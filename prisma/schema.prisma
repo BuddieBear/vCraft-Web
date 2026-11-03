@@ -1,0 +1,495 @@
+// =============================================================================
+// vCraft Prisma Schema - PostgreSQL 18
+// Domain: Nền tảng Triển lãm số & B2C/B2B Làng Lụa Tơ Tằm Vạn Phúc (Hà Đông, Hà Nội)
+// Matches relational-schema.sql (17 tables, 14 ENUMs, 3NF Normalized)
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+enum UserRole {
+  ADMIN
+  ARTISAN
+  BUYER
+
+  @@map("user_role")
+}
+
+enum ArtisanVerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+
+  @@map("artisan_verification_status")
+}
+
+enum SilkWeaveType {
+  LUA_VAN
+  LUA_GAM
+  LUA_SATIN
+  LUA_TWILL
+  LUA_TO_TAM_THO
+  PHU_KIEN_LUA
+
+  @@map("silk_weave_type")
+}
+
+enum SilkProductionStage {
+  UOM_TO
+  MAC_CUI
+  DET_LUA
+  NHUOM_MAU
+  CAN_LANG
+
+  @@map("silk_production_stage")
+}
+
+enum BatchStatus {
+  PLANNING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+
+  @@map("batch_status")
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT_TO_ARTISANS
+  ARTISANS_BIDDING
+  BUYER_ACCEPTED
+  IN_PRODUCTION
+  DELIVERED
+  CANCELLED
+
+  @@map("quote_status")
+}
+
+enum BidStatus {
+  SUBMITTED
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+
+  @@map("bid_status")
+}
+
+enum AssignmentStatus {
+  ASSIGNED
+  IN_PRODUCTION
+  READY_FOR_DELIVERY
+  COMPLETED
+  CANCELLED
+
+  @@map("assignment_status")
+}
+
+enum RetailOrderStatus {
+  PENDING
+  CONFIRMED
+  SHIPPING
+  DELIVERED
+  CANCELLED
+
+  @@map("retail_order_status")
+}
+
+enum PaymentStatus {
+  UNPAID
+  PAID
+  REFUNDED
+
+  @@map("payment_status")
+}
+
+enum PaymentMethod {
+  COD
+  BANK_TRANSFER
+  VNPAY
+  MOMO
+
+  @@map("payment_method")
+}
+
+enum NewsCategory {
+  PRICE_ANNOUNCEMENT
+  POWER_OUTAGE
+  POLICY_SUPPORT
+  FESTIVAL_EVENT
+
+  @@map("news_category")
+}
+
+enum ReviewTargetType {
+  PRODUCT
+  ARTISAN
+
+  @@map("review_target_type")
+}
+
+enum NotificationType {
+  SYSTEM
+  QUOTE_REQUEST
+  BID_RECEIVED
+  BID_ACCEPTED
+  ORDER_STATUS
+  COMMUNITY_NEWS
+
+  @@map("notification_type")
+}
+
+// =============================================================================
+// MODELS
+// =============================================================================
+
+model User {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email        String    @unique @db.VarChar(255)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  fullName     String    @map("full_name") @db.VarChar(120)
+  phone        String?   @db.VarChar(20)
+  role         UserRole  @default(BUYER)
+  avatarUrl    String?   @map("avatar_url") @db.VarChar(500)
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  artisanProfile     ArtisanProfile?
+  cartItems          CartItem[]
+  retailOrders       RetailOrder[]
+  quotationRequests  QuotationRequest[]
+  reviews            Review[]
+  notifications      Notification[]
+  authoredNews       CommunityNews[]
+  auditLogs          AuditLog[]
+
+  @@map("users")
+}
+
+model ArtisanProfile {
+  id                 String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String                    @unique @map("user_id") @db.Uuid
+  workshopName       String                    @map("workshop_name") @db.VarChar(200)
+  artisanTitle       String?                   @map("artisan_title") @db.VarChar(150)
+  familyHistory      String?                   @map("family_history") @db.Text
+  experienceYears    Int?                      @map("experience_years") @db.SmallInt
+  address            String                    @db.VarChar(255)
+  latitude           Decimal                   @db.Decimal(10, 7)
+  longitude          Decimal                   @db.Decimal(10, 7)
+  openingHours       String                    @default("08:00 - 18:00 (Hàng ngày)") @map("opening_hours") @db.VarChar(100)
+  isOpenForVisitors  Boolean                   @default(true) @map("is_open_for_visitors")
+  coverImageUrl      String?                   @map("cover_image_url") @db.VarChar(500)
+  galleryImages      String[]                  @default([]) @map("gallery_images")
+  verificationStatus ArtisanVerificationStatus @default(PENDING) @map("verification_status")
+  verifiedAt         DateTime?                 @map("verified_at") @db.Timestamptz()
+  averageRating      Decimal                   @default(5.00) @map("average_rating") @db.Decimal(3, 2)
+  totalReviews       Int                       @default(0) @map("total_reviews")
+  createdAt          DateTime                  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt          DateTime                  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  certificates          ArtisanCertificate[]
+  products              Product[]
+  retailOrderItems      RetailOrderItem[]
+  bids                  Bid[]
+  orderAssignments      OrderAssignment[]
+  reviews               Review[]
+  targetedQuoteRequests QuotationRequest[]     @relation("DirectQuoteRequests")
+
+  @@map("artisan_profiles")
+}
+
+model ArtisanCertificate {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  artisanId           String   @map("artisan_id") @db.Uuid
+  title               String   @db.VarChar(200)
+  issuingAuthority    String   @map("issuing_authority") @db.VarChar(200)
+  issuedYear          Int      @map("issued_year") @db.SmallInt
+  certificateImageUrl String   @map("certificate_image_url") @db.VarChar(500)
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  artisan ArtisanProfile @relation(fields: [artisanId], references: [id], onDelete: Cascade)
+
+  @@map("artisan_certificates")
+}
+
+model Category {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String    @unique @db.VarChar(100)
+  slug         String    @unique @db.VarChar(120)
+  description  String?   @db.Text
+  thumbnailUrl String?   @map("thumbnail_url") @db.VarChar(500)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+
+  products Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  artisanId      String        @map("artisan_id") @db.Uuid
+  categoryId     String?       @map("category_id") @db.Uuid
+  name           String        @db.VarChar(255)
+  slug           String        @unique @db.VarChar(280)
+  weaveType      SilkWeaveType @default(LUA_VAN) @map("weave_type")
+  rawMaterial    String        @default("100% Tơ tằm tự nhiên Bảo Lộc / Vạn Phúc") @map("raw_material") @db.VarChar(150)
+  description    String?       @db.Text
+  culturalStory  String?       @map("cultural_story") @db.Text
+  price          Decimal       @db.Decimal(12, 2)
+  stockQuantity  Int           @default(0) @map("stock_quantity")
+  mediaUrls      String[]      @default([]) @map("media_urls")
+  isUniquePiece  Boolean       @default(false) @map("is_unique_piece")
+  isPublished    Boolean       @default(true) @map("is_published")
+  averageRating  Decimal       @default(5.00) @map("average_rating") @db.Decimal(3, 2)
+  totalReviews   Int           @default(0) @map("total_reviews")
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt      DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  artisan          ArtisanProfile    @relation(fields: [artisanId], references: [id], onDelete: Restrict)
+  category         Category?         @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  batches          ProductBatch[]
+  cartItems        CartItem[]
+  retailOrderItems RetailOrderItem[]
+  reviews          Review[]
+
+  @@map("products")
+}
+
+model ProductBatch {
+  id                String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productId         String      @map("product_id") @db.Uuid
+  orderAssignmentId String?     @map("order_assignment_id") @db.Uuid
+  batchCode         String      @unique @map("batch_code") @db.VarChar(50)
+  qrCodeUrl         String      @map("qr_code_url") @db.VarChar(500)
+  startedAt         DateTime    @default(now()) @map("started_at") @db.Date
+  completedAt       DateTime?   @map("completed_at") @db.Date
+  totalQuantity     Int         @map("total_quantity")
+  status            BatchStatus @default(IN_PROGRESS)
+  createdAt         DateTime    @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt         DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  product         Product          @relation(fields: [productId], references: [id], onDelete: Restrict)
+  orderAssignment OrderAssignment? @relation(fields: [orderAssignmentId], references: [id], onDelete: SetNull)
+  logs            BatchLog[]
+
+  @@map("product_batches")
+}
+
+model BatchLog {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  batchId           String              @map("batch_id") @db.Uuid
+  stage             SilkProductionStage
+  stageTitle        String              @map("stage_title") @db.VarChar(150)
+  description       String              @db.Text
+  evidenceImageUrls String[]            @default([]) @map("evidence_image_urls")
+  loggedAt          DateTime            @default(now()) @map("logged_at") @db.Timestamptz()
+  stepOrder         Int                 @map("step_order")
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz()
+
+  batch ProductBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@unique([batchId, stage])
+  @@map("batch_logs")
+}
+
+model CartItem {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@map("cart_items")
+}
+
+model RetailOrder {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderCode       String            @unique @map("order_code") @db.VarChar(30)
+  buyerId         String            @map("buyer_id") @db.Uuid
+  recipientName   String            @map("recipient_name") @db.VarChar(120)
+  recipientPhone  String            @map("recipient_phone") @db.VarChar(20)
+  shippingAddress String            @map("shipping_address") @db.Text
+  shippingNote    String?           @map("shipping_note") @db.Text
+  totalAmount     Decimal           @map("total_amount") @db.Decimal(12, 2)
+  paymentMethod   PaymentMethod     @default(COD) @map("payment_method")
+  paymentStatus   PaymentStatus     @default(UNPAID) @map("payment_status")
+  status          RetailOrderStatus @default(PENDING)
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  buyer   User              @relation(fields: [buyerId], references: [id], onDelete: Restrict)
+  items   RetailOrderItem[]
+  reviews Review[]
+
+  @@map("retail_orders")
+}
+
+model RetailOrderItem {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderId   String   @map("order_id") @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  artisanId String   @map("artisan_id") @db.Uuid
+  quantity  Int
+  unitPrice Decimal  @map("unit_price") @db.Decimal(12, 2)
+  subtotal  Decimal  @db.Decimal(12, 2)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  order   RetailOrder    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
+  artisan ArtisanProfile @relation(fields: [artisanId], references: [id], onDelete: Restrict)
+
+  @@map("retail_order_items")
+}
+
+model QuotationRequest {
+  id                  String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  buyerId             String        @map("buyer_id") @db.Uuid
+  targetArtisanId     String?       @map("target_artisan_id") @db.Uuid
+  title               String        @db.VarChar(255)
+  specifications      String        @db.Text
+  targetQuantity      Int           @map("target_quantity")
+  maxBudget           Decimal?      @map("max_budget") @db.Decimal(14, 2)
+  preferredWeaveType  SilkWeaveType @default(LUA_VAN) @map("preferred_weave_type")
+  deadline            DateTime      @db.Date
+  attachmentUrls      String[]      @default([]) @map("attachment_urls")
+  status              QuoteStatus   @default(DRAFT)
+  createdAt           DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt           DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  buyer         User              @relation(fields: [buyerId], references: [id], onDelete: Restrict)
+  targetArtisan ArtisanProfile?   @relation("DirectQuoteRequests", fields: [targetArtisanId], references: [id], onDelete: SetNull)
+  bids          Bid[]
+  assignments   OrderAssignment[]
+  reviews       Review[]
+
+  @@map("quotation_requests")
+}
+
+model Bid {
+  id                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quotationRequestId     String    @map("quotation_request_id") @db.Uuid
+  artisanId              String    @map("artisan_id") @db.Uuid
+  proposedPrice          Decimal   @map("proposed_price") @db.Decimal(12, 2)
+  proposedCompletionDays Int       @map("proposed_completion_days")
+  note                   String?   @db.Text
+  sampleImages           String[]  @default([]) @map("sample_images")
+  status                 BidStatus @default(SUBMITTED)
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt              DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  quotationRequest QuotationRequest @relation(fields: [quotationRequestId], references: [id], onDelete: Cascade)
+  artisan          ArtisanProfile   @relation(fields: [artisanId], references: [id], onDelete: Cascade)
+  assignment       OrderAssignment?
+
+  @@unique([quotationRequestId, artisanId])
+  @@map("bids")
+}
+
+model OrderAssignment {
+  id                 String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quotationRequestId String           @map("quotation_request_id") @db.Uuid
+  artisanId          String           @map("artisan_id") @db.Uuid
+  bidId              String           @unique @map("bid_id") @db.Uuid
+  allocatedQuantity  Int              @map("allocated_quantity")
+  agreedPrice        Decimal          @map("agreed_price") @db.Decimal(12, 2)
+  status             AssignmentStatus @default(ASSIGNED)
+  startedAt          DateTime?        @map("started_at") @db.Timestamptz()
+  completedAt        DateTime?        @map("completed_at") @db.Timestamptz()
+  notes              String?          @db.Text
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt          DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  quotationRequest QuotationRequest @relation(fields: [quotationRequestId], references: [id], onDelete: Restrict)
+  artisan          ArtisanProfile   @relation(fields: [artisanId], references: [id], onDelete: Restrict)
+  bid              Bid              @relation(fields: [bidId], references: [id], onDelete: Restrict)
+  batches          ProductBatch[]
+
+  @@map("order_assignments")
+}
+
+model Review {
+  id                  String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  buyerId             String           @map("buyer_id") @db.Uuid
+  targetType          ReviewTargetType @default(PRODUCT) @map("target_type")
+  productId           String?          @map("product_id") @db.Uuid
+  artisanId           String           @map("artisan_id") @db.Uuid
+  retailOrderId       String?          @map("retail_order_id") @db.Uuid
+  quotationRequestId  String?          @map("quotation_request_id") @db.Uuid
+  rating              Int              @db.SmallInt
+  comment             String           @db.Text
+  mediaUrls           String[]         @default([]) @map("media_urls")
+  isVerifiedPurchase  Boolean          @default(true) @map("is_verified_purchase")
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt           DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  buyer            User              @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  product          Product?          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  artisan          ArtisanProfile    @relation(fields: [artisanId], references: [id], onDelete: Cascade)
+  retailOrder      RetailOrder?      @relation(fields: [retailOrderId], references: [id], onDelete: SetNull)
+  quotationRequest QuotationRequest? @relation(fields: [quotationRequestId], references: [id], onDelete: SetNull)
+
+  @@map("reviews")
+}
+
+model Notification {
+  id        String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  title     String           @db.VarChar(200)
+  message   String           @db.Text
+  type      NotificationType @default(SYSTEM)
+  linkUrl   String?          @map("link_url") @db.VarChar(500)
+  isRead    Boolean          @default(false) @map("is_read")
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model CommunityNews {
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  authorAdminId String       @map("author_admin_id") @db.Uuid
+  title         String       @db.VarChar(255)
+  slug          String       @unique @db.VarChar(280)
+  category      NewsCategory
+  content       String       @db.Text
+  thumbnailUrl  String?      @map("thumbnail_url") @db.VarChar(500)
+  isPinned      Boolean      @default(false) @map("is_pinned")
+  publishedAt   DateTime     @default(now()) @map("published_at") @db.Timestamptz()
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  authorAdmin User @relation(fields: [authorAdminId], references: [id], onDelete: Restrict)
+
+  @@map("community_news")
+}
+
+model AuditLog {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String?  @map("user_id") @db.Uuid
+  action         String   @db.VarChar(100)
+  targetTable    String   @map("target_table") @db.VarChar(100)
+  targetRecordId String?  @map("target_record_id") @db.Uuid
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("audit_logs")
+}

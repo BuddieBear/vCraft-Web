@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 15 (Chính cho dự án vCraft)
+  postgres:
+    image: postgres:15-alpine
+    container_name: vcraft-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: vcraft_admin
+      POSTGRES_PASSWORD: vcraft_password_2026
+      POSTGRES_DB: vcraft_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - vcraft_postgres_data:/var/lib/postgresql/data
+      - ./docs/relational-schema.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vcraft_admin -d vcraft_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache (Hỗ trợ cache thống kê Dashboard cho Admin)
+  redis:
+    image: redis:7-alpine
+    container_name: vcraft-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - vcraft_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # pgAdmin 4 (Giao diện web trực quan quản lý PostgreSQL)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: vcraft-pgadmin
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@vcraft.vn
+      PGADMIN_DEFAULT_PASSWORD: admin_password_2026
+    ports:
+      - "8080:80"
+    depends_on:
+      - postgres
+
+volumes:
+  vcraft_postgres_data:
+  vcraft_redis_data:

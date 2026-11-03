@@ -1,0 +1,80 @@
+﻿Phân biệt hai mô hình:
+B2C – Bán lẻ
+	B2B – Mua sỉ / Đặt sản xuất
+	Khách chọn sản phẩm
+	Khách mô tả nhu cầu
+	Giá niêm yết
+	Giá có thể thương lượng
+	Mua theo số lượng có sẵn
+	Đặt số lượng lớn
+	Checkout và thanh toán
+	Yêu cầu báo giá
+	Người bán xác nhận đơn
+	Nhà cung cấp đề xuất giá và thời gian
+	
+
+1. Giới thiệu tổng quan
+vCraft là nền tảng web "Triển lãm số" và giao thương dành cho Ban quản lý và các hộ kinh doanh tại một làng nghề truyền thống (như Gốm Bát Tràng, Lụa Vạn Phúc). Mục tiêu cốt lõi của hệ thống không chỉ là bán lẻ mà là tôn vinh giá trị thủ công thông qua Nhật ký sản xuất, minh bạch hóa Truy xuất nguồn gốc, kết nối du lịch qua Bản đồ số, và tự động hóa quy trình Báo giá đơn hàng lớn (mua sỉ).
+
+
+2. Yêu cầu Chức năng theo Vai trò (Functional Requirements)
+Hệ thống được chia làm 3 phân hệ người dùng chính:
+2.1. Phân hệ Khách hàng (Buyer / Tourist)
+* Tham quan & Tìm kiếm:
+   * Xem danh mục sản phẩm theo phân loại (VD: Lụa tơ tằm, gốm men lam, khăn lụa vẽ tay,...) hoặc theo từng Hộ gia đình.
+   * Xem chi tiết sản phẩm: Bao gồm hình ảnh chất lượng cao, giá bán, câu chuyện sản phẩm, và đặc biệt là xem Nhật ký sản xuất của sản phẩm đó.
+* Bản đồ Làng nghề (Interactive Map):
+   * Xem bản đồ tổng thể làng nghề để biết vị trí các xưởng.
+   * Click vào các "Ghim" (Pins) trên bản đồ để xem thông tin vắn tắt, giờ mở cửa và chuyển hướng đến trang Showroom của xưởng đó.
+* Mua lẻ:
+   * Thêm sản phẩm vào Giỏ hàng (Shopping Cart).
+   * Thực hiện quy trình Thanh toán (Checkout) cho các sản phẩm có sẵn mức giá niêm yết.
+   * Xem lịch sử đơn hàng cá nhân và theo dõi tình trạng giao hàng.
+   * Để lại đánh giá (Review/Rating) và bình luận sau khi mua hàng.
+* Giao thương (Mua sỉ) => Chủ yếu:
+   * Tạo "Yêu cầu báo giá" (Quote Request) mô tả chi tiết nhu cầu (VD: Số lượng 5000 chiếc, in logo, deadline).
+   * Theo dõi trạng thái báo giá và xem phản hồi/báo giá từ các hộ gia đình (Artisans).
+   * Chốt đơn với hộ gia đình có mức giá và thời gian hoàn thành phù hợp nhất (Buyer Accepted).
+   * Theo dõi Nhật ký và quy trình sản xuất.
+   * Review sản phẩm & nghệ nhân.
+2.2. Phân hệ Hộ gia đình / Nghệ nhân (Artisan)
+* Quản lý Cửa hàng/Hồ sơ:
+   * Cập nhật "Hồ sơ xưởng" (Profile): Câu chuyện lịch sử gia đình, tiểu sử nghệ nhân, hình ảnh xưởng, giấy chứng nhận chất lượng.
+   * Đánh giá về Nghệ nhân (Do người dùng review)
+* Quản lý Sản phẩm & Nhật ký:
+   * Đăng tải sản phẩm mới (hỗ trợ upload nhiều ảnh, ảnh tối ưu tự động).
+      * Với sản phẩm bán lẻ, đặt giá niêm yết, và số lượng còn hàng.
+   * Cập nhật Nhật ký sản xuất: Ghi nhận các mốc thời gian và hình ảnh minh chứng cho vòng đời 1 sản phẩm (VD: Nhào đất -> Vuốt -> Nung -> Thành phẩm / Nuôi tằm -> Quay tơ -> Dệt -> Nhuộm).
+* Tham gia Đấu thầu (Bidding):
+   * Nhận thông báo về các "Yêu cầu báo giá" từ hệ thống (được điều phối từ Admin hoặc khách tạo).
+   * Phản hồi, đưa ra mức giá thầu và thời gian cam kết hoàn thành.
+   * Cập nhật trạng thái đơn hàng khi đang sản xuất và khi giao hàng.
+2.3. Phân hệ Quản trị viên (Admin - BQL Làng nghề)
+* Quản lý Tài khoản:
+   * Kiểm duyệt và cấp phát tài khoản cho các hộ gia đình/nghệ nhân đúng chuẩn, ngăn chặn hàng giả/nhái trà trộn vào hệ thống.
+* Quản lý Điều phối & Thông tin:
+   * Theo dõi và điều phối các đơn hàng sỉ (Yêu cầu báo giá) đến các nhóm hộ gia đình phù hợp.
+   * Quản lý đăng tải tin tức cộng đồng (thông báo giá vật liệu, lịch cúp điện, chính sách, sự kiện du lịch...).
+3. Các Tính năng Cốt lõi Đặc thù (Core Features)
+3.1. Truy xuất Nguồn gốc & Mã QR
+* Hệ thống lưu trữ cấu trúc dữ liệu mảng các mốc thời gian (timeline) cho từng sản phẩm.
+* Hệ thống (Frontend hoặc Backend) tự động sinh ra một Mã QR cho mỗi sản phẩm.
+* Quét QR -> Landing Page: Khi quét, người dùng được dẫn đến một trang Landing Page chuyên biệt kể lại toàn bộ câu chuyện và hành trình chế tác ra sản phẩm đó.
+3.2. Luồng Yêu cầu Báo giá (Quotation State Machine)
+* Hệ thống phải xử lý logic trạng thái khóa bản ghi nghiêm ngặt.
+* Quy trình chuẩn: Draft Request (Khách nháp) -> Sent to Artisans (Gửi yêu cầu) -> Artisans Bidding (Các hộ chào giá) -> Buyer Accepted (Khách chốt) -> In Production (Đang sản xuất) -> Delivered (Đã giao).
+3.3. Tích hợp Bản đồ số
+* Sử dụng Google Maps API hoặc LeafletJS.
+* Hiển thị tọa độ (Latitude, Longitude) của các xưởng bằng Pins.
+* Chức năng zoom-in/zoom-out, hiển thị Popup thông tin khi click vào Pin.
+4. Yêu cầu Phi chức năng & Yêu cầu Kỹ thuật (Technical & Non-functional)
+* Hiệu năng & Kiến trúc Frontend:
+   * Giao diện Image-centric, Responsive trên mọi thiết bị.
+   * Sử dụng Fetch/AJAX gọi API Backend để tải các bộ phận trang.
+   * Cập nhật DOM cục bộ với dữ liệu JSON thay vì reload lại toàn bộ trang.
+* Xử lý Đa phương tiện: Backend phải có module tự động tối ưu hóa kích thước ảnh (Image Resizing/Optimization) để đảm bảo tốc độ tải trang khi hiển thị hàng trăm sản phẩm mỹ nghệ.
+* Kiến trúc Code & Database:
+   * Áp dụng Design Patterns, phân tách rõ mã tạo giao diện và xử lý nghiệp vụ (MVC hoặc tương đương).
+   * Thao tác CSDL thông qua lập trình hướng đối tượng (ORM) đảm bảo tính độc lập với hệ quản trị CSDL.
+* Trải nghiệm người dùng (UX): Kiểm tra hợp thức (Validation) dữ liệu đầu vào chặt chẽ, hỗ trợ tự động điền (Autocomplete), gợi ý thông minh. Thực hiện định tuyến URL (URL Routing) thân thiện, dễ SEO.
+* Bảo mật: Triển khai xác thực (Authentication), quản lý phiên (Session/JWT), điều khiển truy cập (Authorization dựa trên Role), và mã hóa dữ liệu nhạy cảm (mật khẩu...).
