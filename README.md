@@ -41,7 +41,7 @@ vCraft/
 │   ├── erd-draft.md           # Báo cáo chi tiết ERD & lý thuyết chuẩn hóa 3NF
 │   ├── relational-schema.sql  # Script DDL 17 bảng PostgreSQL + Seed data thực tế
 │   ├── schema_visualizer.html # Web visualizer tương tác phóng to/thu nhỏ
-│   └── vcraft_schema.png      # Ảnh sơ đồ ERD siêu nét (3600 x 2400)
+│   └── vcraft_schema.png      # Ảnh sơ đồ ERD chuẩn quốc tế Crow's Foot (3031 x 3190 px)
 ├── prisma/                    # Cấu hình ORM Prisma cho PostgreSQL
 │   └── schema.prisma          # 17 models và 14 enums
 ├── frontend/                  # Mã nguồn giao diện người dùng
