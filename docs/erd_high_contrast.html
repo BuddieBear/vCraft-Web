@@ -1,0 +1,1636 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <title>vCraft - Physical ERD Database Schema (High Resolution)</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: #f8fafc;
+      background-image: 
+        radial-gradient(#cbd5e1 1.2px, transparent 1.2px),
+        radial-gradient(#cbd5e1 1.2px, #f8fafc 1.2px);
+      background-size: 28px 28px;
+      background-position: 0 0, 14px 14px;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      width: 2950px;
+      height: 2360px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .banner {
+      position: absolute;
+      top: 25px;
+      left: 60px;
+      right: 90px;
+      height: 78px;
+      background: #ffffff;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 32px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+      z-index: 100;
+    }
+    .banner-title {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .banner-title h1 {
+      font-size: 24px;
+      font-weight: 800;
+      color: #0f172a;
+      letter-spacing: -0.5px;
+    }
+    .badge-main {
+      background: #0284c7;
+      color: white;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 5px 12px;
+      border-radius: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .legend {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #334155;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .dot { width: 13px; height: 13px; border-radius: 50%; }
+
+    #svg-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 2950px;
+      height: 2360px;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .table-card {
+      position: absolute;
+      background: #ffffff;
+      border-radius: 10px;
+      border: 2px solid;
+      box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 4px 6px -2px rgba(15, 23, 42, 0.04);
+      z-index: 20;
+      overflow: hidden;
+    }
+    .table-header {
+      padding: 10px 14px;
+      border-bottom: 1.5px solid;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .table-name {
+      font-size: 15.5px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .table-domain {
+      font-size: 10px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .table-title {
+      font-size: 11.5px;
+      color: #64748b;
+      font-weight: 700;
+      padding: 5px 14px 6px 14px;
+      background: #f8fafc;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .table-body {
+      padding: 4px 0;
+    }
+    .table-row {
+      display: flex;
+      align-items: center;
+      padding: 3px 14px;
+      font-size: 12px;
+      line-height: 1.4;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .table-row:last-child {
+      border-bottom: none;
+    }
+    .table-row:nth-child(even) {
+      background: #fafbfc;
+    }
+    .col-key {
+      width: 48px;
+      flex-shrink: 0;
+    }
+    .badge-pk {
+      background: #fef3c7;
+      color: #b45309;
+      font-size: 9.5px;
+      font-weight: 800;
+      padding: 2px 5px;
+      border-radius: 3px;
+      border: 1px solid #fcd34d;
+      font-family: 'Fira Code', monospace;
+    }
+    .badge-fk {
+      background: #e0f2fe;
+      color: #0369a1;
+      font-size: 9.5px;
+      font-weight: 800;
+      padding: 2px 5px;
+      border-radius: 3px;
+      border: 1px solid #bae6fd;
+      font-family: 'Fira Code', monospace;
+    }
+    .badge-uk {
+      background: #f3e8ff;
+      color: #7e22ce;
+      font-size: 9.5px;
+      font-weight: 800;
+      padding: 2px 5px;
+      border-radius: 3px;
+      border: 1px solid #e9d5ff;
+      font-family: 'Fira Code', monospace;
+    }
+    .col-name {
+      flex: 1;
+      font-weight: 700;
+      color: #0f172a;
+      letter-spacing: -0.2px;
+      font-family: 'Fira Code', monospace;
+      font-size: 12px;
+    }
+    .col-type {
+      color: #475569;
+      font-size: 11px;
+      font-family: 'Fira Code', monospace;
+      text-align: right;
+    }
+
+    .footer-bar {
+      position: absolute;
+      bottom: 18px;
+      left: 60px;
+      right: 90px;
+      display: flex;
+      justify-content: space-between;
+      color: #64748b;
+      font-size: 13px;
+      font-weight: 700;
+      background: #ffffff;
+      padding: 10px 24px;
+      border-radius: 8px;
+      border: 1px solid #cbd5e1;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="banner">
+    <div class="banner-title">
+      <h1>vCraft Database Schema (PostgreSQL 18.6)</h1>
+      <span class="badge-main">17 Tables - Chuẩn 3NF</span>
+      <span style="font-size: 13.5px; color: #475569; font-weight: 700;">Làng Lụa Tơ Tằm Vạn Phúc (Hà Đông, Hà Nội) - INT3306</span>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><span class="dot" style="background:#1d4ed8"></span> Auth & Core</div>
+      <div class="legend-item"><span class="dot" style="background:#b45309"></span> Artisans & Map</div>
+      <div class="legend-item"><span class="dot" style="background:#047857"></span> Catalog & Silk</div>
+      <div class="legend-item"><span class="dot" style="background:#6d28d9"></span> B2B Wholesale</div>
+      <div class="legend-item"><span class="dot" style="background:#0f766e"></span> QR Batches</div>
+      <div class="legend-item"><span class="dot" style="background:#be123c"></span> B2C Retail</div>
+    </div>
+  </div>
+
+  <svg id="svg-canvas" xmlns="http://www.w3.org/2000/svg">
+  </svg>
+
+    <div id="table-users" class="table-card" style="left: 60px; top: 140px; width: 480px; border-color: #93c5fd;">
+      <div class="table-header" style="background: #eff6ff; border-bottom-color: #93c5fd;">
+        <div class="table-name" style="color: #1d4ed8;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+          users
+        </div>
+        <div class="table-domain" style="background: #1d4ed8; color: white;">AUTH & CORE</div>
+      </div>
+      <div class="table-title">Tài khoản & Phân quyền RBAC</div>
+      <div class="table-body">
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-pk">PK</span></div>
+            <div class="col-name">id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-uk">UK</span></div>
+            <div class="col-name">email</div>
+            <div class="col-type">varchar(255)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">password_hash</div>
+            <div class="col-type">varchar(255)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">full_name</div>
+            <div class="col-type">varchar(120)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">phone</div>
+            <div class="col-type">varchar(20)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">role</div>
+            <div class="col-type">user_role (ENUM)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">avatar_url</div>
+            <div class="col-type">varchar(500)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">is_active</div>
+            <div class="col-type">boolean</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">created_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">updated_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+      </div>
+    </div>
+    
+    <div id="table-notifications" class="table-card" style="left: 60px; top: 550px; width: 480px; border-color: #93c5fd;">
+      <div class="table-header" style="background: #eff6ff; border-bottom-color: #93c5fd;">
+        <div class="table-name" style="color: #1d4ed8;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+          notifications
+        </div>
+        <div class="table-domain" style="background: #1d4ed8; color: white;">AUTH & CORE</div>
+      </div>
+      <div class="table-title">Chuông thông báo thời gian thực</div>
+      <div class="table-body">
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-pk">PK</span></div>
+            <div class="col-name">id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-fk">FK</span></div>
+            <div class="col-name">user_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">title</div>
+            <div class="col-type">varchar(200)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">message</div>
+            <div class="col-type">text</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">type</div>
+            <div class="col-type">notification_type (ENUM)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">link_url</div>
+            <div class="col-type">varchar(500)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">is_read</div>
+            <div class="col-type">boolean</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">created_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+      </div>
+    </div>
+    
+    <div id="table-audit_logs" class="table-card" style="left: 60px; top: 910px; width: 480px; border-color: #93c5fd;">
+      <div class="table-header" style="background: #eff6ff; border-bottom-color: #93c5fd;">
+        <div class="table-name" style="color: #1d4ed8;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+          audit_logs
+        </div>
+        <div class="table-domain" style="background: #1d4ed8; color: white;">AUTH & CORE</div>
+      </div>
+      <div class="table-title">Ghi vết kiểm toán bảo mật</div>
+      <div class="table-body">
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-pk">PK</span></div>
+            <div class="col-name">id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-fk">FK</span></div>
+            <div class="col-name">user_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">action</div>
+            <div class="col-type">varchar(100)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">target_table</div>
+            <div class="col-type">varchar(80)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">target_record_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">metadata</div>
+            <div class="col-type">jsonb</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">created_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+      </div>
+    </div>
+    
+    <div id="table-community_news" class="table-card" style="left: 60px; top: 1240px; width: 480px; border-color: #93c5fd;">
+      <div class="table-header" style="background: #eff6ff; border-bottom-color: #93c5fd;">
+        <div class="table-name" style="color: #1d4ed8;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+          community_news
+        </div>
+        <div class="table-domain" style="background: #1d4ed8; color: white;">AUTH & CORE</div>
+      </div>
+      <div class="table-title">Bản tin BQL & Làng nghề</div>
+      <div class="table-body">
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-pk">PK</span></div>
+            <div class="col-name">id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-fk">FK</span></div>
+            <div class="col-name">author_admin_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">title</div>
+            <div class="col-type">varchar(250)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-uk">UK</span></div>
+            <div class="col-name">slug</div>
+            <div class="col-type">varchar(255)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">category</div>
+            <div class="col-type">news_category (ENUM)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">content</div>
+            <div class="col-type">text</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">thumbnail_url</div>
+            <div class="col-type">varchar(500)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">is_pinned</div>
+            <div class="col-type">boolean</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">published_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">created_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">updated_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+      </div>
+    </div>
+    
+    <div id="table-artisan_profiles" class="table-card" style="left: 590px; top: 140px; width: 530px; border-color: #fde68a;">
+      <div class="table-header" style="background: #fffbeb; border-bottom-color: #fde68a;">
+        <div class="table-name" style="color: #b45309;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#b45309" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+          artisan_profiles
+        </div>
+        <div class="table-domain" style="background: #b45309; color: white;">ARTISANS & MAP</div>
+      </div>
+      <div class="table-title">Hồ sơ Nghệ nhân & Bản đồ Leaflet</div>
+      <div class="table-body">
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-pk">PK</span></div>
+            <div class="col-name">id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-fk">FK</span> <span class="badge-uk">UK</span></div>
+            <div class="col-name">user_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">workshop_name</div>
+            <div class="col-type">varchar(200)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">artisan_title</div>
+            <div class="col-type">varchar(150)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">family_history</div>
+            <div class="col-type">text</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">experience_years</div>
+            <div class="col-type">smallint</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">address</div>
+            <div class="col-type">varchar(300)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">latitude</div>
+            <div class="col-type">numeric(10,7)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">longitude</div>
+            <div class="col-type">numeric(10,7)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">opening_hours</div>
+            <div class="col-type">varchar(100)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">accepts_tourists</div>
+            <div class="col-type">boolean</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">cover_image_url</div>
+            <div class="col-type">varchar(500)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">gallery_images</div>
+            <div class="col-type">text[]</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">verification_status</div>
+            <div class="col-type">status (ENUM)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">verified_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">average_rating</div>
+            <div class="col-type">numeric(3,2)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">total_reviews</div>
+            <div class="col-type">integer</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">created_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">updated_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+      </div>
+    </div>
+    
+    <div id="table-artisan_certificates" class="table-card" style="left: 590px; top: 860px; width: 530px; border-color: #fde68a;">
+      <div class="table-header" style="background: #fffbeb; border-bottom-color: #fde68a;">
+        <div class="table-name" style="color: #b45309;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#b45309" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+          artisan_certificates
+        </div>
+        <div class="table-domain" style="background: #b45309; color: white;">ARTISANS & MAP</div>
+      </div>
+      <div class="table-title">Chứng nhận OCOP & Nghệ nhân</div>
+      <div class="table-body">
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-pk">PK</span></div>
+            <div class="col-name">id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-fk">FK</span></div>
+            <div class="col-name">artisan_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">title</div>
+            <div class="col-type">varchar(200)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">issuing_authority</div>
+            <div class="col-type">varchar(200)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">issued_year</div>
+            <div class="col-type">smallint</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">certificate_image_url</div>
+            <div class="col-type">varchar(500)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">created_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+      </div>
+    </div>
+    
+    <div id="table-categories" class="table-card" style="left: 590px; top: 1190px; width: 530px; border-color: #a7f3d0;">
+      <div class="table-header" style="background: #ecfdf5; border-bottom-color: #a7f3d0;">
+        <div class="table-name" style="color: #047857;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#047857" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+          categories
+        </div>
+        <div class="table-domain" style="background: #047857; color: white;">CATALOG & SILK</div>
+      </div>
+      <div class="table-title">Danh mục Lụa (Lụa Vân, Gấm...)</div>
+      <div class="table-body">
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-pk">PK</span></div>
+            <div class="col-name">id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-uk">UK</span></div>
+            <div class="col-name">name</div>
+            <div class="col-type">varchar(120)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-uk">UK</span></div>
+            <div class="col-name">slug</div>
+            <div class="col-type">varchar(150)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">description</div>
+            <div class="col-type">text</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">thumbnail_url</div>
+            <div class="col-type">varchar(500)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">created_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+      </div>
+    </div>
+    
+    <div id="table-products" class="table-card" style="left: 1170px; top: 140px; width: 530px; border-color: #a7f3d0;">
+      <div class="table-header" style="background: #ecfdf5; border-bottom-color: #a7f3d0;">
+        <div class="table-name" style="color: #047857;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#047857" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+          products
+        </div>
+        <div class="table-domain" style="background: #047857; color: white;">CATALOG & SILK</div>
+      </div>
+      <div class="table-title">Sản phẩm & Tác phẩm Triển lãm</div>
+      <div class="table-body">
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-pk">PK</span></div>
+            <div class="col-name">id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-fk">FK</span></div>
+            <div class="col-name">artisan_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-fk">FK</span></div>
+            <div class="col-name">category_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">name</div>
+            <div class="col-type">varchar(250)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-uk">UK</span></div>
+            <div class="col-name">slug</div>
+            <div class="col-type">varchar(280)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">weave_type</div>
+            <div class="col-type">silk_weave_type</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">raw_material</div>
+            <div class="col-type">varchar(150)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">description</div>
+            <div class="col-type">text</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">cultural_story</div>
+            <div class="col-type">text</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">price</div>
+            <div class="col-type">numeric(12,2)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">stock_quantity</div>
+            <div class="col-type">integer</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">media_urls</div>
+            <div class="col-type">text[]</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">is_unique_piece</div>
+            <div class="col-type">boolean</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">is_published</div>
+            <div class="col-type">boolean</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">average_rating</div>
+            <div class="col-type">numeric(3,2)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">total_reviews</div>
+            <div class="col-type">integer</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">created_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">updated_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+      </div>
+    </div>
+    
+    <div id="table-cart_items" class="table-card" style="left: 1170px; top: 820px; width: 530px; border-color: #fecdd3;">
+      <div class="table-header" style="background: #fff1f2; border-bottom-color: #fecdd3;">
+        <div class="table-name" style="color: #be123c;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#be123c" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+          cart_items
+        </div>
+        <div class="table-domain" style="background: #be123c; color: white;">B2C & RETAIL</div>
+      </div>
+      <div class="table-title">Giỏ hàng B2C của khách</div>
+      <div class="table-body">
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-pk">PK</span></div>
+            <div class="col-name">id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-fk">FK</span></div>
+            <div class="col-name">user_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-fk">FK</span></div>
+            <div class="col-name">product_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">quantity</div>
+            <div class="col-type">integer</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">created_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">updated_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+      </div>
+    </div>
+    
+    <div id="table-reviews" class="table-card" style="left: 1170px; top: 1110px; width: 530px; border-color: #fecdd3;">
+      <div class="table-header" style="background: #fff1f2; border-bottom-color: #fecdd3;">
+        <div class="table-name" style="color: #be123c;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#be123c" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+          reviews
+        </div>
+        <div class="table-domain" style="background: #be123c; color: white;">B2C & RETAIL</div>
+      </div>
+      <div class="table-title">Đánh giá & Xếp hạng 1-5 sao</div>
+      <div class="table-body">
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-pk">PK</span></div>
+            <div class="col-name">id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-fk">FK</span></div>
+            <div class="col-name">buyer_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">target_type</div>
+            <div class="col-type">target_type (ENUM)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-fk">FK</span></div>
+            <div class="col-name">product_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-fk">FK</span></div>
+            <div class="col-name">artisan_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-fk">FK</span></div>
+            <div class="col-name">retail_order_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-fk">FK</span></div>
+            <div class="col-name">quotation_request_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">rating</div>
+            <div class="col-type">smallint (1..5)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">comment</div>
+            <div class="col-type">text</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">media_urls</div>
+            <div class="col-type">text[]</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">is_verified_purchase</div>
+            <div class="col-type">boolean</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">created_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">updated_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+      </div>
+    </div>
+    
+    <div id="table-quotation_requests" class="table-card" style="left: 1750px; top: 140px; width: 530px; border-color: #ddd6fe;">
+      <div class="table-header" style="background: #f5f3ff; border-bottom-color: #ddd6fe;">
+        <div class="table-name" style="color: #6d28d9;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#6d28d9" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+          quotation_requests
+        </div>
+        <div class="table-domain" style="background: #6d28d9; color: white;">B2B WHOLESALE</div>
+      </div>
+      <div class="table-title">Yêu cầu Báo giá Đơn sỉ B2B</div>
+      <div class="table-body">
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-pk">PK</span></div>
+            <div class="col-name">id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-fk">FK</span></div>
+            <div class="col-name">buyer_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-fk">FK</span></div>
+            <div class="col-name">target_artisan_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">title</div>
+            <div class="col-type">varchar(200)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">expected_quantity</div>
+            <div class="col-type">integer</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">max_budget</div>
+            <div class="col-type">numeric(14,2)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">preferred_weave_type</div>
+            <div class="col-type">weave_type</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">deadline</div>
+            <div class="col-type">date</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">attachments</div>
+            <div class="col-type">text[]</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">status</div>
+            <div class="col-type">quote_status (ENUM)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">created_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">updated_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+      </div>
+    </div>
+    
+    <div id="table-bids" class="table-card" style="left: 1750px; top: 600px; width: 530px; border-color: #ddd6fe;">
+      <div class="table-header" style="background: #f5f3ff; border-bottom-color: #ddd6fe;">
+        <div class="table-name" style="color: #6d28d9;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#6d28d9" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+          bids
+        </div>
+        <div class="table-domain" style="background: #6d28d9; color: white;">B2B WHOLESALE</div>
+      </div>
+      <div class="table-title">Các Hộ Dệt Chào Giá Thầu</div>
+      <div class="table-body">
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-pk">PK</span></div>
+            <div class="col-name">id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-fk">FK</span></div>
+            <div class="col-name">quotation_request_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-fk">FK</span></div>
+            <div class="col-name">artisan_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">proposed_price</div>
+            <div class="col-type">numeric(12,2)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">proposed_completion_days</div>
+            <div class="col-type">integer</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">note</div>
+            <div class="col-type">text</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">sample_images</div>
+            <div class="col-type">text[]</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">status</div>
+            <div class="col-type">bid_status (ENUM)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">created_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">updated_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+      </div>
+    </div>
+    
+    <div id="table-order_assignments" class="table-card" style="left: 1750px; top: 1000px; width: 530px; border-color: #ddd6fe;">
+      <div class="table-header" style="background: #f5f3ff; border-bottom-color: #ddd6fe;">
+        <div class="table-name" style="color: #6d28d9;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#6d28d9" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+          order_assignments
+        </div>
+        <div class="table-domain" style="background: #6d28d9; color: white;">B2B WHOLESALE</div>
+      </div>
+      <div class="table-title">BQL Phân Bổ Sản Xuất Đơn Sỉ</div>
+      <div class="table-body">
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-pk">PK</span></div>
+            <div class="col-name">id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-fk">FK</span></div>
+            <div class="col-name">quotation_request_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-fk">FK</span></div>
+            <div class="col-name">artisan_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-fk">FK</span></div>
+            <div class="col-name">bid_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">allocated_quantity</div>
+            <div class="col-type">integer</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">agreed_price</div>
+            <div class="col-type">numeric(12,2)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">status</div>
+            <div class="col-type">assignment_status (ENUM)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">started_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">completed_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">notes</div>
+            <div class="col-type">text</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">created_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">updated_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+      </div>
+    </div>
+    
+    <div id="table-product_batches" class="table-card" style="left: 1750px; top: 1470px; width: 530px; border-color: #99f6e4;">
+      <div class="table-header" style="background: #f0fdfa; border-bottom-color: #99f6e4;">
+        <div class="table-name" style="color: #0f766e;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0f766e" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+          product_batches
+        </div>
+        <div class="table-domain" style="background: #0f766e; color: white;">QR TRACEABILITY</div>
+      </div>
+      <div class="table-title">Lô Sản Xuất & Mã Tem QR</div>
+      <div class="table-body">
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-pk">PK</span></div>
+            <div class="col-name">id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-fk">FK</span></div>
+            <div class="col-name">product_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-fk">FK</span></div>
+            <div class="col-name">order_assignment_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-uk">UK</span></div>
+            <div class="col-name">batch_code</div>
+            <div class="col-type">varchar(50)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">qr_code_url</div>
+            <div class="col-type">varchar(500)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">total_quantity</div>
+            <div class="col-type">integer</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">status</div>
+            <div class="col-type">batch_status (ENUM)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">started_at</div>
+            <div class="col-type">date</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">completed_at</div>
+            <div class="col-type">date</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">created_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">updated_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+      </div>
+    </div>
+    
+    <div id="table-batch_logs" class="table-card" style="left: 1750px; top: 1910px; width: 530px; border-color: #99f6e4;">
+      <div class="table-header" style="background: #f0fdfa; border-bottom-color: #99f6e4;">
+        <div class="table-name" style="color: #0f766e;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0f766e" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+          batch_logs
+        </div>
+        <div class="table-domain" style="background: #0f766e; color: white;">QR TRACEABILITY</div>
+      </div>
+      <div class="table-title">Nhật Ký 5 Công Đoạn Dệt Lụa</div>
+      <div class="table-body">
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-pk">PK</span></div>
+            <div class="col-name">id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-fk">FK</span></div>
+            <div class="col-name">batch_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">stage</div>
+            <div class="col-type">silk_production_stage</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">stage_title</div>
+            <div class="col-type">varchar(150)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">description</div>
+            <div class="col-type">text</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">evidence_images</div>
+            <div class="col-type">text[]</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">logged_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">step_order</div>
+            <div class="col-type">integer</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">created_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+      </div>
+    </div>
+    
+    <div id="table-retail_orders" class="table-card" style="left: 2330px; top: 140px; width: 530px; border-color: #fecdd3;">
+      <div class="table-header" style="background: #fff1f2; border-bottom-color: #fecdd3;">
+        <div class="table-name" style="color: #be123c;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#be123c" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+          retail_orders
+        </div>
+        <div class="table-domain" style="background: #be123c; color: white;">B2C & RETAIL</div>
+      </div>
+      <div class="table-title">Đơn Hàng Mua Lẻ (B2C)</div>
+      <div class="table-body">
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-pk">PK</span></div>
+            <div class="col-name">id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-uk">UK</span></div>
+            <div class="col-name">order_code</div>
+            <div class="col-type">varchar(50)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-fk">FK</span></div>
+            <div class="col-name">buyer_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">recipient_name</div>
+            <div class="col-type">varchar(120)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">recipient_phone</div>
+            <div class="col-type">varchar(20)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">shipping_address</div>
+            <div class="col-type">text</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">total_amount</div>
+            <div class="col-type">numeric(12,2)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">payment_method</div>
+            <div class="col-type">method (ENUM)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">payment_status</div>
+            <div class="col-type">status (ENUM)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">status</div>
+            <div class="col-type">order_status (ENUM)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">created_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">updated_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+      </div>
+    </div>
+    
+    <div id="table-retail_order_items" class="table-card" style="left: 2330px; top: 620px; width: 530px; border-color: #fecdd3;">
+      <div class="table-header" style="background: #fff1f2; border-bottom-color: #fecdd3;">
+        <div class="table-name" style="color: #be123c;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#be123c" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+          retail_order_items
+        </div>
+        <div class="table-domain" style="background: #be123c; color: white;">B2C & RETAIL</div>
+      </div>
+      <div class="table-title">Chi Tiết Sản Phẩm Đơn Lẻ</div>
+      <div class="table-body">
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-pk">PK</span></div>
+            <div class="col-name">id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-fk">FK</span></div>
+            <div class="col-name">order_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-fk">FK</span></div>
+            <div class="col-name">product_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"><span class="badge-fk">FK</span></div>
+            <div class="col-name">artisan_id</div>
+            <div class="col-type">uuid</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">quantity</div>
+            <div class="col-type">integer</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">unit_price</div>
+            <div class="col-type">numeric(12,2)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">subtotal</div>
+            <div class="col-type">numeric(12,2)</div>
+          </div>
+        
+          <div class="table-row">
+            <div class="col-key"></div>
+            <div class="col-name">created_at</div>
+            <div class="col-type">timestamptz</div>
+          </div>
+        
+      </div>
+    </div>
+    
+  <script>
+    const relations = [{"from": "artisan_profiles", "to": "users", "color": "#1d4ed8", "style": "solid", "label": "1:1 owns"}, {"from": "audit_logs", "to": "users", "color": "#1d4ed8", "style": "dashed", "label": "logs"}, {"from": "notifications", "to": "users", "color": "#1d4ed8", "style": "dashed", "label": "receives"}, {"from": "community_news", "to": "users", "color": "#1d4ed8", "style": "dashed", "label": "authored by"}, {"from": "artisan_certificates", "to": "artisan_profiles", "color": "#b45309", "style": "solid", "label": "certified"}, {"from": "products", "to": "artisan_profiles", "color": "#b45309", "style": "solid", "label": "crafts"}, {"from": "products", "to": "categories", "color": "#047857", "style": "solid", "label": "categorized"}, {"from": "cart_items", "to": "products", "color": "#047857", "style": "solid", "label": "in cart"}, {"from": "cart_items", "to": "users", "color": "#1d4ed8", "style": "dashed", "label": "user cart"}, {"from": "quotation_requests", "to": "users", "color": "#1d4ed8", "style": "dashed", "label": "requested by"}, {"from": "quotation_requests", "to": "artisan_profiles", "color": "#b45309", "style": "solid", "label": "targeted to"}, {"from": "bids", "to": "quotation_requests", "color": "#6d28d9", "style": "solid", "label": "bids on"}, {"from": "bids", "to": "artisan_profiles", "color": "#b45309", "style": "solid", "label": "placed by"}, {"from": "order_assignments", "to": "quotation_requests", "color": "#6d28d9", "style": "solid", "label": "assigned from"}, {"from": "order_assignments", "to": "bids", "color": "#6d28d9", "style": "solid", "label": "winning bid"}, {"from": "order_assignments", "to": "artisan_profiles", "color": "#b45309", "style": "solid", "label": "produced by"}, {"from": "product_batches", "to": "products", "color": "#047857", "style": "solid", "label": "retail batch"}, {"from": "product_batches", "to": "order_assignments", "color": "#6d28d9", "style": "solid", "label": "wholesale batch"}, {"from": "batch_logs", "to": "product_batches", "color": "#0f766e", "style": "solid", "label": "5 silk steps"}, {"from": "retail_orders", "to": "users", "color": "#1d4ed8", "style": "dashed", "label": "ordered by"}, {"from": "retail_order_items", "to": "retail_orders", "color": "#be123c", "style": "solid", "label": "order item"}, {"from": "retail_order_items", "to": "products", "color": "#047857", "style": "solid", "label": "silk item"}, {"from": "retail_order_items", "to": "artisan_profiles", "color": "#b45309", "style": "solid", "label": "fulfilled by"}, {"from": "reviews", "to": "users", "color": "#1d4ed8", "style": "dashed", "label": "reviewed by"}, {"from": "reviews", "to": "products", "color": "#047857", "style": "solid", "label": "reviewed product"}, {"from": "reviews", "to": "artisan_profiles", "color": "#b45309", "style": "solid", "label": "reviewed workshop"}];
+    
+    window.addEventListener('DOMContentLoaded', () => {
+      const svg = document.getElementById('svg-canvas');
+      
+      relations.forEach(rel => {
+        const fromTable = document.getElementById('table-' + rel.from);
+        const toTable = document.getElementById('table-' + rel.to);
+        if (!fromTable || !toTable) return;
+        
+        const fromRect = fromTable.getBoundingClientRect();
+        const toRect = toTable.getBoundingClientRect();
+        
+        let startX, startY, endX, endY, cx1, cy1, cx2, cy2;
+        
+        if (fromRect.left > toRect.right + 20) {
+          startX = fromRect.left;
+          startY = fromRect.top + 35;
+          endX = toRect.right;
+          endY = toRect.top + 35;
+          const dx = Math.abs(startX - endX) * 0.5;
+          cx1 = startX - dx;
+          cy1 = startY;
+          cx2 = endX + dx;
+          cy2 = endY;
+        } else if (toRect.left > fromRect.right + 20) {
+          startX = fromRect.right;
+          startY = fromRect.top + 35;
+          endX = toRect.left;
+          endY = toRect.top + 35;
+          const dx = Math.abs(endX - startX) * 0.5;
+          cx1 = startX + dx;
+          cy1 = startY;
+          cx2 = endX - dx;
+          cy2 = endY;
+        } else {
+          if (fromRect.top > toRect.bottom) {
+            startX = fromRect.left + 50;
+            startY = fromRect.top;
+            endX = toRect.left + 50;
+            endY = toRect.bottom;
+            const dy = Math.abs(startY - endY) * 0.5;
+            cx1 = startX;
+            cy1 = startY - dy;
+            cx2 = endX;
+            cy2 = endY + dy;
+          } else {
+            startX = fromRect.left + 70;
+            startY = fromRect.bottom;
+            endX = toRect.left + 70;
+            endY = toRect.top;
+            const dy = Math.abs(endY - startY) * 0.5;
+            cx1 = startX;
+            cy1 = startY + dy;
+            cx2 = endX;
+            cy2 = endY - dy;
+          }
+        }
+        
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        const d = `M ${startX} ${startY} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${endX} ${endY}`;
+        path.setAttribute('d', d);
+        path.setAttribute('fill', 'none');
+        path.setAttribute('stroke', rel.color);
+        path.setAttribute('stroke-width', '2.4');
+        path.setAttribute('stroke-dasharray', rel.style === 'dashed' ? '5 4' : 'none');
+        path.setAttribute('opacity', '0.85');
+        svg.appendChild(path);
+        
+        const circleStart = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circleStart.setAttribute('cx', startX);
+        circleStart.setAttribute('cy', startY);
+        circleStart.setAttribute('r', '4.5');
+        circleStart.setAttribute('fill', rel.color);
+        svg.appendChild(circleStart);
+
+        const circleEnd = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        circleEnd.setAttribute('x', endX - 3.5);
+        circleEnd.setAttribute('y', endY - 7);
+        circleEnd.setAttribute('width', '7');
+        circleEnd.setAttribute('height', '14');
+        circleEnd.setAttribute('rx', '1.5');
+        circleEnd.setAttribute('fill', rel.color);
+        svg.appendChild(circleEnd);
+      });
+    });
+  </script>
+
+  <div class="footer-bar">
+    <div><strong>Dự án:</strong> vCraft - Triển lãm số & Giao thương Làng nghề Lụa Vạn Phúc (Hà Đông, Hà Nội)</div>
+    <div><strong>Môn học:</strong> INT3306 - Phát triển ứng dụng Web (Fall 2026, VNU-UET)</div>
+    <div><strong>Hệ Quản trị CSDL:</strong> PostgreSQL 18.6 | Chuẩn hóa 3NF | 17 Bảng Dữ liệu | 28 Ràng buộc Khóa ngoại</div>
+  </div>
+</body>
+</html>
