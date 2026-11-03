@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <title>vCraft - Physical ERD Diagram (Crow's Foot Notation)</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@400;600;700;800&display=swap');
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: #0b0f19;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #f8fafc;
+      padding: 30px;
+      width: 3000px;
+      min-height: 3100px;
+    }
+    
+    .header {
+      width: 100%;
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 24px 32px;
+      margin-bottom: 24px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    }
+    
+    .badge-bar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .badge {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 4px 12px;
+      border-radius: 20px;
+      letter-spacing: 0.5px;
+    }
+    .badge-blue { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid #3b82f6; }
+    .badge-gold { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid #f59e0b; }
+    .badge-green { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; }
+    .badge-purple { background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid #a855f7; }
+    
+    h1 {
+      font-size: 30px;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: -0.5px;
+    }
+    p.subtitle {
+      color: #94a3b8;
+      font-size: 15px;
+      margin-top: 6px;
+    }
+    
+    #erd-wrapper {
+      background: #0d1322;
+      border: 1px solid #1e293b;
+      border-radius: 14px;
+      padding: 20px;
+      box-shadow: 0 15px 35px rgba(0,0,0,0.6);
+      width: 100%;
+    }
+
+    #myGraph {
+      width: 100% !important;
+      max-width: 2940px !important;
+      height: auto !important;
+    }
+
+    /* Custom CSS Overrides for Mermaid ERD elements */
+    .mermaid .entityBox {
+      fill: #111827 !important;
+      stroke: #38bdf8 !important;
+      stroke-width: 2px !important;
+      rx: 6px;
+      ry: 6px;
+    }
+    .mermaid .attributeBoxOdd {
+      fill: #0f172a !important;
+      stroke: #1e293b !important;
+    }
+    .mermaid .attributeBoxEven {
+      fill: #131c31 !important;
+      stroke: #1e293b !important;
+    }
+    .mermaid .entityTitleText {
+      fill: #ffffff !important;
+      font-family: 'Inter', sans-serif !important;
+      font-size: 18px !important;
+      font-weight: 800 !important;
+    }
+    .mermaid .er.relationshipLine {
+      stroke: #38bdf8 !important;
+      stroke-width: 2.2px !important;
+    }
+    .mermaid .relationshipLabelBox {
+      fill: #0f172a !important;
+      stroke: #f59e0b !important;
+      stroke-width: 1px !important;
+      opacity: 0.95 !important;
+      rx: 4px;
+      ry: 4px;
+    }
+    .mermaid .relationshipLabel {
+      fill: #fbbf24 !important;
+      font-family: 'Inter', sans-serif !important;
+      font-size: 13px !important;
+      font-weight: 700 !important;
+    }
+    .mermaid circle {
+      stroke: #38bdf8 !important;
+      stroke-width: 2px !important;
+      fill: #0b0f19 !important;
+    }
+    .mermaid path[stroke="gray"] {
+      stroke: #38bdf8 !important;
+      stroke-width: 2px !important;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="badge-bar">
+      <span class="badge badge-blue">POSTGRESQL 18.6 PHYSICAL ERD</span>
+      <span class="badge badge-gold">CROW'S FOOT NOTATION (IE STANDARD)</span>
+      <span class="badge badge-green">LÀNG LỤA TƠ TẰM VẠN PHÚC (HÀ ĐÔNG)</span>
+      <span class="badge badge-purple">CHUẨN HÓA 3NF (17 BẢNG)</span>
+    </div>
+    <h1>vCraft - Sơ Đồ Thực Thể Quan Hệ Hoàn Chỉnh (Entity Relationship Diagram)</h1>
+    <p class="subtitle">
+      Chuẩn hóa Crow's Foot: 1-1 (||-o|), 1-N (||-o{), N-N phân rã qua Bids/Assignments, đầy đủ thuộc tính PK, FK, UK và quan hệ kết nối trực quan.
+    </p>
+  </div>
+
+  <div id="erd-wrapper">
+    <div id="render-target"></div>
+  </div>
+
+  <script>
+    const code = `erDiagram
+    users ||--o| artisan_profiles : owns
+    artisan_profiles ||--o{ artisan_certificates : has
+    categories ||--o{ products : categorizes
+    artisan_profiles ||--o{ products : crafts
+    products ||--o{ product_batches : produced_in
+    order_assignments ||--o{ product_batches : links_batch
+    product_batches ||--|{ batch_logs : tracks_steps
+
+    users ||--o{ cart_items : in_cart
+    products ||--o{ cart_items : added_to_cart
+    users ||--o{ retail_orders : places_order
+    retail_orders ||--|{ retail_order_items : contains
+    products ||--o{ retail_order_items : sold_in
+    artisan_profiles ||--o{ retail_order_items : fulfills
+
+    users ||--o{ quotation_requests : creates_quote
+    artisan_profiles ||--o{ quotation_requests : targeted_quote
+    quotation_requests ||--o{ bids : receives_bids
+    artisan_profiles ||--o{ bids : submits_bid
+    quotation_requests ||--o{ order_assignments : splits_into
+    artisan_profiles ||--o{ order_assignments : assigned_to
+    bids ||--o| order_assignments : awarded_bid
+
+    users ||--o{ reviews : writes_review
+    products ||--o{ reviews : reviews_product
+    artisan_profiles ||--o{ reviews : reviews_artisan
+    retail_orders ||--o{ reviews : reviews_retail_order
+    quotation_requests ||--o{ reviews : reviews_quote_order
+
+    users ||--o{ notifications : receives_notifications
+    users ||--o{ community_news : publishes_news
+    users ||--o{ audit_logs : records_audit
+
+    users {
+        uuid id PK
+        varchar email UK
+        varchar password_hash
+        varchar full_name
+        varchar phone
+        user_role role
+        varchar avatar_url
+        boolean is_active
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    artisan_profiles {
+        uuid id PK
+        uuid user_id FK
+        varchar workshop_name
+        varchar artisan_title
+        text family_history
+        smallint experience_years
+        varchar address
+        decimal latitude
+        decimal longitude
+        varchar opening_hours
+        boolean is_open_for_visitors
+        varchar cover_image_url
+        text gallery_images
+        artisan_verification_status verification_status
+        timestamptz verified_at
+        decimal average_rating
+        integer total_reviews
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    artisan_certificates {
+        uuid id PK
+        uuid artisan_id FK
+        varchar title
+        varchar issuing_authority
+        smallint issued_year
+        varchar certificate_image_url
+        timestamptz created_at
+    }
+
+    categories {
+        uuid id PK
+        varchar name UK
+        varchar slug UK
+        text description
+        varchar thumbnail_url
+        timestamptz created_at
+    }
+
+    products {
+        uuid id PK
+        uuid artisan_id FK
+        uuid category_id FK
+        varchar name
+        varchar slug UK
+        silk_weave_type weave_type
+        varchar raw_material
+        text description
+        text cultural_story
+        decimal price
+        integer stock_quantity
+        text media_urls
+        boolean is_unique_piece
+        boolean is_published
+        decimal average_rating
+        integer total_reviews
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    product_batches {
+        uuid id PK
+        uuid product_id FK
+        uuid order_assignment_id FK
+        varchar batch_code UK
+        varchar qr_code_url
+        date started_at
+        date completed_at
+        integer total_quantity
+        batch_status status
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    batch_logs {
+        uuid id PK
+        uuid batch_id FK
+        silk_production_stage stage
+        varchar stage_title
+        text description
+        text evidence_image_urls
+        timestamptz logged_at
+        integer step_order
+        timestamptz created_at
+    }
+
+    cart_items {
+        uuid id PK
+        uuid user_id FK
+        uuid product_id FK
+        integer quantity
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    retail_orders {
+        uuid id PK
+        varchar order_code UK
+        uuid buyer_id FK
+        varchar recipient_name
+        varchar recipient_phone
+        text shipping_address
+        text shipping_note
+        decimal total_amount
+        payment_method payment_method
+        payment_status payment_status
+        retail_order_status status
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    retail_order_items {
+        uuid id PK
+        uuid order_id FK
+        uuid product_id FK
+        uuid artisan_id FK
+        integer quantity
+        decimal unit_price
+        decimal subtotal
+        timestamptz created_at
+    }
+
+    quotation_requests {
+        uuid id PK
+        uuid buyer_id FK
+        uuid target_artisan_id FK
+        varchar title
+        text specifications
+        integer target_quantity
+        decimal max_budget
+        silk_weave_type preferred_weave_type
+        date deadline
+        text attachment_urls
+        quote_status status
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    bids {
+        uuid id PK
+        uuid quotation_request_id FK
+        uuid artisan_id FK
+        decimal proposed_price
+        integer proposed_completion_days
+        text note
+        text sample_images
+        bid_status status
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    order_assignments {
+        uuid id PK
+        uuid quotation_request_id FK
+        uuid artisan_id FK
+        uuid bid_id FK
+        integer allocated_quantity
+        decimal agreed_price
+        assignment_status status
+        timestamptz started_at
+        timestamptz completed_at
+        text notes
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    reviews {
+        uuid id PK
+        uuid buyer_id FK
+        review_target_type target_type
+        uuid product_id FK
+        uuid artisan_id FK
+        uuid retail_order_id FK
+        uuid quotation_request_id FK
+        smallint rating
+        text comment
+        text media_urls
+        boolean is_verified_purchase
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    notifications {
+        uuid id PK
+        uuid user_id FK
+        varchar title
+        text message
+        notification_type type
+        varchar link_url
+        boolean is_read
+        timestamptz created_at
+    }
+
+    community_news {
+        uuid id PK
+        uuid author_admin_id FK
+        varchar title
+        varchar slug UK
+        news_category category
+        text content
+        varchar thumbnail_url
+        boolean is_pinned
+        timestamptz published_at
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    audit_logs {
+        uuid id PK
+        uuid user_id FK
+        varchar action
+        varchar target_table
+        uuid target_record_id
+        jsonb metadata
+        timestamptz created_at
+    }
+`;
+
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'dark',
+      themeVariables: {
+        darkMode: true,
+        background: '#0d1322',
+        primaryColor: '#111827',
+        primaryTextColor: '#f8fafc',
+        primaryBorderColor: '#38bdf8',
+        lineColor: '#38bdf8',
+        secondaryColor: '#0f172a',
+        tertiaryColor: '#131c31'
+      }
+    });
+
+    mermaid.render('myGraph', code).then(res => {
+      document.getElementById('render-target').innerHTML = res.svg;
+    });
+  </script>
+</body>
+</html>
