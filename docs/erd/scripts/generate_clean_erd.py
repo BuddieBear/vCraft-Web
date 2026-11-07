@@ -1,5 +1,5 @@
 import json
-import os
+from pathlib import Path
 
 tables = [
     # Column 1: Auth, Admin & Community (x = 60, w = 480)
@@ -808,6 +808,6 @@ html += """
 </html>
 """
 
-with open("docs/erd_high_contrast.html", "w", encoding="utf-8") as f:
-    f.write(html)
-print("Saved docs/erd_high_contrast.html successfully!")
+out_path = Path(__file__).resolve().parents[1] / "visualizers" / "erd_high_contrast.html"
+out_path.write_text(html, encoding="utf-8")
+print(f"Saved {out_path} successfully!")

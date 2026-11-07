@@ -23,12 +23,12 @@
 
 CSDL bao gồm **17 bảng chuẩn hóa 3NF**, phân thành 5 phân hệ nghiệp vụ:
 
-![vCraft Database ERD Schema](docs/vcraft_schema.png)
+![vCraft Database ERD Schema](docs/erd/images/vcraft_schema.png)
 
 ### Tài Liệu & Công Cụ CSDL Đi Kèm:
-- 📊 **Sơ đồ ERD chi tiết & Ma trận bản số:** [docs/erd-draft.md](docs/erd-draft.md)
-- 💾 **Script DDL & Seed Data PostgreSQL 18:** [docs/relational-schema.sql](docs/relational-schema.sql)
-- 🌐 **Trang Web Trực Quan Tương Tác (Zoom/Pan & Tra Cứu):** [docs/schema_visualizer.html](docs/schema_visualizer.html)
+- 📊 **Sơ đồ ERD chi tiết & Ma trận bản số:** [docs/erd/erd-draft.md](docs/erd/erd-draft.md)
+- 💾 **Script DDL & Seed Data PostgreSQL 18:** [database/postgresql/relational-schema.sql](database/postgresql/relational-schema.sql)
+- 🌐 **Trang Web Trực Quan Tương Tác (Zoom/Pan & Tra Cứu):** [docs/erd/visualizers/schema_visualizer.html](docs/erd/visualizers/schema_visualizer.html)
 - 🗄️ **Mô hình Prisma ORM:** [prisma/schema.prisma](prisma/schema.prisma)
 
 ---
@@ -37,18 +37,20 @@ CSDL bao gồm **17 bảng chuẩn hóa 3NF**, phân thành 5 phân hệ nghiệ
 
 ```text
 vCraft/
-├── docs/                      # Tài liệu phân tích, ERD, DDL SQL & Seed data
-│   ├── erd-draft.md           # Báo cáo chi tiết ERD & lý thuyết chuẩn hóa 3NF
-│   ├── relational-schema.sql  # Script DDL 17 bảng PostgreSQL + Seed data thực tế
-│   ├── schema_visualizer.html # Web visualizer tương tác phóng to/thu nhỏ
-│   └── vcraft_schema.png      # Ảnh sơ đồ ERD chuẩn quốc tế Crow's Foot (3031 x 3190 px)
+├── frontend/                  # Giao diện demo và dữ liệu mẫu
+├── database/                  # Script SQL, tách theo hệ quản trị
+│   ├── postgresql/            # DDL và dữ liệu mẫu cho môi trường local
+│   └── mysql/                 # Script SQL cho MySQL
+├── docs/
+│   └── erd/                   # Báo cáo, ảnh, trang HTML và công cụ tạo sơ đồ
 ├── prisma/                    # Cấu hình ORM Prisma cho PostgreSQL
 │   └── schema.prisma          # 17 models và 14 enums
-├── frontend/                  # Mã nguồn giao diện người dùng
 ├── docker-compose.yml         # Container PostgreSQL 15, Redis 7 & pgAdmin 4
 ├── .env.example               # Biến môi trường mẫu
 └── .gitignore                 # Cấu hình bỏ qua file nhạy cảm và cache
 ```
+
+Xem [hướng dẫn chạy frontend demo](frontend/README.md).
 
 ---
 
@@ -63,6 +65,6 @@ docker-compose up -d
 1. Tạo database: `CREATE DATABASE vcraft_db;`
 2. Chạy file DDL:
    ```bash
-   psql -U postgres -d vcraft_db -f docs/relational-schema.sql
+   psql -U postgres -d vcraft_db -f database/postgresql/relational-schema.sql
    ```
 3. Xem đồ thị quan hệ trực quan: Mở pgAdmin 4 $\rightarrow$ Chuột phải `vcraft_db` $\rightarrow$ **Generate ERD**.
