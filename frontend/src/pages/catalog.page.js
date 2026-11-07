@@ -11,11 +11,11 @@ function productCard(product) {
       <button class="product-open" type="button" data-product="${product.id}" aria-label="Xem ${product.name}">
         <span class="product-image">
           <img src="${asset(product.image)}" alt="${product.alt}" width="414" height="414" loading="lazy" decoding="async">
-          <span class="product-tag">${product.category}</span>
         </span>
         <span class="product-info">
-          <span class="product-workshop">${workshop.name}</span>
+          <span class="product-tag">${product.category}</span>
           <span class="product-name">${product.name}</span>
+          <span class="product-workshop">${workshop.name}</span>
           <span class="product-bottom"><strong>${formatPrice(product.price, product.unit)}</strong><span class="card-arrow">${icon("upRight")}</span></span>
         </span>
       </button>
@@ -25,29 +25,34 @@ function productCard(product) {
 export function mountCatalog(container, openProduct) {
   container.innerHTML = `
     <div class="section-heading">
-      <div><p class="eyebrow"><span></span> 01 / Gian lụa</p><h2 id="catalog-title">Chọn một <em>nếp lụa.</em></h2></div>
-      <p>Từ khăn vẽ tay đến tấm lụa vân, mỗi mẫu gắn với một xưởng và một cách làm riêng.</p>
+      <div><p class="eyebrow"><span></span> 03 / Gian lụa</p><h2 id="catalog-title">Mục lục <em>chất liệu.</em></h2></div>
+      <p>Tra mẫu theo loại lụa hoặc tên xưởng. Mở từng mẫu để xem chất liệu, kích thước và nhật ký lô nếu có.</p>
     </div>
-    <div class="catalog-tools">
-      <div class="category-list" role="group" aria-label="Lọc theo danh mục">
-        ${categories.map((name, index) => `<button type="button" data-category="${index}" aria-pressed="${index === 0}">${name}</button>`).join("")}
+    <div class="catalog-layout">
+      <aside class="catalog-tools" aria-label="Bộ lọc danh mục">
+        <p class="control-label">Tra danh mục</p>
+        <div class="category-list" role="group" aria-label="Lọc theo danh mục">
+          ${categories.map((name, index) => `<button type="button" data-category="${index}" aria-pressed="${index === 0}">${name}</button>`).join("")}
+        </div>
+        <div class="catalog-fields">
+          <label class="search-field">
+            ${icon("search")}<span class="sr-only">Tìm sản phẩm</span>
+            <input id="catalog-search" type="search" placeholder="Tìm lụa, xưởng…">
+          </label>
+          <label class="sort-field"><span class="sr-only">Sắp xếp sản phẩm</span>
+            <select id="catalog-sort"><option value="featured">Nổi bật</option><option value="asc">Giá thấp đến cao</option><option value="desc">Giá cao đến thấp</option></select>
+          </label>
+        </div>
+      </aside>
+      <div class="catalog-body">
+        <div id="catalog-results" class="catalog-summary">
+          <p id="result-count" role="status"></p>
+          <button type="button" class="text-button" id="clear-catalog" hidden>Xóa bộ lọc ${icon("close")}</button>
+        </div>
+        <div class="product-grid" id="product-grid"></div>
+        <nav class="pagination" id="catalog-pages" aria-label="Phân trang sản phẩm"></nav>
       </div>
-      <div class="catalog-fields">
-        <label class="search-field">
-          ${icon("search")}<span class="sr-only">Tìm sản phẩm</span>
-          <input id="catalog-search" type="search" placeholder="Tìm lụa, xưởng…">
-        </label>
-        <label class="sort-field"><span class="sr-only">Sắp xếp sản phẩm</span>
-          <select id="catalog-sort"><option value="featured">Nổi bật</option><option value="asc">Giá thấp đến cao</option><option value="desc">Giá cao đến thấp</option></select>
-        </label>
-      </div>
-    </div>
-    <div id="catalog-results" class="catalog-summary">
-      <p id="result-count" role="status"></p>
-      <button type="button" class="text-button" id="clear-catalog" hidden>Xóa bộ lọc ${icon("close")}</button>
-    </div>
-    <div class="product-grid" id="product-grid"></div>
-    <nav class="pagination" id="catalog-pages" aria-label="Phân trang sản phẩm"></nav>`;
+    </div>`;
 
   const search = container.querySelector("#catalog-search");
   const sort = container.querySelector("#catalog-sort");

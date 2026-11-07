@@ -1,5 +1,5 @@
 import { asset, icon } from "../components/ui.js";
-import { batch } from "../data/demo-data.js";
+import { batches, productionStages, products } from "../data/demo-data.js";
 
 export function mountExhibition(container) {
   container.innerHTML = `
@@ -7,19 +7,43 @@ export function mountExhibition(container) {
       <figure class="exhibition-photo">
         <img src="${asset("weaving-detail.webp")}" width="480" height="480" loading="lazy" decoding="async"
           alt="Minh họa con thoi trên khung dệt với sợi lụa màu đất nung">
-        <figcaption>NHẬT KÝ LÔ MẪU · ${batch.code}</figcaption>
+        <figcaption id="batch-caption"></figcaption>
       </figure>
       <div class="exhibition-copy">
-        <p class="eyebrow"><span></span> 02 / Triển lãm số</p>
-        <h2 id="exhibition-title">Một tấm lụa,<br><em>năm công đoạn.</em></h2>
-        <p>Theo dấu lô Sen Hồng từ guồng tơ đến tấm lụa đã hoàn thiện. Chọn một công đoạn để đọc nhật ký.</p>
-        <div class="stage-list">
-          ${batch.stages.map(({ name, description }, index) => `
-            <details${index === 0 ? " open" : ""} name="weaving-stage">
-              <summary><span class="stage-number">0${index + 1}</span><span>${name}</span>${icon("plus")}</summary>
-              <p>${description}</p>
-            </details>`).join("")}
-        </div>
+        <p class="eyebrow"><span></span> 01 / Nhật ký lô</p>
+        <h2 id="exhibition-title">Theo dấu <em>một mẻ nhuộm.</em></h2>
+        <p>Củ nâu, cánh kiến và lá bàng là những nguyên liệu nhuộm được ghi nhận ở Nha Xá. Chọn một lô mẫu để theo dấu tấm lụa từ guồng tơ đến khi hoàn thiện.</p>
+        <a class="text-link exhibition-source" href="https://sodulich.ninhbinh.gov.vn/vi/du-lich-lang-nghe/nghe-det-lua-nha-xa-hon-lua-gan-nghin-nam-ben-bo-song-hong-2408.html">Tìm hiểu nghề dệt Nha Xá ${icon("upRight")}</a>
+        <label class="batch-field">
+          <span>Lô minh họa</span>
+          <select id="batch-select">
+            ${batches.map(({ code }) => {
+              const product = products.find(item => item.batch === code);
+              return `<option value="${code}">${code} · ${product.name}</option>`;
+            }).join("")}
+          </select>
+        </label>
+        <div class="stage-list"></div>
       </div>
     </div>`;
+
+  const select = container.querySelector("#batch-select");
+  const caption = container.querySelector("#batch-caption");
+  const stages = container.querySelector(".stage-list");
+
+  function showBatch(code) {
+    const batch = batches.find(item => item.code === code);
+    if (!batch) return;
+    select.value = code;
+    caption.textContent = `NHẬT KÝ LÔ MẪU · ${code}`;
+    stages.innerHTML = productionStages.map((name, index) => `
+      <details${index === 0 ? " open" : ""} name="weaving-stage">
+        <summary><span class="stage-number">0${index + 1}</span><span>${name}</span>${icon("plus")}</summary>
+        <p>${batch.notes[index]}</p>
+      </details>`).join("");
+  }
+
+  select.addEventListener("change", () => showBatch(select.value));
+  showBatch(select.value);
+  return showBatch;
 }

@@ -1,7 +1,7 @@
 import { asset, formatPrice, icon } from "../components/ui.js";
 import { artisans } from "../data/demo-data.js";
 
-export function showProduct(dialog, product, addToCart) {
+export function showProduct(dialog, product, addToCart, showBatch) {
   const workshop = artisans.find(artisan => artisan.id === product.artisanId);
   dialog.innerHTML = `
     <button class="icon-button dialog-close" type="button" data-close aria-label="Đóng chi tiết">${icon("close")}</button>
@@ -24,6 +24,7 @@ export function showProduct(dialog, product, addToCart) {
       </div>
     </div>`;
   dialog.querySelectorAll("[data-close]").forEach(control => control.addEventListener("click", () => dialog.close()));
+  dialog.querySelector('a[href="#trien-lam"]')?.addEventListener("click", () => showBatch(product.batch));
   dialog.querySelector("[data-add]")?.addEventListener("click", () => {
     const added = addToCart(product);
     dialog.querySelector(".detail-status").textContent = added

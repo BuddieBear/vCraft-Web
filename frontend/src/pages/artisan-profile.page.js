@@ -4,8 +4,8 @@ import { artisans } from "../data/demo-data.js";
 export function renderArtisans(container) {
   container.innerHTML = `
     <div class="section-heading">
-      <div><p class="eyebrow"><span></span> 03 / Người giữ nghề</p><h2 id="artisans-title">Ghé thăm <em>hai xưởng lụa.</em></h2></div>
-      <p>Hai hồ sơ minh họa cho cách vCraft giới thiệu nghệ nhân, kỹ thuật và sản phẩm của từng xưởng.</p>
+      <div><p class="eyebrow"><span></span> 02 / Người giữ nghề</p><h2 id="artisans-title">Hồ sơ <em>xưởng lụa.</em></h2></div>
+      <p>${artisans.length} hồ sơ minh họa, từ xưởng dệt và nhuộm đến xưởng làm phụ kiện.</p>
     </div>
     <div class="artisan-grid">
       ${artisans.map(workshop => `
