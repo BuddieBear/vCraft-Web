@@ -4,10 +4,10 @@
 > **Dự án**: **vCraft - Triển lãm số & Giao thương Làng nghề Thủ công Truyền thống**  
 > **Chuyên đề nghiên cứu**: **Làng Lụa Tơ Tằm Vạn Phúc, Hà Đông, Hà Nội**  
 > **Hệ quản trị CSDL**: PostgreSQL 18.6 (64-bit)  
-> **Mã nguồn DDL & Seed Data**: [relational-schema.sql](file:///D:/PTUD%20Web/vCraft/docs/relational-schema.sql)  
-> **Mô hình ORM**: [prisma/schema.prisma](file:///D:/PTUD%20Web/vCraft/prisma/schema.prisma)  
-> **Trang trực quan tương tác**: [schema_visualizer.html](file:///D:/PTUD%20Web/vCraft/docs/schema_visualizer.html)  
-> **Ảnh thiết kế độ nét cao**: [vcraft_schema.png](file:///D:/PTUD%20Web/vCraft/docs/vcraft_schema.png)
+> **Mã nguồn DDL & Seed Data**: [relational-schema.sql](../../database/postgresql/relational-schema.sql)<br>
+> **Mô hình ORM**: [prisma/schema.prisma](../../prisma/schema.prisma)<br>
+> **Trang trực quan tương tác**: [schema_visualizer.html](visualizers/schema_visualizer.html)<br>
+> **Ảnh thiết kế độ nét cao**: [vcraft_schema.png](images/vcraft_schema.png)
 
 ---
 

@@ -1,7 +1,7 @@
 # vCraft - Nền Tảng Triển Lãm Số & Giao Thương Làng Nghề Truyền Thống
 
 > **Học phần**: INT3306 - Phát triển ứng dụng Web (Fall 2026, VNU-UET)  
-> **Làng nghề nghiên cứu**: **Làng lụa tơ tằm Vạn Phúc (Hà Đông, Hà Nội)**  
+> **Bối cảnh demo** là **làng lụa Nha Xá, phường Duy Tân, tỉnh Ninh Bình**.<br>
 > **Repository**: [https://github.com/BuddieBear/vCraft-Web](https://github.com/BuddieBear/vCraft-Web)  
 > **Quy ước Commit**: [Conventional Commits](https://gist.github.com/qoomon/5dfcdf8eec66a051ecd85625518cfd13)
 
@@ -11,7 +11,7 @@
 
 **vCraft** là nền tảng web được thiết kế riêng cho Ban quản lý (BQL) và các hộ gia đình nghệ nhân của một làng nghề truyền thống. Thay vì chỉ là sàn thương mại điện tử thông thường, hệ thống tập trung vào:
 1. **Triển lãm số (Digital Exhibition)**: Tôn vinh câu chuyện văn hóa, tác phẩm độc bản và tiểu sử các nghệ nhân lão thành.
-2. **Truy xuất nguồn gốc & Mã QR**: Lưu trữ vòng đời 5 công đoạn dệt lụa Vạn Phúc (*Ươm tơ $\rightarrow$ Mắc cửi $\rightarrow$ Dệt $\rightarrow$ Nhuộm $\rightarrow$ Cán láng*), tự động tạo mã QR quét ra trang Landing Page kể lại toàn bộ câu chuyện lô sản phẩm.
+2. **Truy xuất nguồn gốc & Mã QR**: Theo dõi 5 công đoạn minh họa từ ươm tơ, mắc cửi, dệt, nhuộm đến cán láng. Mã QR dẫn đến trang nhật ký lô sản phẩm.
 3. **Bản đồ tương tác làng nghề (Interactive Map)**: Định vị GPS các xưởng dệt, hỗ trợ du khách xem thông tin, giờ mở cửa và trạng thái đón khách trải nghiệm.
 4. **Song hành 2 mô hình giao thương**:
    - **B2C (Bán lẻ)**: Giỏ hàng, đơn hàng lẻ, theo dõi giao hàng và đánh giá chất lượng sản phẩm.
@@ -21,14 +21,16 @@
 
 ## 2. Kiến Trúc Cơ Sở Dữ Liệu (PostgreSQL 18 - Chuẩn Hóa 3NF)
 
-CSDL bao gồm **17 bảng chuẩn hóa 3NF**, phân thành 5 phân hệ nghiệp vụ:
+CSDL bao gồm **17 bảng chuẩn hóa 3NF**, phân thành 5 phân hệ nghiệp vụ.
 
-![vCraft Database ERD Schema](docs/vcraft_schema.png)
+![vCraft Database ERD Schema](docs/erd/images/vcraft_schema.png)
+
+Bộ ERD và dữ liệu mẫu SQL ghi lại bối cảnh Vạn Phúc của bản thiết kế ban đầu. [Frontend demo](frontend/README.md) dùng bộ dữ liệu Nha Xá riêng.
 
 ### Tài Liệu & Công Cụ CSDL Đi Kèm:
-- 📊 **Sơ đồ ERD chi tiết & Ma trận bản số:** [docs/erd-draft.md](docs/erd-draft.md)
-- 💾 **Script DDL & Seed Data PostgreSQL 18:** [docs/relational-schema.sql](docs/relational-schema.sql)
-- 🌐 **Trang Web Trực Quan Tương Tác (Zoom/Pan & Tra Cứu):** [docs/schema_visualizer.html](docs/schema_visualizer.html)
+- 📊 **Sơ đồ ERD chi tiết & Ma trận bản số:** [docs/erd/erd-draft.md](docs/erd/erd-draft.md)
+- 💾 **Script DDL & Seed Data PostgreSQL 18:** [database/postgresql/relational-schema.sql](database/postgresql/relational-schema.sql)
+- 🌐 **Trang Web Trực Quan Tương Tác (Zoom/Pan & Tra Cứu):** [docs/erd/visualizers/schema_visualizer.html](docs/erd/visualizers/schema_visualizer.html)
 - 🗄️ **Mô hình Prisma ORM:** [prisma/schema.prisma](prisma/schema.prisma)
 
 ---
@@ -37,18 +39,24 @@ CSDL bao gồm **17 bảng chuẩn hóa 3NF**, phân thành 5 phân hệ nghiệ
 
 ```text
 vCraft/
-├── docs/                      # Tài liệu phân tích, ERD, DDL SQL & Seed data
-│   ├── erd-draft.md           # Báo cáo chi tiết ERD & lý thuyết chuẩn hóa 3NF
-│   ├── relational-schema.sql  # Script DDL 17 bảng PostgreSQL + Seed data thực tế
-│   ├── schema_visualizer.html # Web visualizer tương tác phóng to/thu nhỏ
-│   └── vcraft_schema.png      # Ảnh sơ đồ ERD chuẩn quốc tế Crow's Foot (3031 x 3190 px)
+├── backend/                   # Bộ khung REST API Node.js phân tầng
+├── frontend/                  # Giao diện demo và dữ liệu mẫu
+├── database/                  # Script SQL, tách theo hệ quản trị
+│   ├── postgresql/            # DDL và dữ liệu mẫu cho môi trường local
+│   └── mysql/                 # Script SQL cho MySQL
+├── docs/
+│   ├── requirements/          # Yêu cầu nghiệp vụ
+│   └── erd/                   # Báo cáo, ảnh, trang HTML và công cụ tạo sơ đồ
 ├── prisma/                    # Cấu hình ORM Prisma cho PostgreSQL
 │   └── schema.prisma          # 17 models và 14 enums
-├── frontend/                  # Mã nguồn giao diện người dùng
+├── ARCHITECTURE.md             # Kiến trúc và quy ước thư mục
 ├── docker-compose.yml         # Container PostgreSQL 15, Redis 7 & pgAdmin 4
 ├── .env.example               # Biến môi trường mẫu
 └── .gitignore                 # Cấu hình bỏ qua file nhạy cảm và cache
 ```
+
+
+Xem [hướng dẫn chạy frontend demo](frontend/README.md) và [kiến trúc API phân tầng](ARCHITECTURE.md).
 
 ---
 
@@ -63,6 +71,6 @@ docker-compose up -d
 1. Tạo database: `CREATE DATABASE vcraft_db;`
 2. Chạy file DDL:
    ```bash
-   psql -U postgres -d vcraft_db -f docs/relational-schema.sql
+   psql -U postgres -d vcraft_db -f database/postgresql/relational-schema.sql
    ```
 3. Xem đồ thị quan hệ trực quan: Mở pgAdmin 4 $\rightarrow$ Chuột phải `vcraft_db` $\rightarrow$ **Generate ERD**.

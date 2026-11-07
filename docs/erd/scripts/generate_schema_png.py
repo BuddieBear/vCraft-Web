@@ -1,4 +1,5 @@
-import os
+from pathlib import Path
+
 from PIL import Image, ImageDraw, ImageFont
 
 # Canvas dimensions (High Resolution 3600 x 2400)
@@ -395,6 +396,6 @@ for code, color, desc in LEGENDS:
     lx += len(desc) * 8 + 90
 
 # Save Output Image
-out_path = r"D:\PTUD Web\vCraft\docs\vcraft_schema.png"
+out_path = Path(__file__).resolve().parents[1] / "images" / "vcraft_schema.png"
 img.save(out_path, quality=95)
 print(f"Generated ultra-high-res 17-table schema: {out_path} ({WIDTH}x{HEIGHT})")
