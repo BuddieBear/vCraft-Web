@@ -1,22 +1,19 @@
-version: '3.8'
-
 services:
-  # PostgreSQL 15 (Chính cho dự án vCraft)
+  # PostgreSQL 18 dành cho phát triển bằng Docker
   postgres:
-    image: postgres:15-alpine
+    image: postgres:18-alpine
     container_name: vcraft-postgres
     restart: always
     environment:
       POSTGRES_USER: vcraft_admin
-      POSTGRES_PASSWORD: vcraft_password_2026
-      POSTGRES_DB: vcraft_db
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-vcraft_local_dev_only}"
+      POSTGRES_DB: vcraft_nhaxa_dev
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
     volumes:
-      - vcraft_postgres_data:/var/lib/postgresql/data
-      - ./database/postgresql/relational-schema.sql:/docker-entrypoint-initdb.d/init.sql
+      - vcraft_postgres18_data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U vcraft_admin -d vcraft_db"]
+      test: ["CMD-SHELL", "pg_isready -U vcraft_admin -d vcraft_nhaxa_dev"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -50,5 +47,5 @@ services:
       - postgres
 
 volumes:
-  vcraft_postgres_data:
+  vcraft_postgres18_data:
   vcraft_redis_data:

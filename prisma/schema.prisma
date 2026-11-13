@@ -1,7 +1,7 @@
 // =============================================================================
 // vCraft Prisma Schema - PostgreSQL 18
-// Domain: Nền tảng Triển lãm số & B2C/B2B Làng Lụa Tơ Tằm Vạn Phúc (Hà Đông, Hà Nội)
-// Matches relational-schema.sql (17 tables, 14 ENUMs, 3NF Normalized)
+// Domain: Nền tảng triển lãm số và giao thương làng lụa Nha Xá.
+// Migration SQL also defines PostgreSQL checks, partial indexes and triggers.
 // =============================================================================
 
 generator client {
@@ -9,13 +9,30 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("MIGRATION_DATABASE_URL")
 }
 
 // =============================================================================
 // ENUMS
 // =============================================================================
+
+enum PricingMode {
+  FIXED
+  CONTACT
+
+  @@map("pricing_mode")
+}
+
+enum SaleUnit {
+  METER
+  PIECE
+  SET
+  BOX
+
+  @@map("sale_unit")
+}
 
 enum UserRole {
   ADMIN
@@ -173,6 +190,8 @@ model User {
   authoredNews       CommunityNews[]
   auditLogs          AuditLog[]
 
+  @@index([createdAt(sort: Desc)], map: "idx_users_created_at")
+  @@index([role], map: "idx_users_role")
   @@map("users")
 }
 
@@ -197,7 +216,7 @@ model ArtisanProfile {
   createdAt          DateTime                  @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt          DateTime                  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
-  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   certificates          ArtisanCertificate[]
   products              Product[]
   retailOrderItems      RetailOrderItem[]
@@ -206,6 +225,8 @@ model ArtisanProfile {
   reviews               Review[]
   targetedQuoteRequests QuotationRequest[]     @relation("DirectQuoteRequests")
 
+  @@index([workshopName(ops: raw("gin_trgm_ops"))], map: "idx_artisan_name_search", type: Gin)
+  @@index([verificationStatus], map: "idx_artisan_profiles_status")
   @@map("artisan_profiles")
 }
 
@@ -218,8 +239,9 @@ model ArtisanCertificate {
   certificateImageUrl String   @map("certificate_image_url") @db.VarChar(500)
   createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
-  artisan ArtisanProfile @relation(fields: [artisanId], references: [id], onDelete: Cascade)
+  artisan ArtisanProfile @relation(fields: [artisanId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  @@index([artisanId], map: "idx_certificates_artisan")
   @@map("artisan_certificates")
 }
 
@@ -243,10 +265,12 @@ model Product {
   name           String        @db.VarChar(255)
   slug           String        @unique @db.VarChar(280)
   weaveType      SilkWeaveType @default(LUA_VAN) @map("weave_type")
-  rawMaterial    String        @default("100% Tơ tằm tự nhiên Bảo Lộc / Vạn Phúc") @map("raw_material") @db.VarChar(150)
+  rawMaterial    String        @default("Tơ tằm") @map("raw_material") @db.VarChar(150)
   description    String?       @db.Text
   culturalStory  String?       @map("cultural_story") @db.Text
-  price          Decimal       @db.Decimal(12, 2)
+  price          Decimal?     @db.Decimal(12, 2)
+  pricingMode    PricingMode   @default(FIXED) @map("pricing_mode")
+  saleUnit       SaleUnit      @default(PIECE) @map("sale_unit")
   stockQuantity  Int           @default(0) @map("stock_quantity")
   mediaUrls      String[]      @default([]) @map("media_urls")
   isUniquePiece  Boolean       @default(false) @map("is_unique_piece")
@@ -256,13 +280,17 @@ model Product {
   createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt      DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
-  artisan          ArtisanProfile    @relation(fields: [artisanId], references: [id], onDelete: Restrict)
-  category         Category?         @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  artisan          ArtisanProfile    @relation(fields: [artisanId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  category         Category?         @relation(fields: [categoryId], references: [id], onDelete: SetNull, onUpdate: NoAction)
   batches          ProductBatch[]
   cartItems        CartItem[]
   retailOrderItems RetailOrderItem[]
   reviews          Review[]
 
+  @@index([artisanId], map: "idx_products_artisan")
+  @@index([categoryId], map: "idx_products_category")
+  @@index([name(ops: raw("gin_trgm_ops"))], map: "idx_products_name_search", type: Gin)
+  @@index([price], map: "idx_products_price")
   @@map("products")
 }
 
@@ -272,17 +300,20 @@ model ProductBatch {
   orderAssignmentId String?     @map("order_assignment_id") @db.Uuid
   batchCode         String      @unique @map("batch_code") @db.VarChar(50)
   qrCodeUrl         String      @map("qr_code_url") @db.VarChar(500)
-  startedAt         DateTime    @default(now()) @map("started_at") @db.Date
+  startedAt         DateTime    @default(dbgenerated("CURRENT_DATE")) @map("started_at") @db.Date
   completedAt       DateTime?   @map("completed_at") @db.Date
   totalQuantity     Int         @map("total_quantity")
   status            BatchStatus @default(IN_PROGRESS)
   createdAt         DateTime    @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt         DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
-  product         Product          @relation(fields: [productId], references: [id], onDelete: Restrict)
-  orderAssignment OrderAssignment? @relation(fields: [orderAssignmentId], references: [id], onDelete: SetNull)
+  product         Product          @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  orderAssignment OrderAssignment? @relation(fields: [orderAssignmentId], references: [id], onDelete: SetNull, onUpdate: NoAction)
   logs            BatchLog[]
 
+  @@index([orderAssignmentId], map: "idx_batches_assignment")
+  @@index([batchCode], map: "idx_batches_code")
+  @@index([productId], map: "idx_batches_product")
   @@map("product_batches")
 }
 
@@ -297,9 +328,10 @@ model BatchLog {
   stepOrder         Int                 @map("step_order")
   createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz()
 
-  batch ProductBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  batch ProductBatch @relation(fields: [batchId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@unique([batchId, stage])
+  @@unique([batchId, stage], map: "uq_batch_stage")
+  @@index([batchId, stepOrder], map: "idx_batch_logs_order")
   @@map("batch_logs")
 }
 
@@ -311,10 +343,11 @@ model CartItem {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@unique([userId, productId])
+  @@unique([userId, productId], map: "uq_user_product_cart")
+  @@index([userId], map: "idx_cart_items_user")
   @@map("cart_items")
 }
 
@@ -333,10 +366,13 @@ model RetailOrder {
   createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt       DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
-  buyer   User              @relation(fields: [buyerId], references: [id], onDelete: Restrict)
+  buyer   User              @relation(fields: [buyerId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   items   RetailOrderItem[]
   reviews Review[]
 
+  @@index([buyerId], map: "idx_retail_orders_buyer")
+  @@index([createdAt(sort: Desc)], map: "idx_retail_orders_created")
+  @@index([status], map: "idx_retail_orders_status")
   @@map("retail_orders")
 }
 
@@ -350,10 +386,12 @@ model RetailOrderItem {
   subtotal  Decimal  @db.Decimal(12, 2)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
-  order   RetailOrder    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
-  artisan ArtisanProfile @relation(fields: [artisanId], references: [id], onDelete: Restrict)
+  order   RetailOrder    @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  product Product        @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  artisan ArtisanProfile @relation(fields: [artisanId], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
+  @@index([artisanId], map: "idx_retail_order_items_artisan")
+  @@index([orderId], map: "idx_retail_order_items_order")
   @@map("retail_order_items")
 }
 
@@ -372,12 +410,16 @@ model QuotationRequest {
   createdAt           DateTime      @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt           DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
-  buyer         User              @relation(fields: [buyerId], references: [id], onDelete: Restrict)
-  targetArtisan ArtisanProfile?   @relation("DirectQuoteRequests", fields: [targetArtisanId], references: [id], onDelete: SetNull)
+  buyer         User              @relation(fields: [buyerId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  targetArtisan ArtisanProfile?   @relation("DirectQuoteRequests", fields: [targetArtisanId], references: [id], onDelete: SetNull, onUpdate: NoAction)
   bids          Bid[]
   assignments   OrderAssignment[]
   reviews       Review[]
 
+  @@index([buyerId], map: "idx_quotes_buyer")
+  @@index([deadline], map: "idx_quotes_deadline")
+  @@index([status], map: "idx_quotes_status")
+  @@index([targetArtisanId], map: "idx_quotes_target_artisan")
   @@map("quotation_requests")
 }
 
@@ -393,11 +435,13 @@ model Bid {
   createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt              DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
-  quotationRequest QuotationRequest @relation(fields: [quotationRequestId], references: [id], onDelete: Cascade)
-  artisan          ArtisanProfile   @relation(fields: [artisanId], references: [id], onDelete: Cascade)
+  quotationRequest QuotationRequest @relation(fields: [quotationRequestId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  artisan          ArtisanProfile   @relation(fields: [artisanId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   assignment       OrderAssignment?
 
-  @@unique([quotationRequestId, artisanId])
+  @@unique([quotationRequestId, artisanId], map: "uq_artisan_bid")
+  @@index([artisanId], map: "idx_bids_artisan")
+  @@index([quotationRequestId], map: "idx_bids_quote")
   @@map("bids")
 }
 
@@ -415,11 +459,13 @@ model OrderAssignment {
   createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt          DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
-  quotationRequest QuotationRequest @relation(fields: [quotationRequestId], references: [id], onDelete: Restrict)
-  artisan          ArtisanProfile   @relation(fields: [artisanId], references: [id], onDelete: Restrict)
-  bid              Bid              @relation(fields: [bidId], references: [id], onDelete: Restrict)
+  quotationRequest QuotationRequest @relation(fields: [quotationRequestId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  artisan          ArtisanProfile   @relation(fields: [artisanId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  bid              Bid              @relation(fields: [bidId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   batches          ProductBatch[]
 
+  @@index([artisanId], map: "idx_assignments_artisan")
+  @@index([quotationRequestId], map: "idx_assignments_quote")
   @@map("order_assignments")
 }
 
@@ -434,16 +480,18 @@ model Review {
   rating              Int              @db.SmallInt
   comment             String           @db.Text
   mediaUrls           String[]         @default([]) @map("media_urls")
-  isVerifiedPurchase  Boolean          @default(true) @map("is_verified_purchase")
+  isVerifiedPurchase  Boolean          @default(false) @map("is_verified_purchase")
   createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt           DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
-  buyer            User              @relation(fields: [buyerId], references: [id], onDelete: Cascade)
-  product          Product?          @relation(fields: [productId], references: [id], onDelete: Cascade)
-  artisan          ArtisanProfile    @relation(fields: [artisanId], references: [id], onDelete: Cascade)
-  retailOrder      RetailOrder?      @relation(fields: [retailOrderId], references: [id], onDelete: SetNull)
-  quotationRequest QuotationRequest? @relation(fields: [quotationRequestId], references: [id], onDelete: SetNull)
+  buyer            User              @relation(fields: [buyerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  product          Product?          @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  artisan          ArtisanProfile    @relation(fields: [artisanId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  retailOrder      RetailOrder?      @relation(fields: [retailOrderId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  quotationRequest QuotationRequest? @relation(fields: [quotationRequestId], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
+  @@index([artisanId], map: "idx_reviews_artisan")
+  @@index([buyerId], map: "idx_reviews_buyer")
   @@map("reviews")
 }
 
@@ -457,8 +505,9 @@ model Notification {
   isRead    Boolean          @default(false) @map("is_read")
   createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz()
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  @@index([userId, isRead, createdAt(sort: Desc)], map: "idx_notifications_user_unread")
   @@map("notifications")
 }
 
@@ -475,8 +524,10 @@ model CommunityNews {
   createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt     DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
-  authorAdmin User @relation(fields: [authorAdminId], references: [id], onDelete: Restrict)
+  authorAdmin User @relation(fields: [authorAdminId], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
+  @@index([category], map: "idx_news_category")
+  @@index([isPinned, publishedAt(sort: Desc)], map: "idx_news_pinned")
   @@map("community_news")
 }
 
@@ -489,7 +540,9 @@ model AuditLog {
   metadata       Json?
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
+  @@index([createdAt(sort: Desc)], map: "idx_audit_created")
+  @@index([userId], map: "idx_audit_user")
   @@map("audit_logs")
 }
