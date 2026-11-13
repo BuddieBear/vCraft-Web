@@ -18,6 +18,7 @@ test("checkout, multi-artisan quote and verified review transactions", async () 
     const workshop = (owner) => prisma.artisanProfile.create({ data: { userId: owner.id, workshopName: owner.email, address: "test", latitude: 0, longitude: 0, verificationStatus: "APPROVED" } });
     const w1 = await workshop(a1); const w2 = await workshop(a2);
     const product = await prisma.product.create({ data: { artisanId: w1.id, name: "test", slug: "commerce-test", price: 20, stockQuantity: 1 } });
+    await assert.rejects(prisma.$executeRaw`UPDATE products SET price = 'NaN'::numeric WHERE id = ${product.id}::uuid`);
     for (const u of [buyer, buyer2]) await prisma.cartItem.create({ data: { userId: u.id, productId: product.id, quantity: 1 } });
     const details = { recipientName: "Test", recipientPhone: "123", shippingAddress: "Test" };
     const results = await Promise.allSettled([checkout({ userId: buyer.id, ...details }), checkout({ userId: buyer2.id, ...details })]);
@@ -40,9 +41,26 @@ test("checkout, multi-artisan quote and verified review transactions", async () 
     const reviews = await Promise.allSettled([createReview(review), createReview(review)]);
     assert.equal(reviews.filter((r) => r.status === "fulfilled").length, 1);
     await assert.rejects(createReview({ ...review, artisanId: w2.id }));
+    await assert.rejects(prisma.retailOrder.delete({ where: { id: order.id } }));
+    assert.ok(await prisma.retailOrder.findUnique({ where: { id: order.id } }));
 
+    await Promise.all([buyer, buyer2].map((author, index) => prisma.review.create({ data: { buyerId: author.id, productId: available.id, artisanId: w1.id, rating: index ? 5 : 1, comment: "Concurrent rollup" } })));
+    const rated = await prisma.product.findUniqueOrThrow({ where: { id: available.id } });
+    assert.equal(rated.totalReviews, 2);
+    assert.equal(rated.averageRating.toString(), "3");
+
+    await assert.rejects(createQuote({ userId: buyer.id, title: "Order", specifications: "Silk", targetQuantity: 10, deadline: "2099-02-30" }));
+    await assert.rejects(createQuote({ userId: buyer.id, title: "Order", specifications: "Silk", targetQuantity: 10, deadline: "2099-01-01", maxBudget: "NaN" }));
+    const smallQuote = await createQuote({ userId: buyer.id, title: "Single item", specifications: "Silk", targetQuantity: 1, deadline: "2099-01-01" });
+    await sendQuote({ userId: buyer.id, quoteId: smallQuote.id });
+    const small1 = await submitBid({ userId: a1.id, quoteId: smallQuote.id, proposedPrice: 20, proposedCompletionDays: 5 });
+    const small2 = await submitBid({ userId: a2.id, quoteId: smallQuote.id, proposedPrice: 30, proposedCompletionDays: 7 });
+    await assert.rejects(acceptBids({ userId: buyer.id, quoteId: smallQuote.id, bidIds: [small1.id, small2.id] }));
+    assert.equal((await prisma.quotationRequest.findUniqueOrThrow({ where: { id: smallQuote.id } })).status, "ARTISANS_BIDDING");
     const quote = await createQuote({ userId: buyer.id, title: "Order", specifications: "Silk", targetQuantity: 10, deadline: "2099-01-01" });
     await sendQuote({ userId: buyer.id, quoteId: quote.id });
+    await assert.rejects(submitBid({ userId: a1.id, quoteId: quote.id, proposedPrice: "NaN", proposedCompletionDays: 5 }));
+    await assert.rejects(submitBid({ userId: a1.id, quoteId: quote.id, proposedPrice: "0.001", proposedCompletionDays: 5 }));
     const bid1 = await submitBid({ userId: a1.id, quoteId: quote.id, proposedPrice: 20, proposedCompletionDays: 5 });
     const bid2 = await submitBid({ userId: a2.id, quoteId: quote.id, proposedPrice: 30, proposedCompletionDays: 7 });
     const decisions = await Promise.allSettled([acceptBids({ userId: buyer.id, quoteId: quote.id, bidIds: [bid1.id, bid2.id] }), acceptBids({ userId: buyer.id, quoteId: quote.id, bidIds: [bid1.id, bid2.id] })]);

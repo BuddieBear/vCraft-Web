@@ -22,7 +22,7 @@ export async function listProducts(request, response) {
     });
   }
 
-  const catalog = await listCatalogProducts({ page, limit, category });
+  const catalog = await listCatalogProducts({ page, limit, category: category?.trim() });
   return response.json(toCatalogJson(catalog));
 }
 

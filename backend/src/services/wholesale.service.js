@@ -1,9 +1,27 @@
 import { prisma } from "../database/prisma.js";
+import { Prisma } from "@prisma/client";
 import { activeUser, approvedArtisan, lockQuote } from "../repositories/wholesale.repository.js";
 
 function id(value) { if (typeof value !== "string" || !value.trim()) throw new Error("Invalid identifier"); return value; }
 function text(value, max) { if (typeof value !== "string" || !value.trim() || value.length > max) throw new Error("Invalid text"); return value.trim(); }
 function positive(value) { if (!Number.isInteger(value) || value <= 0 || value > 2147483647) throw new Error("Invalid quantity"); return value; }
+function money(value, max) {
+  if ((typeof value !== "string" && typeof value !== "number" && !Prisma.Decimal.isDecimal(value)) || (typeof value === "string" && !value.trim())) throw new Error("Invalid amount");
+  let amount;
+  try { amount = new Prisma.Decimal(value); } catch { throw new Error("Invalid amount"); }
+  if (!amount.isFinite() || amount.lte(0) || amount.gt(max) || amount.decimalPlaces() > 2) throw new Error("Invalid amount");
+  return amount;
+}
+function vietnamToday() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+function deadlineDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error("Invalid deadline");
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (!Number.isFinite(date.valueOf()) || date.toISOString().slice(0, 10) !== value || value < vietnamToday()) throw new Error("Invalid deadline");
+  return date;
+}
+function deadlinePassed(date) { return date.toISOString().slice(0, 10) < vietnamToday(); }
 async function quoteFor(tx, quoteId, buyerId, status) {
   const quote = await lockQuote(tx, id(quoteId));
   if (!quote || (buyerId && quote.buyerId !== buyerId) || (status && !status.includes(quote.status))) throw new Error("Quote not found or invalid state");
@@ -20,14 +38,14 @@ export async function findBuyerQuote({ userId, quoteId }) {
 
 export async function createQuote({ userId, title, specifications, targetQuantity, deadline, targetArtisanId = null, maxBudget = null, preferredWeaveType = "LUA_VAN", attachmentUrls = [] }) {
   id(userId); text(title, 255); text(specifications, 10000); positive(targetQuantity);
-  const date = new Date(deadline);
-  if (Number.isNaN(date.valueOf()) || date < new Date(new Date().toISOString().slice(0, 10))) throw new Error("Invalid deadline");
+  const date = deadlineDate(deadline);
+  const budget = maxBudget === null ? null : money(maxBudget, "999999999999.99");
   if (targetArtisanId !== null) id(targetArtisanId);
   if (!Array.isArray(attachmentUrls) || attachmentUrls.some((url) => typeof url !== "string" || url.length > 500)) throw new Error("Invalid attachments");
   return prisma.$transaction(async (tx) => {
     if (!await activeUser(tx, userId, "BUYER")) throw new Error("Buyer is not active");
     if (targetArtisanId && !await tx.artisanProfile.findFirst({ where: { id: targetArtisanId, verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } } })) throw new Error("Artisan is unavailable");
-    return tx.quotationRequest.create({ data: { buyerId: userId, title: title.trim(), specifications: specifications.trim(), targetQuantity, deadline: date, targetArtisanId, maxBudget, preferredWeaveType, attachmentUrls } });
+    return tx.quotationRequest.create({ data: { buyerId: userId, title: title.trim(), specifications: specifications.trim(), targetQuantity, deadline: date, targetArtisanId, maxBudget: budget, preferredWeaveType, attachmentUrls } });
   });
 }
 
@@ -36,7 +54,7 @@ export async function sendQuote({ userId, quoteId }) {
   return prisma.$transaction(async (tx) => {
     if (!await activeUser(tx, userId, "BUYER")) throw new Error("Buyer is not active");
     const quote = await quoteFor(tx, quoteId, userId, ["DRAFT"]);
-    if (quote.deadline < new Date(new Date().toISOString().slice(0, 10))) throw new Error("Quote deadline passed");
+    if (deadlinePassed(quote.deadline)) throw new Error("Quote deadline passed");
     const artisans = await tx.artisanProfile.findMany({ where: { ...(quote.targetArtisanId ? { id: quote.targetArtisanId } : {}), verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } }, select: { userId: true } });
     if (!artisans.length) throw new Error("No eligible artisan");
     const result = await tx.quotationRequest.update({ where: { id: quoteId }, data: { status: "SENT_TO_ARTISANS" } });
@@ -47,13 +65,14 @@ export async function sendQuote({ userId, quoteId }) {
 
 export async function submitBid({ userId, quoteId, proposedPrice, proposedCompletionDays, note = null, sampleImages = [] }) {
   id(userId); id(quoteId); positive(proposedCompletionDays);
+  const price = money(proposedPrice, "9999999999.99");
   if (!Array.isArray(sampleImages) || sampleImages.some((s) => typeof s !== "string" || s.length > 500)) throw new Error("Invalid images");
   if (note != null && (typeof note !== "string" || note.length > 10000)) throw new Error("Invalid note");
   return prisma.$transaction(async (tx) => {
     const quote = await quoteFor(tx, quoteId, null, ["SENT_TO_ARTISANS", "ARTISANS_BIDDING"]);
     const artisan = await approvedArtisan(tx, userId);
-    if (!artisan || (quote.targetArtisanId && quote.targetArtisanId !== artisan.id) || quote.deadline < new Date(new Date().toISOString().slice(0, 10))) throw new Error("Artisan cannot bid on quote");
-    const bid = await tx.bid.create({ data: { quotationRequestId: quoteId, artisanId: artisan.id, proposedPrice, proposedCompletionDays, note, sampleImages } });
+    if (!artisan || (quote.targetArtisanId && quote.targetArtisanId !== artisan.id) || deadlinePassed(quote.deadline)) throw new Error("Artisan cannot bid on quote");
+    const bid = await tx.bid.create({ data: { quotationRequestId: quoteId, artisanId: artisan.id, proposedPrice: price, proposedCompletionDays, note, sampleImages } });
     await tx.quotationRequest.update({ where: { id: quoteId }, data: { status: "ARTISANS_BIDDING" } });
     await tx.notification.create({ data: { userId: quote.buyerId, title: "Có báo giá mới", message: quote.title, type: "BID_RECEIVED" } });
     return bid;
@@ -67,7 +86,8 @@ export async function acceptBids({ userId, quoteId, bidIds }) {
   return prisma.$transaction(async (tx) => {
     if (!await activeUser(tx, userId, "BUYER")) throw new Error("Buyer is not active");
     const quote = await quoteFor(tx, quoteId, userId, ["ARTISANS_BIDDING"]);
-    const bids = await tx.bid.findMany({ where: { id: { in: bidIds }, quotationRequestId: quoteId, status: "SUBMITTED", artisan: { verificationStatus: "APPROVED", user: { isActive: true } } }, include: { artisan: { select: { userId: true } } } });
+    if (bidIds.length > quote.targetQuantity) throw new Error("Too many bids for the requested quantity");
+    const bids = await tx.bid.findMany({ where: { id: { in: bidIds }, quotationRequestId: quoteId, status: "SUBMITTED", artisan: { verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } } }, include: { artisan: { select: { userId: true } } } });
     if (bids.length !== bidIds.length) throw new Error("Invalid or unavailable bids");
     await tx.bid.updateMany({ where: { quotationRequestId: quoteId, status: "SUBMITTED", id: { notIn: bidIds } }, data: { status: "REJECTED" } });
     await tx.bid.updateMany({ where: { id: { in: bidIds }, quotationRequestId: quoteId, status: "SUBMITTED" }, data: { status: "ACCEPTED" } });
