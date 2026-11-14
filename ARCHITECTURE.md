@@ -1,6 +1,6 @@
 # Kiến trúc vCraft
 
-vCraft gồm giao diện web trong `frontend/` và bộ khung REST API trong `backend/`. Frontend hiện có [bản demo HTML, CSS và JavaScript](frontend/README.md) dùng dữ liệu mẫu. Bộ khung API dùng JavaScript trên Node.js, dự kiến dùng Express cho tầng HTTP và Prisma để truy cập PostgreSQL.
+vCraft gồm giao diện web trong `frontend/` và REST API trong `backend/`. Frontend hiện có [bản demo HTML, CSS và JavaScript](frontend/README.md) dùng dữ liệu mẫu. API danh mục dùng Express trên Node.js và Prisma để đọc PostgreSQL.
 
 ## Cấu trúc thư mục
 
@@ -32,10 +32,14 @@ vCraft/
 │       ├── pages/                  # Màn hình theo chức năng
 │       └── styles/                 # CSS dùng chung
 ├── prisma/
-│   └── schema.prisma               # Schema PostgreSQL hiện có
+│   ├── schema.prisma               # Model Prisma cho PostgreSQL
+│   ├── migrations/                 # Lịch sử khởi tạo và thay đổi schema
+│   └── seed.js                     # Dữ liệu Nha Xá và tài khoản phát triển
 ├── database/
 │   ├── postgresql/
-│   │   └── relational-schema.sql   # DDL và dữ liệu mẫu dùng bởi Docker Compose
+│   │   ├── relational-schema.sql   # DDL và dữ liệu mẫu của thiết kế ban đầu
+│   │   ├── configure-roles.sql     # Quyền sở hữu schema của tài khoản migration
+│   │   └── grant-runtime.sql       # Quyền đọc/ghi cho tài khoản ứng dụng
 │   └── mysql/
 │       └── vcraft_mysql.sql        # Script SQL cho MySQL
 ├── docs/
@@ -63,6 +67,8 @@ Frontend → Route → Middleware → Controller → Service → Repository → 
 - Controller lấy dữ liệu từ yêu cầu, gọi service và chuyển kết quả thành phản hồi HTTP.
 - Service xử lý quyền trên từng tài nguyên, kiểm tra trạng thái và điều phối các thao tác cần nằm trong cùng một giao dịch. Ví dụ, khi tạo đơn B2C, service điều phối việc tạo đơn và các dòng sản phẩm rồi cập nhật giỏ hàng trong cùng giao dịch.
 - Repository tập trung truy vấn và ghi dữ liệu. Các repository dùng Prisma Client chung từ `database/prisma.js`.
+- Repository danh mục dùng `select` để đọc các cột công khai và quan hệ cần thiết. HTTP và lệnh xuất JSON dùng chung presenter để chuẩn hóa giá và ngày giờ. Xem [thiết kế và cách kiểm tra Persistence Layer](docs/persistence-layer.md).
+- Prisma Client backend dùng `DATABASE_URL` của tài khoản ứng dụng. Prisma CLI và seed phát triển dùng `MIGRATION_DATABASE_URL` của tài khoản migration.
 
 ## Phân hệ nghiệp vụ
 

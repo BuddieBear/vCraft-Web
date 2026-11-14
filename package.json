@@ -1,0 +1,32 @@
+{
+  "name": "vcraft",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.11.0"
+  },
+  "scripts": {
+    "start": "node backend/src/server.js",
+    "db:validate": "prisma validate",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:status": "prisma migrate status",
+    "db:seed": "node prisma/seed.js",
+    "db:json": "node backend/scripts/export-catalog.js",
+    "db:test": "node --test backend/tests/integration/orm.test.js"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.3",
+    "bcryptjs": "3.0.3",
+    "express": "5.3.0"
+  },
+  "devDependencies": {
+    "prisma": "6.19.3"
+  },
+  "overrides": {
+    "@prisma/config": {
+      "deepmerge-ts": "8.0.2"
+    }
+  }
+}
