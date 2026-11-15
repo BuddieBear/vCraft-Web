@@ -1,6 +1,6 @@
 import { prisma } from "../database/prisma.js";
 import { Prisma } from "@prisma/client";
-import { activeUser, approvedArtisan, lockQuote } from "../repositories/wholesale.repository.js";
+import { activeUser, approvedArtisan, lockQuote, findApprovedArtisan, listOpenQuotes, listArtisanAssignments, listBuyerQuotes, listAcceptedQuotes } from "../repositories/wholesale.repository.js";
 
 function id(value) { if (typeof value !== "string" || !value.trim()) throw new Error("Invalid identifier"); return value; }
 function text(value, max) { if (typeof value !== "string" || !value.trim() || value.length > max) throw new Error("Invalid text"); return value.trim(); }
@@ -22,6 +22,14 @@ function deadlineDate(value) {
   return date;
 }
 function deadlinePassed(date) { return date.toISOString().slice(0, 10) < vietnamToday(); }
+export async function listArtisanWork(userId, options, assignments = false) {
+  id(userId);
+  const artisan = await findApprovedArtisan(userId);
+  if (!artisan) throw new Error("Artisan is not active");
+  return assignments ? listArtisanAssignments(artisan.id, options) : listOpenQuotes(artisan.id, { ...options, today: new Date(`${vietnamToday()}T00:00:00.000Z`) });
+}
+export function listQuotesForBuyer(userId, options) { id(userId); return listBuyerQuotes(userId, options); }
+export function listQuotesForAllocation(options) { return listAcceptedQuotes(options); }
 async function quoteFor(tx, quoteId, buyerId, status) {
   const quote = await lockQuote(tx, id(quoteId));
   if (!quote || (buyerId && quote.buyerId !== buyerId) || (status && !status.includes(quote.status))) throw new Error("Quote not found or invalid state");
@@ -32,7 +40,7 @@ export async function findBuyerQuote({ userId, quoteId }) {
   id(userId); id(quoteId);
   return prisma.quotationRequest.findFirst({
     where: { id: quoteId, buyerId: userId, buyer: { isActive: true, role: "BUYER" } },
-    include: { bids: true, assignments: { include: { batches: { select: { id: true, batchCode: true, status: true } } } } },
+    include: { bids: true, recipients: { select: { artisanId: true } }, assignments: { include: { batches: { select: { id: true, batchCode: true, status: true } } } } },
   });
 }
 
@@ -63,6 +71,26 @@ export async function sendQuote({ userId, quoteId }) {
   });
 }
 
+export async function dispatchQuote({ userId, quoteId, artisanIds }) {
+  id(userId); id(quoteId);
+  if (!Array.isArray(artisanIds) || !artisanIds.length || new Set(artisanIds).size !== artisanIds.length) throw new Error("Invalid allocations");
+  artisanIds.forEach(id);
+  return prisma.$transaction(async (tx) => {
+    if (!await activeUser(tx, userId, "ADMIN")) throw new Error("Admin is not active");
+    const quote = await quoteFor(tx, quoteId, null, ["DRAFT"]);
+    if (!await activeUser(tx, quote.buyerId, "BUYER")) throw new Error("Quote buyer is unavailable");
+    if (deadlinePassed(quote.deadline)) throw new Error("Quote deadline passed");
+    if (quote.targetArtisanId && (artisanIds.length !== 1 || artisanIds[0] !== quote.targetArtisanId)) throw new Error("Invalid allocations");
+    const artisans = await tx.artisanProfile.findMany({ where: { id: { in: artisanIds }, verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } }, select: { id: true, userId: true } });
+    if (artisans.length !== artisanIds.length) throw new Error("Artisan is unavailable");
+    await tx.quoteRecipient.createMany({ data: artisans.map((artisan) => ({ quotationRequestId: quoteId, artisanId: artisan.id })) });
+    const result = await tx.quotationRequest.update({ where: { id: quoteId }, data: { status: "SENT_TO_ARTISANS" } });
+    await tx.notification.createMany({ data: artisans.map((artisan) => ({ userId: artisan.userId, title: "Yêu cầu báo giá mới", message: quote.title, type: "QUOTE_REQUEST" })) });
+    await tx.auditLog.create({ data: { userId, action: "QUOTE_DISPATCHED", targetTable: "quotation_requests", targetRecordId: quoteId, metadata: { artisanIds } } });
+    return result;
+  });
+}
+
 export async function submitBid({ userId, quoteId, proposedPrice, proposedCompletionDays, note = null, sampleImages = [] }) {
   id(userId); id(quoteId); positive(proposedCompletionDays);
   const price = money(proposedPrice, "9999999999.99");
@@ -70,8 +98,11 @@ export async function submitBid({ userId, quoteId, proposedPrice, proposedComple
   if (note != null && (typeof note !== "string" || note.length > 10000)) throw new Error("Invalid note");
   return prisma.$transaction(async (tx) => {
     const quote = await quoteFor(tx, quoteId, null, ["SENT_TO_ARTISANS", "ARTISANS_BIDDING"]);
+    if (!await activeUser(tx, quote.buyerId, "BUYER")) throw new Error("Quote buyer is unavailable");
     const artisan = await approvedArtisan(tx, userId);
     if (!artisan || (quote.targetArtisanId && quote.targetArtisanId !== artisan.id) || deadlinePassed(quote.deadline)) throw new Error("Artisan cannot bid on quote");
+    const recipients = await tx.quoteRecipient.count({ where: { quotationRequestId: quoteId } });
+    if (recipients && !await tx.quoteRecipient.findUnique({ where: { quotationRequestId_artisanId: { quotationRequestId: quoteId, artisanId: artisan.id } } })) throw new Error("Artisan cannot bid on quote");
     const bid = await tx.bid.create({ data: { quotationRequestId: quoteId, artisanId: artisan.id, proposedPrice: price, proposedCompletionDays, note, sampleImages } });
     await tx.quotationRequest.update({ where: { id: quoteId }, data: { status: "ARTISANS_BIDDING" } });
     await tx.notification.create({ data: { userId: quote.buyerId, title: "Có báo giá mới", message: quote.title, type: "BID_RECEIVED" } });
@@ -125,6 +156,12 @@ export async function advanceAssignment({ userId, assignmentId, status }) {
     const quote = await quoteFor(tx, initial.quotationRequestId, null, ["BUYER_ACCEPTED", "IN_PRODUCTION"]);
     const artisan = await approvedArtisan(tx, userId);
     if (!artisan) throw new Error("Artisan is not active");
+    if (status === "READY_FOR_DELIVERY") {
+      // Batch creation uses the same lock, so a new batch cannot slip past the check.
+      await tx.$queryRaw`SELECT id FROM order_assignments WHERE id = ${assignmentId}::uuid AND artisan_id = ${artisan.id}::uuid FOR UPDATE`;
+      const unfinished = await tx.productBatch.findFirst({ where: { orderAssignmentId: assignmentId, orderAssignment: { artisanId: artisan.id }, status: { in: ["PLANNING", "IN_PROGRESS"] } }, select: { id: true } });
+      if (unfinished) throw new Error("Assignment has unfinished batches");
+    }
     const updated = await tx.orderAssignment.updateMany({ where: { id: assignmentId, artisanId: artisan.id, status: previous }, data: { status, ...(status === "IN_PRODUCTION" ? { startedAt: new Date() } : {}), ...(status === "COMPLETED" ? { completedAt: new Date() } : {}) } });
     if (updated.count !== 1) throw new Error("Assignment not found or invalid state");
     const remaining = await tx.orderAssignment.count({ where: { quotationRequestId: quote.id, status: { not: "COMPLETED" } } });

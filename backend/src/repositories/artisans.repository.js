@@ -21,3 +21,19 @@ export function findPublicArtisan(id) {
     select: { ...fields, certificates: { select: { id: true, title: true, issuingAuthority: true, issuedYear: true, certificateImageUrl: true } } },
   });
 }
+
+export function findOwnWorkshop(userId) {
+  return prisma.artisanProfile.findFirst({ where: { userId, user: { isActive: true, role: "ARTISAN" } }, include: { certificates: true } });
+}
+export function updateOwnWorkshop(userId, data) {
+  return prisma.artisanProfile.updateMany({ where: { userId, user: { isActive: true, role: "ARTISAN" } }, data });
+}
+export function addOwnCertificate(userId, data) {
+  return prisma.$transaction(async (tx) => {
+    const workshop = await tx.artisanProfile.findFirst({ where: { userId, user: { isActive: true, role: "ARTISAN" } }, select: { id: true } });
+    return workshop ? tx.artisanCertificate.create({ data: { ...data, artisanId: workshop.id } }) : null;
+  });
+}
+export function deleteOwnCertificate(userId, id) {
+  return prisma.artisanCertificate.deleteMany({ where: { id, artisan: { userId, user: { isActive: true, role: "ARTISAN" } } } });
+}

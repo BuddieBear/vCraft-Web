@@ -4,6 +4,9 @@ const publicProducts = {
   isPublished: true,
   artisan: { verificationStatus: "APPROVED", user: { isActive: true } },
 };
+export function listCategories() {
+  return prisma.category.findMany({ select: { id: true, name: true, slug: true, description: true, thumbnailUrl: true }, orderBy: { name: "asc" } });
+}
 
 const summaryFields = {
   id: true,
@@ -12,14 +15,23 @@ const summaryFields = {
   price: true,
   pricingMode: true,
   saleUnit: true,
+  stockQuantity: true,
+  isUniquePiece: true,
+  averageRating: true,
+  totalReviews: true,
   mediaUrls: true,
   category: { select: { slug: true, name: true } },
   artisan: { select: { id: true, workshopName: true } },
 };
 
-export function listPublicProducts({ skip, take, category }) {
+export function listPublicProducts({ skip, take, category, artisanId, q }) {
   const where = { ...publicProducts };
   if (category) where.category = { slug: category };
+  if (artisanId) where.artisanId = artisanId;
+  if (q) {
+    const match = { contains: q.replace(/[\\%_]/g, "\\$&"), mode: "insensitive" };
+    where.OR = [{ name: match }, { rawMaterial: match }, { category: { name: match } }, { artisan: { workshopName: match } }];
+  }
 
   return prisma.product.findMany({
     where,
@@ -53,5 +65,25 @@ export function hideProductOwnedByUser(transaction, { productId, userId }) {
       artisan: { userId, user: { isActive: true } },
     },
     data: { isPublished: false },
+  });
+}
+
+export async function createOwnedProduct(userId, data) {
+  return prisma.$transaction(async (tx) => {
+    const workshop = await tx.artisanProfile.findFirst({ where: { userId, verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } }, select: { id: true } });
+    if (!workshop) return null;
+    return tx.product.create({ data: { ...data, artisanId: workshop.id } });
+  });
+}
+export function listOwnedProducts(userId, { skip, take }) {
+  return prisma.product.findMany({ where: { artisan: { userId, user: { isActive: true, role: "ARTISAN" } } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip, take });
+}
+export async function replaceOwnedProduct(userId, id, { expectedStockQuantity, ...data }) {
+  return prisma.$transaction(async (tx) => {
+    const own = { id, artisan: { userId, verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } } };
+    const result = await tx.product.updateMany({ where: { ...own, stockQuantity: expectedStockQuantity }, data });
+    if (result.count) return tx.product.findUnique({ where: { id } });
+    if (await tx.product.findFirst({ where: own, select: { id: true } })) throw new Error("Stale product stock");
+    return null;
   });
 }

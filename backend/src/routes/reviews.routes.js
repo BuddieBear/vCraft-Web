@@ -1,0 +1,12 @@
+import { Router } from "express";
+import { z } from "zod";
+import { authenticate } from "../middlewares/authenticate.js";
+import { authorize } from "../middlewares/authorize.js";
+import { validate } from "../middlewares/validate-request.js";
+import { uuid, urls, byId, pageArgs, pageQuery } from "./schemas.js";
+import { createReview, getProductReviews, getArtisanReviews } from "../services/reviews.service.js";
+const router = Router();
+router.get("/products/:slug", validate({ params: z.object({ slug: z.string().min(1).max(280) }), query: pageQuery }), async (req, res) => res.json({ data: await getProductReviews(req.validatedParams.slug, pageArgs(req.validatedQuery)) }));
+router.get("/artisans/:id", validate({ params: byId, query: pageQuery }), async (req, res) => res.json({ data: await getArtisanReviews(req.validatedParams.id, pageArgs(req.validatedQuery)) }));
+router.post("/", authenticate, authorize("BUYER"), validate({ body: z.object({ targetType: z.enum(["PRODUCT", "ARTISAN"]), productId: uuid.nullable().optional(), artisanId: uuid, retailOrderId: uuid.nullable().optional(), quotationRequestId: uuid.nullable().optional(), rating: z.number().int().min(1).max(5), comment: z.string().trim().min(1).max(10000), mediaUrls: urls.optional() }).strict() }), async (req, res) => res.status(201).json({ data: await createReview({ ...req.validatedBody, userId: req.user.id }) }));
+export default router;

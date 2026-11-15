@@ -1,7 +1,29 @@
 import { Router } from "express";
 import products from "./products.routes.js";
+import auth from "./auth.routes.js";
+import retail from "./retail.routes.js";
+import wholesale from "./wholesale.routes.js";
+import reviews from "./reviews.routes.js";
+import artisans from "./artisans.routes.js";
+import traceability from "./traceability.routes.js";
+import news from "./news.routes.js";
+import notifications from "./notifications.routes.js";
+import admin from "./admin.routes.js";
+import media from "./media.routes.js";
+import { getCategories } from "../services/products.service.js";
 
 const router = Router();
+router.get("/categories", async (_req, res) => res.json({ data: await getCategories() }));
+router.use("/auth", auth);
+router.use("/admin", admin);
+router.use("/media", media);
+router.use("/retail", retail);
+router.use("/wholesale", wholesale);
+router.use("/reviews", reviews);
+router.use("/artisans", artisans);
+router.use("/traceability", traceability);
+router.use("/news", news);
+router.use("/notifications", notifications);
 router.use("/products", products);
 
 export default router;

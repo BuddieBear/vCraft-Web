@@ -1,5 +1,8 @@
 import { app } from "./app.js";
 import { prisma } from "./database/prisma.js";
+import { jwtSecret } from "./config/security.js";
+
+jwtSecret();
 
 const port = Number(process.env.PORT ?? 5000);
 if (!Number.isInteger(port) || port < 1 || port > 65535) {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { randomBytes } from "node:crypto";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -15,6 +16,8 @@ const prismaCli = resolve(dirname(require.resolve("prisma/package.json")), requi
 const seedFile = fileURLToPath(new URL("../../../prisma/seed.js", import.meta.url));
 const persistenceTest = fileURLToPath(new URL("./persistence.test.js", import.meta.url));
 const commerceTest = fileURLToPath(new URL("./commerce.test.js", import.meta.url));
+const apiTest = fileURLToPath(new URL("./api.test.js", import.meta.url));
+const featureTest = fileURLToPath(new URL("./features.test.js", import.meta.url));
 const databaseName = (url) => decodeURIComponent(new URL(url).pathname.slice(1));
 
 test("fresh ORM migration, idempotent seed, pricing and rating rollups", { timeout: 120_000 }, async () => {
@@ -33,6 +36,9 @@ test("fresh ORM migration, idempotent seed, pricing and rating rollups", { timeo
     MIGRATION_DATABASE_URL: url,
     NODE_ENV: "test",
     SEED_DEMO_PASSWORD: randomBytes(24).toString("base64url"),
+    JWT_SECRET: randomBytes(48).toString("base64url"),
+    CORS_ALLOWED_ORIGINS: "http://127.0.0.1:5189",
+    UPLOAD_DIR: resolve(tmpdir(), `vcraft-upload-test-${randomBytes(8).toString("hex")}`),
   };
   const run = (...args) => execFileSync(process.execPath, args, {
     cwd: root,
@@ -110,6 +116,8 @@ test("fresh ORM migration, idempotent seed, pricing and rating rollups", { timeo
     seed();
     assert.equal(await prisma.product.count(), products.length);
     run("--test", commerceTest);
+    run("--test", apiTest);
+    run("--test", featureTest);
   } finally {
     await prisma.$disconnect();
   }

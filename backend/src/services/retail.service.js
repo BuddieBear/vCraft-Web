@@ -1,7 +1,21 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../database/prisma.js";
-import { findCheckoutBuyer, findCheckoutItems, reserveStock, createRetailOrder, removePurchasedItem } from "../repositories/retail.repository.js";
+import { findCheckoutBuyer, findCheckoutItems, reserveStock, createRetailOrder, removePurchasedItem, findBuyerOrder, listArtisanOrders, listAdminOrders, transitionOrder } from "../repositories/retail.repository.js";
+import { ApiError } from "../middlewares/api-error.js";
+
+export function listSales(userId, options) { return listArtisanOrders(userId, options); }
+export function listAdminSales(options) { return listAdminOrders(options); }
+export async function changeOrderStatus(actor, id, status, paymentCollected = false) {
+  const result = await transitionOrder(actor, id, status, paymentCollected);
+  if (!result) throw new ApiError(404, "NOT_FOUND", "Không tìm thấy đơn hàng.");
+  return result;
+}
+
+export function getOrder(userId, id) {
+  if (typeof userId !== "string" || !userId || typeof id !== "string" || !id) throw new Error("Invalid identifier");
+  return findBuyerOrder(userId, id);
+}
 
 export async function setCartItem({ userId, productId, quantity }) {
   if (typeof userId !== "string" || !userId || typeof productId !== "string" || !productId || !Number.isInteger(quantity) || quantity < 0 || quantity > 2147483647) throw new Error("Invalid cart item");
@@ -32,6 +46,7 @@ export async function checkout({ userId, recipientName, recipientPhone, shipping
   }
   if (shippingNote != null && (typeof shippingNote !== "string" || shippingNote.length > 2000)) throw new Error("Invalid shippingNote");
   if (!["COD", "BANK_TRANSFER", "VNPAY", "MOMO"].includes(paymentMethod)) throw new Error("Invalid paymentMethod");
+  if (paymentMethod !== "COD") throw new ApiError(422, "PAYMENT_METHOD_UNAVAILABLE", "Hiện chỉ hỗ trợ thanh toán khi nhận hàng (COD).");
 
   return prisma.$transaction(async (tx) => {
     if (!await findCheckoutBuyer(tx, userId)) throw new Error("Buyer is not active");
@@ -46,6 +61,7 @@ export async function checkout({ userId, recipientName, recipientPhone, shipping
       }
       const subtotal = product.price.mul(item.quantity);
       total = total.add(subtotal);
+      if (total.gt("9999999999.99")) throw new ApiError(422, "ORDER_TOTAL_TOO_LARGE", "Tổng đơn hàng vượt giới hạn. Hãy giảm số lượng trong giỏ.");
       lines.push({ productId: product.id, artisanId: product.artisanId, quantity: item.quantity, unitPrice: product.price, subtotal });
     }
     const order = await createRetailOrder(tx, {

@@ -1,5 +1,8 @@
 import { prisma } from "../database/prisma.js";
-import { findDeliveredQuote, findDeliveredRetailOrder } from "../repositories/reviews.repository.js";
+import { findDeliveredQuote, findDeliveredRetailOrder, publicProductReviews, publicArtisanReviews } from "../repositories/reviews.repository.js";
+
+export function getProductReviews(slug, options) { return publicProductReviews(slug, options); }
+export function getArtisanReviews(id, options) { return publicArtisanReviews(id, options); }
 
 export async function createReview({ userId, targetType, productId = null, artisanId, retailOrderId = null, quotationRequestId = null, rating, comment, mediaUrls = [] }) {
   for (const value of [userId, artisanId]) if (typeof value !== "string" || !value.trim()) throw new Error("Invalid identifier");

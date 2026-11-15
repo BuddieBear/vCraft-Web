@@ -1,0 +1,18 @@
+import { Router } from "express";
+import { z } from "zod";
+import { validate } from "../middlewares/validate-request.js";
+import { ApiError } from "../middlewares/api-error.js";
+import { byId, mediaUrl, pageArgs, pageQuery } from "./schemas.js";
+import { getNews, listPublishedNews, getAdminNews, publishNews, editNews, removeNews } from "../services/news.service.js";
+import { authenticate } from "../middlewares/authenticate.js";
+import { authorize } from "../middlewares/authorize.js";
+const router = Router();
+const admin = [authenticate, authorize("ADMIN")];
+const newsBody = z.object({ title: z.string().trim().min(1).max(255), slug: z.string().min(1).max(280).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/), category: z.enum(["PRICE_ANNOUNCEMENT", "POWER_OUTAGE", "POLICY_SUPPORT", "FESTIVAL_EVENT"]), content: z.string().trim().min(1).max(50000), thumbnailUrl: mediaUrl.nullable().optional(), isPinned: z.boolean().optional(), publishedAt: z.string().datetime({ offset: true }).transform((v) => new Date(v)).optional() }).strict();
+router.get("/admin/list", ...admin, validate({ query: pageQuery }), async (req, res) => res.json({ data: await getAdminNews(pageArgs(req.validatedQuery)) }));
+router.post("/", ...admin, validate({ body: newsBody }), async (req, res) => res.status(201).json({ data: await publishNews(req.user.id, req.validatedBody) }));
+router.put("/:id", ...admin, validate({ params: byId, body: newsBody }), async (req, res) => res.json({ data: await editNews(req.user.id, req.validatedParams.id, req.validatedBody) }));
+router.delete("/:id", ...admin, validate({ params: byId }), async (req, res) => { await removeNews(req.user.id, req.validatedParams.id); res.status(204).end(); });
+router.get("/", validate({ query: z.object({ page: z.coerce.number().int().min(1).max(10000).default(1), limit: z.coerce.number().int().min(1).max(100).default(24), category: z.enum(["PRICE_ANNOUNCEMENT", "POWER_OUTAGE", "POLICY_SUPPORT", "FESTIVAL_EVENT"]).optional() }).strict() }), async (req, res) => res.json({ data: await listPublishedNews({ ...pageArgs(req.validatedQuery), category: req.validatedQuery.category }) }));
+router.get("/:slug", validate({ params: z.object({ slug: z.string().min(1).max(280) }) }), async (req, res) => { const article = await getNews(req.validatedParams.slug); if (!article) throw new ApiError(404, "NOT_FOUND", "Không tìm thấy tin tức."); res.json({ data: article }); });
+export default router;

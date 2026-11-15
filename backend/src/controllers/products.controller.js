@@ -10,19 +10,21 @@ function parsePositiveInteger(value, fallback, maximum) {
 }
 
 export async function listProducts(request, response) {
-  const { category } = request.query;
+  const { category, artisanId, q } = request.query;
   const page = parsePositiveInteger(request.query.page, 1, 10_000);
   const limit = parsePositiveInteger(request.query.limit, 24, 100);
   const validCategory = category === undefined
     || (typeof category === "string" && category.trim().length > 0 && category.length <= 120);
+  const validArtisan = artisanId === undefined || (typeof artisanId === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(artisanId));
 
-  if (!page || !limit || !validCategory) {
+  const validSearch = q === undefined || (typeof q === "string" && q.trim().length > 0 && q.length <= 100);
+  if (!page || !limit || !validCategory || !validArtisan || !validSearch) {
     return response.status(400).json({
-      error: { code: "INVALID_QUERY", message: "Tham số page, limit hoặc category không hợp lệ." },
+      error: { code: "INVALID_QUERY", message: "Tham số danh mục không hợp lệ." },
     });
   }
 
-  const catalog = await listCatalogProducts({ page, limit, category: category?.trim() });
+  const catalog = await listCatalogProducts({ page, limit, category: category?.trim(), artisanId, q: q?.trim() });
   return response.json(toCatalogJson(catalog));
 }
 

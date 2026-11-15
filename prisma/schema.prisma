@@ -224,6 +224,7 @@ model ArtisanProfile {
   orderAssignments      OrderAssignment[]
   reviews               Review[]
   targetedQuoteRequests QuotationRequest[]     @relation("DirectQuoteRequests")
+  quoteRecipients       QuoteRecipient[]
 
   @@index([workshopName(ops: raw("gin_trgm_ops"))], map: "idx_artisan_name_search", type: Gin)
   @@index([verificationStatus], map: "idx_artisan_profiles_status")
@@ -411,10 +412,11 @@ model QuotationRequest {
   updatedAt           DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
   buyer         User              @relation(fields: [buyerId], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  targetArtisan ArtisanProfile?   @relation("DirectQuoteRequests", fields: [targetArtisanId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  targetArtisan ArtisanProfile?   @relation("DirectQuoteRequests", fields: [targetArtisanId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   bids          Bid[]
   assignments   OrderAssignment[]
   reviews       Review[]
+  recipients    QuoteRecipient[]
 
   @@index([buyerId], map: "idx_quotes_buyer")
   @@index([deadline], map: "idx_quotes_deadline")
@@ -443,6 +445,17 @@ model Bid {
   @@index([artisanId], map: "idx_bids_artisan")
   @@index([quotationRequestId], map: "idx_bids_quote")
   @@map("bids")
+}
+
+model QuoteRecipient {
+  quotationRequestId String @map("quotation_request_id") @db.Uuid
+  artisanId String @map("artisan_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  quotationRequest QuotationRequest @relation(fields: [quotationRequestId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  artisan ArtisanProfile @relation(fields: [artisanId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  @@id([quotationRequestId, artisanId])
+  @@index([artisanId], map: "idx_quote_recipients_artisan")
+  @@map("quote_recipients")
 }
 
 model OrderAssignment {

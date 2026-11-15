@@ -34,10 +34,18 @@ test("checkout, multi-artisan quote and verified review transactions", async () 
     await assert.rejects(checkout({ userId: buyer3.id, ...details }));
     assert.equal((await prisma.product.findUniqueOrThrow({ where: { id: available.id } })).stockQuantity, 3);
     assert.equal(await prisma.cartItem.count({ where: { userId: buyer3.id } }), 2);
+    const expensive = await prisma.product.create({ data: { artisanId: w1.id, name: "expensive", slug: "commerce-large-total", price: "9999999999.99", stockQuantity: 2 } });
+    await prisma.cartItem.deleteMany({ where: { userId: buyer3.id } });
+    await prisma.cartItem.create({ data: { userId: buyer3.id, productId: expensive.id, quantity: 2 } });
+    await assert.rejects(checkout({ userId: buyer3.id, ...details }), { code: "ORDER_TOTAL_TOO_LARGE" });
+    assert.equal((await prisma.product.findUniqueOrThrow({ where: { id: expensive.id } })).stockQuantity, 2);
+    assert.equal(await prisma.cartItem.count({ where: { userId: buyer3.id } }), 1);
     assert.equal(await prisma.retailOrder.count({ where: { buyerId: buyer3.id } }), 0);
     await assert.rejects(createReview({ userId: order.buyerId, targetType: "PRODUCT", productId: product.id, artisanId: w1.id, retailOrderId: order.id, rating: 5, comment: "Good" }));
     await prisma.retailOrder.update({ where: { id: order.id }, data: { status: "DELIVERED" } });
     const review = { userId: order.buyerId, targetType: "PRODUCT", productId: product.id, artisanId: w1.id, retailOrderId: order.id, rating: 5, comment: "Good" };
+    await assert.rejects(createReview(review), /Review target is not in a delivered order/);
+    await prisma.retailOrder.update({ where: { id: order.id }, data: { paymentStatus: "PAID" } });
     const reviews = await Promise.allSettled([createReview(review), createReview(review)]);
     assert.equal(reviews.filter((r) => r.status === "fulfilled").length, 1);
     await assert.rejects(createReview({ ...review, artisanId: w2.id }));
@@ -77,7 +85,9 @@ test("checkout, multi-artisan quote and verified review transactions", async () 
     assert.equal((await prisma.quotationRequest.findUniqueOrThrow({ where: { id: quote.id } })).status, "DELIVERED");
     await createReview({ userId: buyer.id, targetType: "ARTISAN", artisanId: w1.id, quotationRequestId: quote.id, rating: 4, comment: "Good" });
     const assignment = assignments.find((item) => item.artisanId === w1.id);
-    await prisma.productBatch.create({ data: { productId: product.id, orderAssignmentId: assignment.id, batchCode: "COMMERCE-TEST", qrCodeUrl: "https://example.test/qr", totalQuantity: 4, status: "COMPLETED" } });
+    const batch = await prisma.productBatch.create({ data: { productId: product.id, orderAssignmentId: assignment.id, batchCode: "COMMERCE-TEST", qrCodeUrl: "https://example.test/qr", totalQuantity: 4, status: "IN_PROGRESS" } });
+    await assert.rejects(createReview({ userId: buyer.id, targetType: "PRODUCT", productId: product.id, artisanId: w1.id, quotationRequestId: quote.id, rating: 5, comment: "Good" }), /Review target is not in a delivered order/);
+    await prisma.productBatch.update({ where: { id: batch.id }, data: { status: "COMPLETED" } });
     await createReview({ userId: buyer.id, targetType: "PRODUCT", productId: product.id, artisanId: w1.id, quotationRequestId: quote.id, rating: 5, comment: "Good" });
     await assert.rejects(createReview({ userId: buyer2.id, targetType: "ARTISAN", artisanId: w1.id, quotationRequestId: quote.id, rating: 5, comment: "Not mine" }));
   } finally { await prisma.$disconnect(); }

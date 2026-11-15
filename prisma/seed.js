@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { hash } from "bcryptjs";
 import { env, readDatabaseUrl } from "../backend/src/config/env.js";
+import { batchLandingUrl } from "../backend/src/config/trace-url.js";
 import { artisans, batches, products, productionStages } from "../frontend/src/data/demo-data.js";
 
 const prisma = new PrismaClient({ datasourceUrl: readDatabaseUrl("MIGRATION_DATABASE_URL") });
@@ -29,15 +30,6 @@ function weaveType(product) {
   if (product.material.startsWith("Gấm")) return "LUA_GAM";
   if (product.material.startsWith("Lụa vân")) return "LUA_VAN";
   return "LUA_TO_TAM_THO";
-}
-
-function traceUrl(code) {
-  const url = new URL(process.env.QR_BASE_URL || "http://localhost:5189/trace");
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new Error("QR_BASE_URL must use HTTP or HTTPS.");
-  }
-  url.pathname = `${url.pathname.replace(/\/+$/, "")}/${code}`;
-  return url.href;
 }
 
 async function seed() {
@@ -148,7 +140,7 @@ async function seed() {
         create: {
           batchCode: batch.code,
           productId,
-          qrCodeUrl: traceUrl(batch.code),
+          qrCodeUrl: batchLandingUrl(batch.code),
           totalQuantity: 12,
           status: "COMPLETED",
           startedAt: batchDate,
