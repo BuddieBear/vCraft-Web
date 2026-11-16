@@ -12,7 +12,7 @@ vCraft/
 │   │   ├── server.js               # Điểm khởi động HTTP server
 │   │   ├── app.js                  # Cấu hình ứng dụng Express
 │   │   ├── config/                 # Đọc cấu hình từ biến môi trường
-│   │   ├── routes/                 # Điểm vào của REST API, dự kiến /api/v1
+│   │   ├── routes/                 # Điểm vào của REST API dưới /api
 │   │   ├── middlewares/            # Xác thực, phân quyền, kiểm tra dữ liệu, xử lý lỗi
 │   │   ├── controllers/            # Nhận yêu cầu HTTP và trả phản hồi
 │   │   ├── services/               # Quy tắc nghiệp vụ và điều phối giao dịch
@@ -60,11 +60,11 @@ vCraft/
 ## Luồng xử lý
 
 ```text
-Frontend → Route → Middleware → Controller → Service → Repository → Prisma → PostgreSQL
+Frontend → Route/Middleware → Handler → Service → Repository → Prisma → PostgreSQL
 ```
 
-- Route gắn URL với middleware và controller. Middleware xác thực, kiểm tra quyền truy cập tuyến và kiểm tra đầu vào.
-- Controller lấy dữ liệu từ yêu cầu, gọi service và chuyển kết quả thành phản hồi HTTP.
+- Route gắn URL với middleware và handler. Middleware xác thực, kiểm tra quyền truy cập tuyến và kiểm tra đầu vào.
+- Handler lấy dữ liệu từ yêu cầu, gọi service và chuyển kết quả thành phản hồi HTTP; một số handler nằm trong route, riêng danh mục sản phẩm dùng controller.
 - Service xử lý quyền trên từng tài nguyên, kiểm tra trạng thái và điều phối các thao tác cần nằm trong cùng một giao dịch. Ví dụ, khi tạo đơn B2C, service điều phối việc tạo đơn và các dòng sản phẩm rồi cập nhật giỏ hàng trong cùng giao dịch.
 - Repository tập trung truy vấn và ghi dữ liệu. Các repository dùng Prisma Client chung từ `database/prisma.js`.
 - Repository danh mục dùng `select` để đọc các cột công khai và quan hệ cần thiết. HTTP và lệnh xuất JSON dùng chung presenter để chuẩn hóa giá và ngày giờ. Xem [thiết kế và cách kiểm tra Persistence Layer](docs/persistence-layer.md).
@@ -72,7 +72,7 @@ Frontend → Route → Middleware → Controller → Service → Repository → 
 
 ## Phân hệ nghiệp vụ
 
-Tên phân hệ được dùng xuyên suốt các tầng. Ví dụ, luồng bán lẻ đi qua `retail.routes.js`, `retail.controller.js`, `retail.service.js` và `retail.repository.js`.
+Tên phân hệ được dùng xuyên suốt các tầng. Ví dụ, luồng bán lẻ đi qua `retail.routes.js`, `retail.service.js` và `retail.repository.js`.
 
 | Phân hệ | Phạm vi |
 | --- | --- |

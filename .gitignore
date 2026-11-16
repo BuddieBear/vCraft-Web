@@ -19,6 +19,7 @@ lerna-debug.log*
 *.log
 
 # Build outputs & caches
+storage/uploads/
 dist/
 build/
 .next/

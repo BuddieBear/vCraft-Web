@@ -1,15 +1,52 @@
 import { prisma } from "../database/prisma.js";
+import { createHash } from "node:crypto";
+
+export function createBuyer({ email, fullName, passwordHash }) {
+    return prisma.user.create({ data: { email, fullName, passwordHash, role: "BUYER" }, select: { id: true, email: true, fullName: true, role: true } });
+}
+export function createArtisanAccount(userId, account, profile) {
+    return prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({ data: { ...account, role: "ARTISAN", artisanProfile: { create: profile } }, select: { id: true, email: true, fullName: true, role: true, artisanProfile: true } });
+        await tx.auditLog.create({ data: { userId, action: "ARTISAN_CREATED", targetTable: "users", targetRecordId: user.id } });
+        return user;
+    });
+}
+export function listPendingArtisans({ skip, take }) {
+    return prisma.artisanProfile.findMany({ where: { verificationStatus: "PENDING" }, select: { id: true, userId: true, workshopName: true, address: true, createdAt: true, user: { select: { email: true, fullName: true, isActive: true } } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], skip, take });
+}
+export function decideArtisan(adminId, id, verificationStatus) {
+    return prisma.$transaction(async (tx) => {
+        const result = await tx.artisanProfile.updateMany({ where: { id, verificationStatus: "PENDING" }, data: { verificationStatus, verifiedAt: verificationStatus === "APPROVED" ? new Date() : null } });
+        if (result.count) await tx.auditLog.create({ data: { userId: adminId, action: `ARTISAN_${verificationStatus}`, targetTable: "artisan_profiles", targetRecordId: id } });
+        return result;
+    });
+}
 
 export function findActiveCredentialsByEmail(email) {
-  return prisma.user.findUnique({
-    where: { email, isActive: true },
-    select: { id: true, role: true, passwordHash: true },
-  });
+    return prisma.user.findUnique({
+        where: { email, isActive: true },
+        select: { id: true, email: true, role: true, passwordHash: true },
+    });
 }
 
+const profileFields = { id: true, fullName: true, email: true, phone: true, avatarUrl: true, role: true };
+const hashToken = (token) => createHash("sha256").update(token).digest("hex");
+export function findUserById(id) { return prisma.user.findUnique({ where: { id, isActive: true }, select: profileFields }); }
+export function updateUserProfile(id, data) { return prisma.user.update({ where: { id, isActive: true }, data, select: profileFields }); }
+export function findPasswordHashById(id) { return prisma.user.findUnique({ where: { id, isActive: true }, select: { passwordHash: true } }); }
+export function updatePasswordAndRevokeSessions(id, passwordHash) { return prisma.$transaction(async (tx) => { await tx.user.update({ where: { id, isActive: true }, data: { passwordHash } }); await tx.authSession.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: new Date() } }); }); }
+export function createAuthSession({ userId, jti, expiresAt }) { return prisma.authSession.create({ data: { userId, jti, expiresAt }, select: { id: true } }); }
+export function findActiveSession(userId, jti) { return prisma.authSession.findFirst({ where: { userId, jti, revokedAt: null, expiresAt: { gt: new Date() } }, select: { id: true } }); }
+export function revokeAuthSession(userId, jti) { return prisma.authSession.updateMany({ where: { userId, jti, revokedAt: null }, data: { revokedAt: new Date() } }); }
+export function revokeAllAuthSessions(userId) { return prisma.authSession.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } }); }
+export async function createPasswordResetToken(userId, token, expiresAt) { await prisma.passwordResetToken.updateMany({ where: { userId, usedAt: null }, data: { usedAt: new Date() } }); return prisma.passwordResetToken.create({ data: { userId, tokenHash: hashToken(token), expiresAt }, select: { id: true } }); }
+export function findValidPasswordResetToken(token) { return prisma.passwordResetToken.findFirst({ where: { tokenHash: hashToken(token), usedAt: null, expiresAt: { gt: new Date() }, user: { isActive: true } }, select: { id: true, userId: true } }); }
+export function consumePasswordResetToken(id, userId, passwordHash) { return prisma.$transaction(async (tx) => { const result = await tx.passwordResetToken.updateMany({ where: { id, userId, usedAt: null, expiresAt: { gt: new Date() } }, data: { usedAt: new Date() } }); if (!result.count) return false; await tx.user.update({ where: { id, isActive: true }, data: { passwordHash } }); await tx.authSession.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } }); return true; }); }
+
 export function findActiveUserProfile(userId) {
-  return prisma.user.findUnique({
-    where: { id: userId, isActive: true },
-    select: { id: true, fullName: true, email: true, phone: true, avatarUrl: true, role: true },
-  });
+    return prisma.user.findUnique({
+        where: { id: userId, isActive: true },
+        select: { id: true, fullName: true, email: true, phone: true, avatarUrl: true, role: true },
+    });
 }
+export function findActiveUserById(id) { return prisma.user.findUnique({ where: { id, isActive: true }, select: { id: true, role: true } }); }

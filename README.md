@@ -21,7 +21,7 @@
 
 ## 2. Kiến Trúc Cơ Sở Dữ Liệu (PostgreSQL 18 - Chuẩn Hóa 3NF)
 
-CSDL bao gồm **17 bảng chuẩn hóa 3NF**, phân thành 5 phân hệ nghiệp vụ.
+CSDL có **18 bảng**, phân thành 5 phân hệ nghiệp vụ; bảng `quote_recipients` hỗ trợ điều phối yêu cầu tới nhóm xưởng.
 
 ![vCraft Database ERD Schema](docs/erd/images/vcraft_schema.png)
 
@@ -48,7 +48,7 @@ vCraft/
 │   ├── requirements/          # Yêu cầu nghiệp vụ
 │   └── erd/                   # Báo cáo, ảnh, trang HTML và công cụ tạo sơ đồ
 ├── prisma/                    # Cấu hình ORM Prisma cho PostgreSQL
-│   └── schema.prisma          # 17 models và 14 enums
+│   └── schema.prisma          # Các model và enum PostgreSQL
 ├── ARCHITECTURE.md             # Kiến trúc và quy ước thư mục
 ├── docker-compose.yml         # Container PostgreSQL 18, Redis 7 & pgAdmin 4
 ├── .env.example               # Biến môi trường mẫu
@@ -114,13 +114,15 @@ Có thể đọc dữ liệu trực tiếp từ PostgreSQL bằng CLI. Cách nà
 npm run --silent db:json -- hong-dat
 ```
 
-Sau khi cấu hình PostgreSQL và chạy `npm run db:generate`, khởi động API từ thư mục gốc.
+Sau khi cấu hình PostgreSQL và chạy `npm run db:generate`, đặt `JWT_SECRET` trong `.env` bằng một chuỗi ngẫu nhiên ít nhất 32 byte rồi khởi động API từ thư mục gốc. Ví dụ, tạo secret bằng `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"` và lưu kết quả vào `.env`.
 
 ```powershell
 npm start
 ```
 
 API mặc định lắng nghe trên `127.0.0.1:5000`. Có thể cấu hình bằng `HOST` và `PORT`.
+
+Xem [danh sách API và cách xác thực](docs/api.md) cho tài khoản, giỏ hàng, đơn, báo giá, đánh giá và các tài nguyên công khai.
 
 - `GET /api/products` trả `{ data, pagination }`. Tham số tùy chọn gồm `page` (mặc định 1, tối đa 10000), `limit` (mặc định 24, tối đa 100) và `category` (slug danh mục). `pagination` gồm `page`, `limit` và `hasNext`.
 - `GET /api/products/:slug` trả `{ data }` cho chi tiết sản phẩm, hoặc HTTP 404 nếu sản phẩm không có trong danh mục công khai.

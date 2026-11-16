@@ -1,0 +1,10 @@
+import { Router } from "express";
+import { authenticate } from "../middlewares/authenticate.js";
+import { validate } from "../middlewares/validate-request.js";
+import { byId, pageArgs, pageQuery } from "./schemas.js";
+import { listNotifications, readNotification } from "../services/notifications.service.js";
+const router = Router();
+router.use(authenticate);
+router.get("/", validate({ query: pageQuery }), async (req, res) => res.json({ data: await listNotifications(req.user.id, pageArgs(req.validatedQuery)) }));
+router.patch("/:id/read", validate({ params: byId }), async (req, res) => res.json({ data: { updated: await readNotification(req.user.id, req.validatedParams.id) } }));
+export default router;
