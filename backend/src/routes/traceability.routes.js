@@ -12,9 +12,9 @@ const router = Router();
 const own = [authenticate, authorize("ARTISAN")];
 const codeParams = z.object({ code: z.string().trim().min(1).max(50) });
 async function timeline(req, res) {
-  const batch = await getPublicTimeline(req.validatedParams.code);
-  if (!batch) throw new ApiError(404, "NOT_FOUND", "Không tìm thấy lô sản phẩm.");
-  res.json({ data: batch });
+    const batch = await getPublicTimeline(req.validatedParams.code);
+    if (!batch) throw new ApiError(404, "NOT_FOUND", "Không tìm thấy lô sản phẩm.");
+    res.json({ data: batch });
 }
 router.get("/mine", ...own, validate({ query: pageQuery }), async (req, res) => res.json({ data: await getMyBatches(req.user.id, pageArgs(req.validatedQuery)) }));
 router.get("/products/:slug", validate({ params: z.object({ slug: z.string().min(1).max(280) }) }), async (req, res) => res.json({ data: await getProductBatches(req.validatedParams.slug) }));

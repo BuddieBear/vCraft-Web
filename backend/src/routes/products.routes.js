@@ -13,9 +13,9 @@ const router = Router();
 const stockQuantity = z.number().int().min(0).max(2147483647);
 const productFields = z.object({ name: z.string().trim().min(1).max(255), slug: z.string().min(1).max(280).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).refine((v) => v !== "mine"), categoryId: uuid.nullable().optional(), weaveType: z.enum(["LUA_VAN", "LUA_GAM", "LUA_SATIN", "LUA_TWILL", "LUA_TO_TAM_THO", "PHU_KIEN_LUA"]).optional(), rawMaterial: z.string().min(1).max(150).optional(), description: z.string().max(20000).nullable().optional(), culturalStory: z.string().max(20000).nullable().optional(), pricingMode: z.enum(["FIXED", "CONTACT"]), price: money.nullable(), saleUnit: z.enum(["METER", "PIECE", "SET", "BOX"]), stockQuantity, mediaUrls: urls, isUniquePiece: z.boolean().optional(), isPublished: z.boolean().optional() }).strict();
 function validatePricing(v, ctx) {
-  if (v.pricingMode === "CONTACT" && v.price === null) return;
-  try { const price = new Prisma.Decimal(v.price); if (v.pricingMode === "FIXED" && v.price !== null && price.isFinite() && price.gte(0) && price.lte("9999999999.99") && price.decimalPlaces() <= 2) return; } catch { /* invalid price */ }
-  ctx.addIssue({ code: "custom", message: "Invalid pricing" });
+    if (v.pricingMode === "CONTACT" && v.price === null) return;
+    try { const price = new Prisma.Decimal(v.price); if (v.pricingMode === "FIXED" && v.price !== null && price.isFinite() && price.gte(0) && price.lte("9999999999.99") && price.decimalPlaces() <= 2) return; } catch { /* invalid price */ }
+    ctx.addIssue({ code: "custom", message: "Invalid pricing" });
 }
 const productBody = productFields.superRefine(validatePricing);
 const replaceBody = productFields.extend({ expectedStockQuantity: stockQuantity }).superRefine(validatePricing);

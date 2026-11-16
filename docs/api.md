@@ -6,7 +6,7 @@ API đặt dưới `/api`, trả JSON dạng `{ data: ... }` hoặc `{ error: { 
 
 Đặt `JWT_SECRET` thành chuỗi ngẫu nhiên ít nhất 32 byte trong `.env` trước khi đăng nhập. Ví dụ, tự tạo một giá trị bằng `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`. Không dùng giá trị mẫu hoặc chia sẻ secret. API ký token HS256, kiểm tra issuer, audience và thời hạn một giờ; mỗi request được xác thực còn kiểm tra tài khoản hiện đang hoạt động và lấy vai trò từ database.
 
-Các endpoint riêng yêu cầu `Authorization: Bearer <accessToken>`. Token hiện là stateless: đăng xuất phía client cần xóa token; hệ thống chưa có thu hồi token riêng lẻ. Giới hạn đăng nhập/đăng ký dùng bộ nhớ từng tiến trình, cần bộ lưu trữ dùng chung khi chạy nhiều instance. Triển khai qua HTTPS và cấu hình proxy đáng tin cậy phù hợp trước khi đưa ra internet.
+Các endpoint riêng yêu cầu `Authorization: Bearer <accessToken>`. Mỗi token được ghi nhận trong `auth_sessions`; logout, đổi mật khẩu, reset mật khẩu và logout-all đều thu hồi phiên tương ứng. Yêu cầu reset trả `resetToken` trong môi trường development để kiểm thử cục bộ; production cần nối service gửi email và không trả token trong JSON. Giới hạn đăng nhập/đăng ký dùng bộ nhớ từng tiến trình, cần bộ lưu trữ dùng chung khi chạy nhiều instance. Triển khai qua HTTPS và cấu hình proxy đáng tin cậy phù hợp trước khi đưa ra internet.
 
 `CORS_ALLOWED_ORIGINS` là danh sách origin frontend ngăn cách bằng dấu phẩy. Môi trường phát triển mặc định cho phép `http://127.0.0.1:5189` và `http://localhost:5189`; production mặc định không cho phép origin nào. CORS chỉ điều khiển trình duyệt đọc phản hồi, còn API vẫn xác thực và phân quyền từng request.
 
@@ -14,7 +14,12 @@ Các endpoint riêng yêu cầu `Authorization: Bearer <accessToken>`. Token hi�
 | --- | --- | --- |
 | POST | `/auth/register` | Công khai; `email`, `password` (12–72 byte UTF-8), `fullName`. Chỉ tạo BUYER. |
 | POST | `/auth/login` | Công khai; `email`, `password`; trả `accessToken`, `tokenType`, `expiresIn`. |
-| GET | `/auth/me` | Đăng nhập. |
+| POST | `/auth/logout` | Đăng nhập; thu hồi phiên hiện tại. |
+| POST | `/auth/logout-all` | Đăng nhập; thu hồi mọi phiên của tài khoản. |
+| GET, PATCH | `/auth/me` | Đăng nhập; xem hoặc cập nhật họ tên, số điện thoại, ảnh đại diện. |
+| POST | `/auth/password/change` | Đăng nhập; đổi mật khẩu bằng mật khẩu hiện tại và thu hồi phiên. |
+| POST | `/auth/password/reset/request` | Công khai; yêu cầu token đặt lại mà không tiết lộ trạng thái email. |
+| POST | `/auth/password/reset/confirm` | Công khai; dùng token một lần để đặt mật khẩu mới. |
 | GET | `/products` | Công khai; `page`, `limit`, `category`, `artisanId`, `q` tìm theo tên sản phẩm, xưởng, danh mục hoặc chất liệu. |
 | GET | `/products/:slug`, `/products/by-slug/:slug` | Công khai; gồm giá, tồn kho và điểm đánh giá. |
 | GET | `/categories` | Công khai; danh mục sản phẩm. |
