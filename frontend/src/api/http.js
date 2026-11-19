@@ -37,6 +37,7 @@ export async function request(path, { method = "GET", body, signal, auth = false
     if (response.status === 401 && session && token === session && (!result || result.error?.code === "UNAUTHENTICATED")) setToken(null);
     const error = new Error(result?.error?.message || "Không nhận được phản hồi hợp lệ từ máy chủ.");
     error.status = response.status;
+    error.fields = Array.isArray(result?.error?.fields) ? result.error.fields : [];
     throw error;
   }
   return result;

@@ -1,6 +1,16 @@
 import { findPublicTimelineByBatchCode, listPublicProductBatches, createOwnedBatch, listOwnedBatches, addOwnedLog, completeOwnedBatch, editOwnedLog } from "../repositories/traceability.repository.js";
 import { ApiError } from "../middlewares/api-error.js";
 import { batchLandingUrl } from "../config/trace-url.js";
+import { findPublicProductBySlug } from "../repositories/products.repository.js";
+import { findReferenceProduct } from "../data/workshop-references.js";
+import { productProduction } from "../../../frontend/src/data/product-production.js";
+
+export async function getPublicProductionProduct(slug, reference) {
+    if (!productProduction({ slug }, { reference }).length) return null;
+    if (!reference) return findPublicProductBySlug(slug);
+    const product = findReferenceProduct(slug);
+    return product && { ...product, mediaUrls: [product.image], artisan: { workshopName: product.workshopName } };
+}
 export function getPublicTimeline(code, options) { return findPublicTimelineByBatchCode(code, options); }
 export function getProductBatches(slug) { return listPublicProductBatches(slug); }
 export function getMyBatches(userId, options) { return listOwnedBatches(userId, options); }

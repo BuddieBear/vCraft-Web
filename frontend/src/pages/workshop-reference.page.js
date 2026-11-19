@@ -1,6 +1,7 @@
 import { mediaUrl, request } from "../api/http.js";
 import { formatPrice, icon } from "../components/ui.js";
-import { sitePaths } from "../site-paths.js";
+import { productPagePath, sitePaths } from "../site-paths.js";
+import { mountSearchSuggestions } from "../components/search-suggestions.js";
 
 function card(link, className) {
   const item = document.createElement("article");
@@ -50,7 +51,7 @@ export function mountReferenceWorkshops(section) {
   load();
 }
 
-export function mountReferenceCatalog(section, slug, dialog) {
+export function mountReferenceCatalog(section, slug) {
   section.innerHTML = `
     <a class="text-link artisan-all" href="${sitePaths.artisans}">${icon("left")} Tất cả cơ sở dệt lụa</a>
     <div class="section-heading">
@@ -78,8 +79,13 @@ export function mountReferenceCatalog(section, slug, dialog) {
   const grid = section.querySelector(".reference-grid");
   const retry = section.querySelector(".text-button");
   const search = section.querySelector('input[type="search"]');
+  const url = new URL(location.href);
+  search.value = (url.searchParams.get("q") || "").slice(0, search.maxLength);
+  const showMatches = mountSearchSuggestions(search, updateProducts);
   const type = section.querySelector("[data-type]");
   const sort = section.querySelector("[data-sort]");
+  const requestedType = url.searchParams.get("loai");
+  sort.value = url.searchParams.get("sort") || "";
   const filters = section.querySelector(".reference-filters");
   let products;
 
@@ -90,10 +96,17 @@ export function mountReferenceCatalog(section, slug, dialog) {
   function updateProducts() {
     if (!products) return;
     const query = searchKey(search.value);
+    const address = new URL(location.href);
+    for (const [name, value] of Object.entries({ q: search.value.trim(), loai: type.value, sort: sort.value })) {
+      if (value) address.searchParams.set(name, value);
+      else address.searchParams.delete(name);
+    }
+    if (address.href !== location.href) history.replaceState(history.state, "", address);
     const matches = products.filter(product =>
       (!type.value || product.type === type.value) && searchKey(`${product.name} ${product.type} ${product.workshopName}`).includes(query));
     if (sort.value) matches.sort((a, b) => sort.value === "asc" ? a.price - b.price : b.price - a.price);
-    grid.replaceChildren(...matches.map(product => referenceProductCard(product, dialog)));
+    grid.replaceChildren(...matches.map(referenceProductCard));
+    showMatches(matches);
     status.textContent = matches.length ? "" : "Chưa tìm thấy mẫu phù hợp.";
   }
 
@@ -121,7 +134,9 @@ export function mountReferenceCatalog(section, slug, dialog) {
         }
         products = data.products.map(product => ({ ...product, workshopName: data.name }));
       } else products = data;
-      for (const name of new Set(products.map(product => product.type))) type.add(new Option(name, name));
+      const productTypes = new Set(products.map(product => product.type));
+      for (const name of productTypes) type.add(new Option(name, name));
+      if (productTypes.has(requestedType)) type.value = requestedType;
       updateProducts();
     } catch (error) {
       status.textContent = error.message;
@@ -130,7 +145,7 @@ export function mountReferenceCatalog(section, slug, dialog) {
   }
 
   retry.addEventListener("click", load);
-  search.addEventListener("input", updateProducts);
+  search.addEventListener("input", event => { if (!event.isComposing) updateProducts(); });
   type.addEventListener("change", updateProducts);
   sort.addEventListener("change", updateProducts);
   load();
@@ -143,9 +158,9 @@ export function mountReferenceCatalog(section, slug, dialog) {
   };
 }
 
-export function referenceProductCard(product, dialog) {
-  const control = document.createElement("button");
-  control.type = "button";
+export function referenceProductCard(product) {
+  const control = document.createElement("a");
+  control.href = productPagePath(product.slug, true);
   control.className = "reference-product-open";
   control.setAttribute("aria-label", "Xem " + product.name);
   control.innerHTML = `
@@ -159,7 +174,6 @@ export function referenceProductCard(product, dialog) {
   control.querySelector(".reference-product-title").textContent = product.name;
   control.querySelector(".reference-product-owner").textContent = product.workshopName;
   control.querySelector("strong").textContent = listedPrice(product);
-  control.addEventListener("click", () => showReferenceProduct(dialog, product));
   return card(control, "reference-card reference-product");
 }
 
@@ -174,29 +188,4 @@ function productImage(product) {
   image.referrerPolicy = "no-referrer";
   if (src) image.src = src;
   return image;
-}
-
-function showReferenceProduct(dialog, product) {
-  dialog.innerHTML = `
-    <button class="icon-button dialog-close" type="button" aria-label="Đóng chi tiết" autofocus>${icon("close")}</button>
-    <div class="detail-grid">
-      <div class="detail-visual"></div>
-      <div class="detail-copy">
-        <header class="detail-heading">
-          <p class="eyebrow"></p><h2 id="detail-title"></h2><p class="detail-price"></p>
-        </header>
-        <dl class="detail-specs"><div><dt>Loại sản phẩm</dt><dd></dd></div></dl>
-        <p class="detail-source">Ảnh mẫu và giá tham khảo do cơ sở công bố.</p>
-      </div>
-    </div>`;
-  const image = productImage(product);
-  image.className = "detail-image";
-  image.loading = "eager";
-  dialog.querySelector(".detail-visual").append(image);
-  dialog.querySelector(".eyebrow").textContent = product.workshopName;
-  dialog.querySelector("h2").textContent = product.name;
-  dialog.querySelector(".detail-price").textContent = listedPrice(product);
-  dialog.querySelector(".detail-specs dd").textContent = product.type;
-  dialog.querySelector(".dialog-close").addEventListener("click", () => dialog.close());
-  dialog.showModal();
 }

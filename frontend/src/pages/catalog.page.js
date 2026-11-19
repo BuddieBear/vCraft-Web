@@ -1,8 +1,9 @@
 import { formatPrice, icon, saleUnits } from "../components/ui.js";
 import { mediaUrl, request } from "../api/http.js";
-import { sitePaths } from "../site-paths.js";
+import { productPagePath, sitePaths } from "../site-paths.js";
+import { mountSearchSuggestions } from "../components/search-suggestions.js";
 
-export function mountCatalog(container, openProduct) {
+export function mountCatalog(container) {
   container.innerHTML = `
     <div class="section-heading">
       <h1 id="catalog-title" class="page-title">Sản phẩm đang bán</h1>
@@ -37,14 +38,17 @@ export function mountCatalog(container, openProduct) {
     </div>`;
 
   const search = container.querySelector("#catalog-search");
+  const showMatches = mountSearchSuggestions(search, () => resetPage());
   const sort = container.querySelector("#catalog-sort");
   const grid = container.querySelector(".product-grid");
   const pagination = container.querySelector(".pagination");
   const count = container.querySelector("#result-count");
   const clear = container.querySelector("#clear-catalog");
   const chips = container.querySelector(".category-list");
-  let category = "";
   const url = new URL(location.href);
+  let category = (url.searchParams.get("category") || "").slice(0, 120);
+  search.value = (url.searchParams.get("q") || "").slice(0, search.maxLength);
+  sort.value = url.searchParams.get("sort") || "";
   let workshopId = url.searchParams.get("xuong");
   const title = container.querySelector("#catalog-title");
   const originalTitle = title.innerHTML;
@@ -63,7 +67,8 @@ export function mountCatalog(container, openProduct) {
       document.title = data.workshopName + " · vCraft";
     }).catch(() => { /* The product list reports its own loading errors. */ });
   }
-  let page = 1;
+  const requestedPage = url.searchParams.get("page") || "";
+  let page = /^[1-9]\d{0,4}$/.test(requestedPage) && Number(requestedPage) <= 10000 ? Number(requestedPage) : 1;
   let current;
   let debounce;
 
@@ -84,16 +89,16 @@ export function mountCatalog(container, openProduct) {
     const card = document.createElement("article");
     card.className = "product-card";
     card.innerHTML = `
-      <button class="product-open" type="button">
+      <a class="product-open">
         <span class="product-image"><img width="414" height="414" loading="lazy" decoding="async" alt=""></span>
         <span class="product-info">
           <span class="product-tag"></span><span class="product-name"></span><span class="product-workshop"></span>
           <span class="product-bottom"><strong></strong><span class="card-arrow">${icon("upRight")}</span></span>
         </span>
-      </button>`;
-    const button = card.querySelector("button");
-    button.setAttribute("aria-label", "Xem " + product.name);
-    button.addEventListener("click", () => openProduct(product));
+      </a>`;
+    const link = card.querySelector("a");
+    link.href = productPagePath(product.slug);
+    link.setAttribute("aria-label", "Xem " + product.name);
     const src = mediaUrl(product.mediaUrls[0]);
     if (src) card.querySelector("img").src = src;
     card.querySelector(".product-tag").textContent = product.category?.name || "Lụa Nha Xá";
@@ -108,6 +113,14 @@ export function mountCatalog(container, openProduct) {
     current?.abort();
     const { signal } = current = new AbortController();
     const query = search.value.trim();
+    const address = new URL(location.href);
+    address.searchParams.set("mua", "1");
+    for (const [name, value] of Object.entries({ q: query, category, sort: sort.value, xuong: workshopId, page: page > 1 ? page : null })) {
+      if (value) address.searchParams.set(name, value);
+      else address.searchParams.delete(name);
+    }
+    if (address.href !== location.href) history.replaceState(history.state, "", address);
+    showMatches([]);
     const params = new URLSearchParams({ page, limit: 12, storefront: "true" });
     if (category) params.set("category", category);
     if (workshopId) params.set("artisanId", workshopId);
@@ -124,16 +137,17 @@ export function mountCatalog(container, openProduct) {
       const result = await request("/products?" + params, { signal });
       if (signal.aborted) return;
       if (!result.data.length && page > 1) {
-        page--;
+        page = 1;
         return update();
       }
       grid.replaceChildren(...result.data.map(productCard));
+      showMatches(result.data);
       count.textContent = result.data.length
         ? `${result.data.length} sản phẩm trên trang${workshopId ? " · " + result.data[0].artisan.workshopName : ""}`
         : (category || workshopId || query ? "Chưa tìm thấy sản phẩm phù hợp." : "Chưa có hàng do xưởng đăng bán.");
       pagination.querySelector("[aria-current]").textContent = "Trang " + page;
       pagination.querySelector('[data-step="-1"]').disabled = page === 1;
-      pagination.querySelector('[data-step="1"]').disabled = !result.pagination.hasNext;
+      pagination.querySelector('[data-step="1"]').disabled = !result.pagination.hasNext || page === 10000;
       pagination.hidden = page === 1 && !result.pagination.hasNext;
     } catch (error) {
       if (signal.aborted) return;
@@ -160,9 +174,10 @@ export function mountCatalog(container, openProduct) {
     message.textContent = "Chưa tải được bộ lọc danh mục.";
     chips.append(message);
   });
-  search.addEventListener("input", () => {
+  search.addEventListener("input", event => {
     current?.abort();
     clearTimeout(debounce);
+    if (event.isComposing) return;
     debounce = setTimeout(resetPage, 250);
   });
   sort.addEventListener("change", resetPage);
@@ -172,8 +187,6 @@ export function mountCatalog(container, openProduct) {
     title.innerHTML = originalTitle;
     document.title = originalPageTitle;
     backToWorkshops?.remove();
-    url.searchParams.delete("xuong");
-    history.replaceState(null, "", url);
     search.value = "";
     sort.value = "";
     resetPage();

@@ -1,6 +1,6 @@
 import { mediaUrl } from "../api/http.js";
 import { icon } from "../components/ui.js";
-import { describeSilkStages } from "../data/silk-stages.js";
+import { renderProductionGuide } from "../components/production-guide.js";
 
 const date = new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium", timeZone: "Asia/Ho_Chi_Minh" });
 
@@ -9,9 +9,7 @@ export function renderTimeline(target, batch, accordion) {
   heading.textContent = batch.product.name;
   const progress = document.createElement("p");
   const state = batch.status === "COMPLETED" ? "Đã hoàn thành" : "Đang sản xuất";
-  const steps = describeSilkStages(batch.logs);
-  const recorded = steps.filter(step => step.log).length;
-  progress.textContent = `${batch.product.artisan.workshopName} · ${state} · ${recorded}/${steps.length} công đoạn đã ghi nhận`;
+  progress.textContent = `${batch.product.artisan.workshopName} · ${state} · ${batch.logs.length} công đoạn đã ghi nhận`;
   target.replaceChildren(heading, progress);
   const storyText = batch.product.culturalStory || batch.product.description;
   if (storyText) {
@@ -20,34 +18,36 @@ export function renderTimeline(target, batch, accordion) {
     story.textContent = storyText;
     target.append(story);
   }
-  target.append(stageList(steps, accordion));
+  if (batch.logs.length) target.append(stageList(batch.logs, accordion));
+  else {
+    const pending = document.createElement("p");
+    pending.textContent = "Lô chưa có công đoạn nào được ghi nhận.";
+    target.append(pending);
+  }
+  const cover = batch.product.mediaUrls?.map(mediaUrl).find(Boolean);
+  target.insertAdjacentHTML("beforeend", renderProductionGuide(batch.product, {
+    cover, heading: "h3", headingId: accordion + "-production-guide",
+  }));
 }
 
-function stageList(steps, accordion) {
+function stageList(logs, accordion) {
   const stages = document.createElement("div");
   stages.className = "stage-list";
-  for (const [index, { number, title, guide, log }] of steps.entries()) {
+  for (const [index, log] of logs.entries()) {
     const stage = document.createElement("details");
     stage.name = accordion;
     stage.open = index === 0;
-    stage.innerHTML = `<summary><span class="stage-number"></span><span class="stage-overview"><span></span><small></small></span>${icon("plus")}</summary>`;
-    stage.querySelector(".stage-number").textContent = number;
-    stage.querySelector(".stage-overview span").textContent = title;
-    stage.querySelector("small").textContent = guide;
-    if (log) {
-      renderStageNote(stage, log, title);
-      stage.append(stageMedia(log));
-    } else {
-      const pending = document.createElement("p");
-      pending.textContent = "Chưa có nhật ký cho công đoạn này.";
-      stage.append(pending);
-    }
+    stage.innerHTML = `<summary><span class="stage-number"></span><span class="stage-overview"></span>${icon("plus")}</summary>`;
+    stage.querySelector(".stage-number").textContent = String(index + 1).padStart(2, "0");
+    stage.querySelector(".stage-overview").textContent = log.stageTitle;
+    renderStageNote(stage, log);
+    stage.append(stageMedia(log));
     stages.append(stage);
   }
   return stages;
 }
 
-function renderStageNote(target, log, title) {
+function renderStageNote(target, log) {
   if (log.loggedAt) {
     const time = document.createElement("time");
     time.dateTime = log.loggedAt;
@@ -55,10 +55,7 @@ function renderStageNote(target, log, title) {
     target.append(time);
   }
   const note = document.createElement("p");
-  const label = title.toLowerCase().includes(log.stageTitle.toLowerCase()) ? "Ghi chú của lô" : log.stageTitle;
-  const heading = document.createElement("strong");
-  heading.textContent = label;
-  note.append(heading, document.createElement("br"), log.description);
+  note.textContent = log.description;
   target.append(note);
 }
 

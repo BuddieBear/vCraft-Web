@@ -17,8 +17,8 @@ export async function listCatalogProducts({ page = 1, limit = 24, category, arti
     };
 }
 
-export function getCatalogProduct(slug) {
-    return findPublicProductBySlug(slug);
+export function getCatalogProduct(slug, options) {
+    return findPublicProductBySlug(slug, options);
 }
 export function getCategories() {
     return listCategories();

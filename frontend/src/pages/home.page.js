@@ -6,7 +6,7 @@ import { mountArtisanMap } from "./artisan-map.page.js";
 
 export const homeMapId = "ban-do-lang-nghe";
 
-export function renderHome(container, productDialog) {
+export function renderHome(container) {
   container.innerHTML = `
     <div class="hero section-shell">
       <div class="hero-copy">
@@ -84,7 +84,7 @@ export function renderHome(container, productDialog) {
       return true;
     }).slice(0, 3);
     if (!highlights.length) return;
-    featured.querySelector(".reference-grid").append(...highlights.map(product => referenceProductCard(product, productDialog)));
+    featured.querySelector(".reference-grid").append(...highlights.map(referenceProductCard));
     featured.hidden = false;
   }).catch(() => { /* The full catalog handles loading errors and retries. */ });
 

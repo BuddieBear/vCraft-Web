@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../database/prisma.js";
+import { lockRetailOrder } from "../database/postgresql/row-locks.js";
 
 export function findCheckoutBuyer(tx, userId) {
         return tx.user.findFirst({ where: { id: userId, isActive: true, role: "BUYER" }, select: { id: true } });
@@ -100,7 +101,7 @@ export function listAdminOrders({ skip, take, status }) {
 }
 export function transitionOrder(actor, orderId, status, paymentCollected) {
         return prisma.$transaction(async (tx) => {
-                await tx.$queryRaw`SELECT id FROM retail_orders WHERE id = ${orderId}::uuid FOR UPDATE`;
+                await lockRetailOrder(tx, orderId);
                 const order = await tx.retailOrder.findUnique({ where: { id: orderId }, include: { items: { orderBy: { productId: "asc" }, select: { productId: true, artisanId: true, quantity: true } } } });
                 if (!order) return null;
                 if (actor.role === "BUYER") {

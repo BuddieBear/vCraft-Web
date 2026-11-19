@@ -8,12 +8,12 @@ import { mountWholesale } from "./pages/wholesale.page.js";
 import { mountRetailOrders } from "./pages/retail-orders.page.js";
 import { mountReferenceCatalog } from "./pages/workshop-reference.page.js";
 import { mountCatalog } from "./pages/catalog.page.js";
-import { showProduct } from "./pages/product-detail.page.js";
+import { mountProductDetail } from "./pages/product-detail.page.js";
 import { mountNews } from "./pages/news.page.js";
 import { mountArtisanMap } from "./pages/artisan-map.page.js";
 import { mountNotifications } from "./pages/notifications.page.js";
 import { mountArtisanAdministration } from "./pages/admin.page.js";
-import { sitePaths } from "./site-paths.js";
+import { matchProductPage, sitePaths } from "./site-paths.js";
 
 const pages = new Map([
   [sitePaths.home, { id: "trang-chu", titleId: "hero-title" }],
@@ -28,7 +28,8 @@ const pages = new Map([
   [sitePaths.administration, { id: "quan-ly-xuong", titleId: "admin-title", className: "section-shell wholesale", title: "Quản lý xưởng" }],
 ]);
 const requestedPath = location.pathname.toLowerCase().replace(/\/+$/, "");
-const path = pages.has(requestedPath) ? requestedPath : sitePaths.home;
+const productPage = matchProductPage(requestedPath);
+const path = productPage ? sitePaths.catalog : pages.has(requestedPath) ? requestedPath : sitePaths.home;
 const legacyPage = path === sitePaths.home
   ? [...pages].find(([, page]) => location.hash === "#" + page.id)
   : null;
@@ -98,16 +99,19 @@ function renderPage() {
   if (page.title) document.title = page.title + " · vCraft";
 
   let catalog;
-  if (path === sitePaths.home) renderHome(section, document.querySelector("#product-dialog"));
+  if (path === sitePaths.home) renderHome(section);
   if (path === sitePaths.journal) mountExhibition(section);
   if (path === sitePaths.artisans) renderArtisans(section);
-  if (path === sitePaths.catalog) {
+  if (productPage) {
+    section.classList.add("product-detail-page");
+    section.setAttribute("aria-labelledby", "detail-title");
+    mountProductDetail(section, productPage, cart.add);
+  } else if (path === sitePaths.catalog) {
     const query = new URLSearchParams(location.search);
     const store = !query.get("co-so") && (query.get("mua") === "1" || query.has("xuong"));
-    const productDialog = document.querySelector("#product-dialog");
     catalog = store
-      ? mountCatalog(section, product => showProduct(productDialog, product, cart.add))
-      : mountReferenceCatalog(section, query.get("co-so"), productDialog);
+      ? mountCatalog(section)
+      : mountReferenceCatalog(section, query.get("co-so"));
     const views = document.createElement("nav");
     views.className = "catalog-switch";
     views.setAttribute("aria-label", "Loại danh mục");

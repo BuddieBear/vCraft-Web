@@ -1,5 +1,5 @@
 import { icon } from "../components/ui.js";
-import { sitePaths } from "../site-paths.js";
+import { signInPath, sitePaths } from "../site-paths.js";
 import { onSessionChange, request, setToken, signedIn } from "../api/http.js";
 
 export function mountAccount(dialog, trigger) {
@@ -86,7 +86,7 @@ export function mountAccount(dialog, trigger) {
   function open() {
     if (!signedIn()) {
       const destination = location.pathname + location.search + location.hash;
-      location.assign("/login.html?returnTo=" + encodeURIComponent(destination));
+      location.assign(signInPath + "?" + new URLSearchParams({ returnTo: destination }));
       return;
     }
     render();

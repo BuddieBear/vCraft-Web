@@ -29,7 +29,13 @@ export async function listProducts(request, response) {
 }
 
 export async function getProduct(request, response) {
-    const product = await getCatalogProduct(request.params.slug);
+    const { storefront } = request.query;
+    if (storefront !== undefined && storefront !== "true") {
+        return response.status(400).json({
+            error: { code: "INVALID_QUERY", message: "Tham số danh mục không hợp lệ." },
+        });
+    }
+    const product = await getCatalogProduct(request.params.slug, { storefront: storefront === "true" });
     if (!product) {
         return response.status(404).json({
             error: { code: "PRODUCT_NOT_FOUND", message: "Không tìm thấy sản phẩm." },

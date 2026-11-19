@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../database/prisma.js";
+import { findMatchingProductIds } from "../database/postgresql/product-search.js";
 import { recordProductHidden } from "./audit-log.repository.js";
 import { demoWorkshopDomain } from "../data/demo-workshop.js";
 
@@ -7,6 +8,17 @@ const publicProducts = {
     isPublished: true,
     artisan: { verificationStatus: "APPROVED", user: { isActive: true } },
 };
+
+function publicProductFilter(storefront) {
+    if (!storefront) return publicProducts;
+    return {
+        ...publicProducts,
+        artisan: {
+            ...publicProducts.artisan,
+            user: { ...publicProducts.artisan.user, email: { not: { endsWith: demoWorkshopDomain }, mode: "insensitive" } },
+        },
+    };
+}
 export function listCategories() {
     return prisma.category.findMany({ select: { id: true, name: true, slug: true, description: true, thumbnailUrl: true }, orderBy: { name: "asc" } });
 }
@@ -27,37 +39,9 @@ const summaryFields = {
     artisan: { select: { id: true, workshopName: true } },
 };
 
-function foldVietnamese(value) {
-    const accented = "Đđ\u0300\u0301\u0302\u0303\u0306\u0309\u031b\u0323";
-    return Prisma.sql`lower(translate(normalize(${value}, NFD), ${accented}, 'Dd'))`;
-}
-
 async function searchPublicProducts({ skip, take, category, artisanId, q, sort, storefront }) {
-    const priceOrder = sort === "asc" ? Prisma.sql`p.price ASC NULLS LAST,`
-        : sort === "desc" ? Prisma.sql`p.price DESC NULLS LAST,` : Prisma.empty;
     return prisma.$transaction(async tx => {
-        // Mirror the public visibility and optional filters before applying pagination.
-        const matches = await tx.$queryRaw`
-            SELECT p.id
-            FROM products p
-            JOIN artisan_profiles a ON a.id = p.artisan_id
-            JOIN users u ON u.id = a.user_id
-            LEFT JOIN categories c ON c.id = p.category_id
-            CROSS JOIN (SELECT ${foldVietnamese(Prisma.sql`${q}::text`)} AS needle) term
-            WHERE p.is_published AND a.verification_status = 'APPROVED' AND u.is_active
-                ${category ? Prisma.sql`AND c.slug = ${category}` : Prisma.empty}
-                ${artisanId ? Prisma.sql`AND p.artisan_id = ${artisanId}::uuid` : Prisma.empty}
-                ${storefront ? Prisma.sql`AND right(lower(u.email), length(${demoWorkshopDomain}::text)) <> ${demoWorkshopDomain}` : Prisma.empty}
-                AND term.needle <> ''
-                AND (
-                    strpos(${foldVietnamese(Prisma.sql`p.name`)}, term.needle) > 0
-                    OR strpos(${foldVietnamese(Prisma.sql`p.raw_material`)}, term.needle) > 0
-                    OR strpos(${foldVietnamese(Prisma.sql`c.name`)}, term.needle) > 0
-                    OR strpos(${foldVietnamese(Prisma.sql`a.workshop_name`)}, term.needle) > 0
-                )
-            ORDER BY ${priceOrder} p.slug ASC
-            OFFSET ${skip} LIMIT ${take}
-        `;
+        const matches = await findMatchingProductIds(tx, { skip, take, category, artisanId, q, sort, storefront });
         if (!matches.length) return [];
         const products = await tx.product.findMany({
             where: { id: { in: matches.map(({ id }) => id) } },
@@ -70,11 +54,7 @@ async function searchPublicProducts({ skip, take, category, artisanId, q, sort, 
 
 export function listPublicProducts({ skip, take, category, artisanId, q, sort, storefront }) {
     if (q) return searchPublicProducts({ skip, take, category, artisanId, q, sort, storefront });
-    const where = { ...publicProducts };
-    if (storefront) where.artisan = {
-        ...publicProducts.artisan,
-        user: { ...publicProducts.artisan.user, email: { not: { endsWith: demoWorkshopDomain }, mode: "insensitive" } },
-    };
+    const where = { ...publicProductFilter(storefront) };
     if (category) where.category = { slug: category };
     if (artisanId) where.artisanId = artisanId;
     return prisma.product.findMany({
@@ -86,9 +66,9 @@ export function listPublicProducts({ skip, take, category, artisanId, q, sort, s
     });
 }
 
-export function findPublicProductBySlug(slug) {
+export function findPublicProductBySlug(slug, { storefront = false } = {}) {
     return prisma.product.findUnique({
-        where: { slug, ...publicProducts },
+        where: { slug, ...publicProductFilter(storefront) },
         select: {
             ...summaryFields,
             description: true,

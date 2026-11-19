@@ -1,4 +1,6 @@
 import { request, setToken } from "../api/http.js";
+import { signInPath } from "../site-paths.js";
+import { bindFormErrors, clearFormErrors, showFormErrors } from "../components/form-errors.js";
 
 const form = document.querySelector("#sign-in-form");
 const title = document.querySelector("#sign-in-title");
@@ -11,12 +13,14 @@ const password = form.elements.namedItem("password");
 const forgot = document.querySelector(".sign-in-forgot");
 const resetRequest = document.querySelector("#reset-request-form");
 const resetConfirm = document.querySelector("#reset-confirm-form");
+for (const fields of [form, resetRequest, resetConfirm]) bindFormErrors(fields);
 const requestedReturn = new URLSearchParams(location.search).get("returnTo");
 let returnTo = "/";
 if (requestedReturn?.startsWith("/") && !requestedReturn.startsWith("//")) {
   try {
     const url = new URL(requestedReturn, location.origin);
-    if (url.origin === location.origin && url.pathname !== "/login.html") {
+    const path = url.pathname.toLowerCase().replace(/\/+$/, "");
+    if (url.origin === location.origin && ![signInPath, "/login.html"].includes(path)) {
       returnTo = url.href;
     }
   } catch { /* Use the home page for an invalid destination. */ }
@@ -26,6 +30,7 @@ document.querySelector(".sign-in-back").href = returnTo;
 let registration = false;
 let resetToken;
 function updateMode() {
+  clearFormErrors(form);
   form.hidden = false;
   resetRequest.hidden = true;
   resetConfirm.hidden = true;
@@ -56,6 +61,7 @@ forgot.addEventListener("click", () => {
   form.hidden = true;
   resetConfirm.hidden = true;
   resetRequest.hidden = false;
+  clearFormErrors(resetRequest);
   resetRequest.elements.namedItem("email").value = form.elements.namedItem("email").value;
   title.textContent = "Quên mật khẩu";
   document.title = title.textContent + " · vCraft";
@@ -73,13 +79,14 @@ function showLogin() {
   forgot.textContent = "Quên mật khẩu?";
   forgot.dataset.mode = "";
   resetConfirm.reset();
+  clearFormErrors(resetConfirm);
   updateMode();
 }
 
-function validNewPassword(value) {
+function validNewPassword(form, name, value) {
   const length = new TextEncoder().encode(value).length;
   if (length >= 12 && length <= 72) return true;
-  status.textContent = "Mật khẩu phải từ 12 đến 72 byte UTF-8.";
+  showFormErrors(form, [{ name, message: "Mật khẩu phải từ 12 đến 72 byte UTF-8." }]);
   return false;
 }
 
@@ -104,6 +111,8 @@ if (resetLink) {
 resetRequest.addEventListener("submit", async event => {
   event.preventDefault();
   const button = resetRequest.querySelector('button[type="submit"]');
+  if (button.disabled) return;
+  clearFormErrors(resetRequest);
   button.disabled = forgot.disabled = true;
   status.textContent = "";
   try {
@@ -113,7 +122,7 @@ resetRequest.addEventListener("submit", async event => {
     });
     status.textContent = "Nếu email có tài khoản, hãy kiểm tra hộp thư để nhận liên kết khôi phục.";
   } catch (error) {
-    status.textContent = error.message;
+    if (!showFormErrors(resetRequest, error.fields)) status.textContent = error.message;
   } finally {
     button.disabled = forgot.disabled = false;
   }
@@ -122,10 +131,13 @@ resetRequest.addEventListener("submit", async event => {
 resetConfirm.addEventListener("submit", async event => {
   event.preventDefault();
   const button = resetConfirm.querySelector('button[type="submit"]');
+  if (button.disabled) return;
+  clearFormErrors(resetConfirm);
+  status.textContent = "";
   const newPassword = resetConfirm.elements.namedItem("newPassword").value;
-  if (!validNewPassword(newPassword)) return;
+  if (!validNewPassword(resetConfirm, "newPassword", newPassword)) return;
   if (newPassword !== resetConfirm.elements.namedItem("confirmPassword").value) {
-    status.textContent = "Hai mật khẩu chưa khớp.";
+    showFormErrors(resetConfirm, [{ name: "confirmPassword", message: "Hai mật khẩu chưa khớp." }]);
     return;
   }
   button.disabled = forgot.disabled = true;
@@ -135,7 +147,7 @@ resetConfirm.addEventListener("submit", async event => {
     showLogin();
     status.textContent = "Đã đặt lại mật khẩu. Hãy đăng nhập bằng mật khẩu mới.";
   } catch (error) {
-    status.textContent = error.message;
+    if (!showFormErrors(resetConfirm, error.fields)) status.textContent = error.message;
   } finally {
     button.disabled = forgot.disabled = false;
   }
@@ -143,10 +155,12 @@ resetConfirm.addEventListener("submit", async event => {
 
 form.addEventListener("submit", async event => {
   event.preventDefault();
-  const body = Object.fromEntries(new FormData(form));
-  if (registration && !validNewPassword(body.password)) return;
-  submit.disabled = toggle.disabled = true;
+  if (submit.disabled) return;
+  clearFormErrors(form);
   status.textContent = "";
+  const body = Object.fromEntries(new FormData(form));
+  if (registration && !validNewPassword(form, "password", body.password)) return;
+  submit.disabled = toggle.disabled = forgot.disabled = true;
   try {
     if (registration) {
       await request("/auth/register", { method: "POST", body });
@@ -158,7 +172,8 @@ form.addEventListener("submit", async event => {
     setToken(data.accessToken);
     location.assign(returnTo);
   } catch (error) {
-    status.textContent = error.message;
-    submit.disabled = toggle.disabled = false;
+    if (!showFormErrors(form, error.fields)) status.textContent = error.message;
+  } finally {
+    submit.disabled = toggle.disabled = forgot.disabled = false;
   }
 });

@@ -6,7 +6,7 @@ import { byId, pageArgs, pageQuery, urls, mediaUrl } from "./schemas.js";
 import { getArtisan, listArtisans, getMyWorkshop, updateMyWorkshop, createCertificate, removeCertificate } from "../services/artisans.service.js";
 import { authenticate } from "../middlewares/authenticate.js";
 import { authorize } from "../middlewares/authorize.js";
-import { workshopReferences } from "../data/workshop-references.js";
+import { findReferenceProduct, workshopReferences } from "../data/workshop-references.js";
 const router = Router();
 const own = [authenticate, authorize("ARTISAN")];
 router.get("/reference", (_req, res) => res.json({
@@ -15,6 +15,11 @@ router.get("/reference", (_req, res) => res.json({
 router.get("/reference/products", (_req, res) => res.json({
     data: workshopReferences.flatMap(({ name, products }) => products.map(product => ({ ...product, workshopName: name }))),
 }));
+router.get("/reference/products/:slug", (req, res) => {
+    const product = findReferenceProduct(req.params.slug);
+    if (!product) throw new ApiError(404, "PRODUCT_NOT_FOUND", "Không tìm thấy mẫu lụa.");
+    res.json({ data: product });
+});
 router.get("/reference/:slug", (req, res) => {
     const workshop = workshopReferences.find(({ slug }) => slug === req.params.slug);
     if (!workshop) throw new ApiError(404, "NOT_FOUND", "Không tìm thấy cơ sở dệt lụa.");

@@ -1,4 +1,5 @@
 import { prisma } from "../database/prisma.js";
+import { lockActiveUserPassword } from "../database/postgresql/row-locks.js";
 import { createHash } from "node:crypto";
 
 export function createBuyer({ email, fullName, passwordHash }) {
@@ -35,7 +36,7 @@ export function findUserById(id) { return prisma.user.findUnique({ where: { id, 
 export function updateUserProfile(id, data) { return prisma.user.update({ where: { id, isActive: true }, data, select: profileFields }); }
 export function findPasswordHashById(id) { return prisma.user.findUnique({ where: { id, isActive: true }, select: { passwordHash: true } }); }
 async function lockActiveUser(tx, id) {
-    const [user] = await tx.$queryRaw`SELECT password_hash FROM users WHERE id = ${id}::uuid AND is_active FOR UPDATE`;
+    const [user] = await lockActiveUserPassword(tx, id);
     return user;
 }
 

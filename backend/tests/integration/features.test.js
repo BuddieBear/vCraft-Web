@@ -5,6 +5,7 @@ import { join } from "node:path";
 import sharp from "sharp";
 import { app } from "../../src/app.js";
 import { prisma } from "../../src/database/prisma.js";
+import { vietnamToday } from "../../../frontend/src/data/input-values.js";
 
 test("artisan, production, administration, media and retail APIs", async () => {
     assert.equal(process.env.NODE_ENV, "test");
@@ -25,10 +26,35 @@ test("artisan, production, administration, media and retail APIs", async () => {
     };
     let uploaded;
     try {
+        assert.equal(vietnamToday(new Date("2026-11-18T17:00:00Z")), "2026-11-19");
+        const oldLogin = await fetch(base + "/login.html?returnTo=%2Fdanh-muc", { redirect: "manual" });
+        assert.equal(oldLogin.status, 302);
+        assert.equal(oldLogin.headers.get("location"), "/dang-nhap?returnTo=%2Fdanh-muc");
+        assert.equal((await fetch(base + "/dang-nhap")).status, 200);
+        const sample = await request("/artisans/reference/products/lua-hoa-sen-shd21");
+        assert.equal(sample.json.data.workshopSlug, "nhaxasilk");
+        assert.equal((await fetch(base + "/mau-lua/lua-hoa-sen-shd21")).status, 200);
+        assert.equal((await fetch(base + "/mau-lua/mau-khong-ton-tai")).status, 404);
         const admin = await login("admin@nhaxa.example");
         const product = await prisma.product.findUniqueOrThrow({ where: { slug: "hong-dat" }, include: { artisan: { include: { user: true } } } });
+        const storefrontSample = await request("/products/by-slug/hong-dat?storefront=true");
+        assert.equal(storefrontSample.status, 404);
+        assert.equal((await request("/products/by-slug/hong-dat")).status, 200);
+        const samplePage = await fetch(base + "/san-pham/hong-dat", { redirect: "manual" });
+        assert.equal(samplePage.status, 302);
+        assert.equal(samplePage.headers.get("location"), "/trace/product/hong-dat");
+        assert.equal((await fetch(base + "/trace/product/hong-dat")).status, 200);
         const artisan = await login(product.artisan.user.email);
         const buyer = await login("buyer@nhaxa.example");
+        const invalidQuote = await request("/wholesale/quotes", { method: "POST", token: buyer, body: { title: " ", specifications: "Tơ", targetQuantity: 5, deadline: "2099-01-01" } });
+        assert.equal(invalidQuote.status, 400);
+        assert.equal(invalidQuote.json.error.fields[0].name, "title");
+        const pastQuote = await request("/wholesale/quotes", { method: "POST", token: buyer, body: { title: "Đặt lụa", specifications: "Tơ", targetQuantity: 5, deadline: "2000-01-01" } });
+        assert.equal(pastQuote.status, 400);
+        assert.equal(pastQuote.json.error.fields[0].name, "deadline");
+        const invalidPhone = await request("/retail/checkout", { method: "POST", token: buyer, body: { recipientName: "Test", shippingAddress: "Test", recipientPhone: "abc" } });
+        assert.equal(invalidPhone.status, 400);
+        assert.equal(invalidPhone.json.error.fields[0].name, "recipientPhone");
         const me = await request("/artisans/me", { token: artisan });
         assert.equal(me.status, 200);
         assert.equal((await request("/artisans/me", { method: "PATCH", token: artisan, body: { familyHistory: "Lịch sử kiểm thử" } })).status, 200);
@@ -67,6 +93,8 @@ test("artisan, production, administration, media and retail APIs", async () => {
         assert.equal((await request(`/wholesale/quotes/${routedQuote.json.data.id}/bids`, { method: "POST", token: other, body: { proposedPrice: 100, proposedCompletionDays: 2 } })).status, 201);
         const created = await request("/products", { method: "POST", token: other, body: newProduct });
         assert.equal(created.status, 201);
+        assert.equal((await request("/products/by-slug/feature-test-silk?storefront=true")).status, 200);
+        assert.equal((await fetch(base + "/san-pham/feature-test-silk")).status, 200);
         const replacement = { ...newProduct, expectedStockQuantity: 5 };
         assert.equal((await request(`/products/${created.json.data.id}`, { method: "PUT", token: artisan, body: replacement })).status, 404);
         assert.equal((await request(`/products/${created.json.data.id}`, { method: "PUT", token: other, body: replacement })).status, 200);
@@ -133,6 +161,7 @@ test("artisan, production, administration, media and retail APIs", async () => {
         assert.equal((await request(`/retail/orders/${mixed.json.data.id}/status`, { method: "PATCH", token: admin, body: { status: "CANCELLED" } })).status, 409);
         assert.equal((await request(`/products/${created.json.data.id}`, { method: "DELETE", token: other })).status, 204);
         assert.equal((await request("/products/feature-test-silk")).status, 404);
+        assert.equal((await fetch(base + "/san-pham/feature-test-silk")).status, 404);
         assert.equal((await fetch(base + "/trace/FEATURE-001")).status, 404);
     } finally {
         if (uploaded) await unlink(join(process.env.UPLOAD_DIR, uploaded.split("/").pop()));

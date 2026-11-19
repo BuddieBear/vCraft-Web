@@ -9,17 +9,17 @@ export const workshopReferences = [
         },
         products: [
             {
-                name: "Lụa Hoa Sen SHD21", type: "Vải lụa hoa", price: 162000, unit: "mét dài",
+                slug: "lua-hoa-sen-shd21", name: "Lụa Hoa Sen SHD21", type: "Vải lụa hoa", price: 162000, unit: "mét dài",
                 image: "https://nhaxasilk.com/wp-content/uploads/2024/08/22-600x600.jpg.webp",
                 url: "https://nhaxasilk.com/lua-hoa-sen-shd21",
             },
             {
-                name: "Lụa họa tiết Thọ Rơi – TR38", type: "Vải lụa hoa", price: 162000, unit: "mét dài",
+                slug: "lua-hoa-tiet-tho-roi-tr38", name: "Lụa họa tiết Thọ Rơi – TR38", type: "Vải lụa hoa", price: 162000, unit: "mét dài",
                 image: "https://nhaxasilk.com/wp-content/uploads/2024/07/1-21-600x600.png",
                 url: "https://nhaxasilk.com/lua-hoa-tiet-tho-roi-tr38",
             },
             {
-                name: "Lụa Hoa Sen SHD19", type: "Vải lụa hoa", price: 162000, unit: "mét dài",
+                slug: "lua-hoa-sen-shd19", name: "Lụa Hoa Sen SHD19", type: "Vải lụa hoa", price: 162000, unit: "mét dài",
                 image: "https://nhaxasilk.com/wp-content/uploads/2024/07/1-22-600x600.png",
                 url: "https://nhaxasilk.com/lua-hoa-sen-shd19",
             },
@@ -38,17 +38,17 @@ export const workshopReferences = [
         },
         products: [
             {
-                name: "Lụa Họa Tiết Bồ Công Anh BCA01", type: "Vải lụa hoa", price: 162000, unit: "mét dài",
+                slug: "lua-hoa-tiet-bo-cong-anh-bca01", name: "Lụa Họa Tiết Bồ Công Anh BCA01", type: "Vải lụa hoa", price: 162000, unit: "mét dài",
                 image: "https://luatotamnhaxa.vn/wp-content/uploads/2025/03/bang-mau-lua-to-tam-nha-xa-bo-cong-anh-1.png",
                 url: "https://luatotamnhaxa.vn/san-pham/lua-hoa-tiet-bo-cong-anh-bca01",
             },
             {
-                name: "Lụa Hoa Sen Hồ Điệp SHD01", type: "Vải lụa hoa", price: 162000, unit: "mét dài",
+                slug: "lua-hoa-sen-ho-diep-shd01", name: "Lụa Hoa Sen Hồ Điệp SHD01", type: "Vải lụa hoa", price: 162000, unit: "mét dài",
                 image: "https://luatotamnhaxa.vn/wp-content/uploads/2025/02/Thiet-ke-chua-co-ten.jpg",
                 url: "https://luatotamnhaxa.vn/san-pham/lua-hoa-sen-ho-diep-shd01",
             },
             {
-                name: "Khăn đũi choàng cổ màu xanh navy", type: "Khăn đũi", price: 500000, unit: "mét dài",
+                slug: "khan-dui-choang-co-mau-xanh-navy", name: "Khăn đũi choàng cổ màu xanh navy", type: "Khăn đũi", price: 500000, unit: "mét dài",
                 image: "https://luatotamnhaxa.vn/wp-content/uploads/2025/03/lua-to-tam-nha-xa-7-600x600.png",
                 url: "https://luatotamnhaxa.vn/san-pham/khan-dui-choang-co-mau-xanh-navy",
             },
@@ -69,3 +69,11 @@ export const workshopReferences = [
         source: "https://nongthon.vietnamtourism.gov.vn/ha-nam-nang-tam-san-pham-lua-to-tam-nha-xa/",
     },
 ];
+
+export function findReferenceProduct(slug) {
+    for (const workshop of workshopReferences) {
+        const product = workshop.products.find(sample => sample.slug === slug);
+        if (product) return { ...product, workshopName: workshop.name, workshopSlug: workshop.slug };
+    }
+    return null;
+}

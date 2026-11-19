@@ -46,6 +46,8 @@
 }
 .trace-meta dt { margin-bottom: 5px; color: var(--gold); font-size: .76rem; }
 .trace-meta dd { margin: 0; overflow-wrap: anywhere; font-size: .94rem; font-weight: 650; }
+.trace-guide-link { display: inline-flex; align-items: center; gap: 7px; width: fit-content; color: var(--gold); font-size: .88rem; font-weight: 650; }
+.trace-guide-link svg { width: 17px; height: 17px; }
 .trace-timeline { width: min(920px, 100%); margin: clamp(28px, 5vw, 62px) auto 0; }
 .trace-timeline-head {
   display: flex;
@@ -69,9 +71,7 @@
 .trace-state.is-complete { background: #e2ebe0; color: var(--indigo); }
 .trace-state svg { width: 17px; height: 17px; }
 .trace-timeline-guide { margin-top: 10px; color: var(--soft-ink); line-height: 1.55; }
-.trace-progress { display: grid; gap: 8px; margin-block: 16px 22px; color: var(--soft-ink); font-size: .88rem; }
-.trace-progress progress { width: 100%; height: 8px; accent-color: var(--indigo); }
-.trace-stages { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.trace-stages { display: grid; gap: 10px; margin: 14px 0 0; padding: 0; list-style: none; }
 .trace-stage { border: 1px solid var(--line); border-radius: 5px; background: var(--white); }
 .trace-stage[open] { border-color: #b6bfad; }
 .trace-stage summary {
@@ -100,10 +100,8 @@
   font-variant-numeric: tabular-nums;
 }
 .trace-stage[open] .trace-step { color: var(--white); background: var(--indigo); }
-.trace-stage-overview { display: grid; gap: 5px; }
 .trace-stage-title { font: 500 clamp(1.03rem, 2.25vw, 1.38rem)/1.3 var(--serif); }
-.trace-stage-guide { color: var(--soft-ink); line-height: 1.55; font-size: .88rem; }
-.trace-stage time, .trace-stage-pending { margin-top: 4px; color: var(--soft-ink); font-size: .8rem; }
+.trace-stage time { margin-top: 4px; color: var(--soft-ink); font-size: .8rem; }
 .trace-toggle { margin-top: 3px; color: var(--indigo); }
 .trace-toggle svg { display: block; width: 19px; height: 19px; }
 .trace-stage[open] .trace-toggle svg:first-child, .trace-stage:not([open]) .trace-toggle svg:last-child { display: none; }
@@ -114,7 +112,7 @@
   gap: 18px;
   padding: clamp(14px, 3vw, 30px);
 }
-.trace-stage-record h3 { margin-bottom: 6px; font: 500 1.04rem/1.3 var(--serif); }
+.trace-stage-body-text { grid-template-columns: minmax(0, 1fr); }
 .trace-stage-body p { color: var(--soft-ink); line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
 .trace-evidence { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 10px; }
 .trace-stage-media img { width: 100%; height: auto; max-height: 460px; object-fit: contain; border-radius: 3px; }
@@ -126,7 +124,7 @@
   .trace-stage summary { grid-template-columns: auto minmax(0, 1fr) auto; gap: 2px 10px; }
   .trace-step, .trace-toggle { grid-row: 1 / span 2; }
   .trace-toggle { grid-column: 3; }
-  .trace-stage-overview, .trace-stage time, .trace-stage-pending { grid-column: 2; }
+  .trace-stage-title, .trace-stage time { grid-column: 2; }
 }
 
 @media (prefers-reduced-motion: no-preference) {

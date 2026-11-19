@@ -1,4 +1,5 @@
 import { ApiError } from "../middlewares/api-error.js";
+import { signInPath } from "../../../frontend/src/site-paths.js";
 
 export function passwordResetDelivery() {
     const { RESEND_API_KEY: key, PASSWORD_RESET_FROM: from, PUBLIC_APP_URL: appUrl, NODE_ENV: environment } = process.env;
@@ -12,7 +13,7 @@ export function passwordResetDelivery() {
         throw new ApiError(503, "RESET_MAIL_UNAVAILABLE", "Dịch vụ gửi email khôi phục đang tạm thời không khả dụng.");
     }
     return async (email, token) => {
-        const link = new URL("/login.html", origin);
+        const link = new URL(signInPath, origin);
         link.hash = new URLSearchParams({ reset: token }).toString();
         try {
             const response = await fetch("https://api.resend.com/emails", {

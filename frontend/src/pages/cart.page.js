@@ -2,6 +2,8 @@ import { formatPrice, icon, saleUnits } from "../components/ui.js";
 import { request, signedIn } from "../api/http.js";
 import { paymentLabel } from "./retail-orders.page.js";
 import { reviewForm } from "./reviews.page.js";
+import { bindFormErrors, clearFormErrors, showFormErrors } from "../components/form-errors.js";
+import { recipientPhoneError, validRecipientPhone } from "../data/input-values.js";
 
 export function mountCart(dialog, updateBadge, notify, account) {
   let items = [];
@@ -86,6 +88,7 @@ export function mountCart(dialog, updateBadge, notify, account) {
     total.hidden = false;
     total.querySelector("strong").textContent = formatPrice(items.reduce((sum, { product, quantity }) => sum + Number(product.price) * quantity, 0));
     const form = dialog.querySelector("form");
+    bindFormErrors(form);
     form.hidden = false;
     form.querySelector('[type="submit"]').disabled = !canCheckout;
     form.elements.namedItem("recipientName").value = account.profile?.fullName || "";
@@ -117,7 +120,6 @@ export function mountCart(dialog, updateBadge, notify, account) {
     const profile = await account.resolveProfile();
     if (profile?.role === "BUYER") return profile;
     if (signedIn()) throw new Error("Giỏ hàng dành cho tài khoản người mua.");
-    document.querySelector("#product-dialog")?.close();
     account.open();
     return false;
   }
@@ -170,19 +172,27 @@ export function mountCart(dialog, updateBadge, notify, account) {
   dialog.addEventListener("submit", async event => {
     if (!event.target.matches(".checkout-form")) return;
     event.preventDefault();
-    const button = event.target.querySelector("button");
+    const form = event.target;
+    const button = form.querySelector("button");
     if (busy || button.disabled) return;
+    clearFormErrors(form);
+    dialog.querySelector("[role=status]").textContent = "";
+    const values = Object.fromEntries(new FormData(form));
+    if (!validRecipientPhone(values.recipientPhone)) {
+      showFormErrors(form, [{ name: "recipientPhone", message: recipientPhoneError }]);
+      return;
+    }
     busy = button.disabled = true;
     try {
       const { data } = await request("/retail/checkout", {
-        method: "POST", auth: true, body: { ...Object.fromEntries(new FormData(event.target)), paymentMethod: "COD" },
+        method: "POST", auth: true, body: { ...values, paymentMethod: "COD" },
       });
       items = [];
       updateBadge(0);
       dialog.close();
       notify("Đã tạo đơn " + data.orderCode + ".");
     } catch (error) {
-      report(error);
+      if (!showFormErrors(form, error.fields)) report(error);
     } finally { busy = button.disabled = false; }
   });
 

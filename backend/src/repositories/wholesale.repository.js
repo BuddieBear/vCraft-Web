@@ -1,4 +1,5 @@
 import { prisma } from "../database/prisma.js";
+import { lockQuotation, lockArtisanAssignment } from "../database/postgresql/row-locks.js";
 export function findBuyerQuote(quoteId, buyerId) {
     return prisma.quotationRequest.findFirst({
         where: { id: quoteId, buyerId, buyer: { isActive: true, role: "BUYER" } },
@@ -15,7 +16,7 @@ export function findBuyerQuote(quoteId, buyerId) {
 }
 
 export async function lockQuote(tx, id) {
-        const rows = await tx.$queryRaw`SELECT id FROM quotation_requests WHERE id = ${id}::uuid FOR UPDATE`;
+        const rows = await lockQuotation(tx, id);
         return rows.length ? tx.quotationRequest.findUnique({ where: { id } }) : null;
 }
 
@@ -144,7 +145,7 @@ export function advanceAssignment(userId, assignmentId, status) {
         if (!artisan) throw new Error("Artisan is not active");
         const previous = { IN_PRODUCTION: "ASSIGNED", READY_FOR_DELIVERY: "IN_PRODUCTION", COMPLETED: "READY_FOR_DELIVERY" }[status];
         if (status === "READY_FOR_DELIVERY") {
-            const [assignment] = await tx.$queryRaw`SELECT allocated_quantity FROM order_assignments WHERE id = ${assignmentId}::uuid AND artisan_id = ${artisan.id}::uuid FOR UPDATE`;
+            const [assignment] = await lockArtisanAssignment(tx, assignmentId, artisan.id);
             if (!assignment) throw new Error("Assignment not found or invalid state");
             const unfinished = await tx.productBatch.findFirst({ where: { orderAssignmentId: assignmentId, orderAssignment: { artisanId: artisan.id }, status: { in: ["PLANNING", "IN_PROGRESS"] } }, select: { id: true } });
             if (unfinished) throw new Error("Assignment has unfinished batches");

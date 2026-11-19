@@ -1,20 +1,16 @@
 import { formatPrice, icon, saleUnits } from "../components/ui.js";
 import { mediaUrl, request } from "../api/http.js";
 import { sitePaths } from "../site-paths.js";
+import { renderProductionGuide } from "../components/production-guide.js";
 
-let current;
-
-export async function showProduct(dialog, summary, addToCart) {
-  current?.abort();
-  const controller = current = new AbortController();
-  const { signal } = controller;
-  dialog.innerHTML = `
-    <button class="icon-button dialog-close" type="button" aria-label="Đóng chi tiết" autofocus>${icon("close")}</button>
+export async function mountProductDetail(section, { slug, reference }, addToCart) {
+  section.innerHTML = `
+    <a class="text-link product-back" href="${sitePaths.catalog}${reference ? "" : "?mua=1"}">${icon("left")} Về danh mục</a>
     <div class="detail-grid">
-      <div class="detail-visual"><img class="detail-image" width="414" height="414" alt="" referrerpolicy="no-referrer"></div>
+      <div class="detail-visual" hidden><img class="detail-image" width="414" height="414" alt="" referrerpolicy="no-referrer"></div>
       <div class="detail-copy">
         <header class="detail-heading">
-          <p class="eyebrow"></p><h2 id="detail-title"></h2><p class="detail-price"></p>
+          <p class="eyebrow"></p><h1 id="detail-title">Chi tiết sản phẩm</h1><p class="detail-price"></p>
         </header>
         <p class="product-description"></p>
         <dl class="detail-specs" hidden><div><dt>Chất liệu</dt><dd></dd></div></dl>
@@ -25,52 +21,59 @@ export async function showProduct(dialog, summary, addToCart) {
       </div>
     </div>`;
 
-  const image = dialog.querySelector("img");
-  const grid = dialog.querySelector(".detail-grid");
-  const workshopName = dialog.querySelector(".eyebrow");
-  const title = dialog.querySelector("h2");
-  const price = dialog.querySelector(".detail-price");
-  function showIdentity(product) {
-    const src = product.mediaUrls.map(mediaUrl).find(Boolean);
+  const image = section.querySelector("img");
+  const grid = section.querySelector(".detail-grid");
+  const workshopName = section.querySelector(".eyebrow");
+  const title = section.querySelector("h1");
+  const price = section.querySelector(".detail-price");
+  const status = section.querySelector("[role=status]");
+  grid.classList.add("detail-no-image");
+  const param = encodeURIComponent(slug);
+  const endpoint = reference ? "/artisans/reference/products/" + param : "/products/by-slug/" + param + "?storefront=true";
+  const previous = document.referrer && new URL(document.referrer);
+  const returnToCatalog = previous?.origin === location.origin && previous.pathname === sitePaths.catalog;
+  if (returnToCatalog) section.querySelector(".product-back").href = previous.href;
+  try {
+    const { data: product } = await request(endpoint);
+    const src = (reference ? [product.image] : product.mediaUrls).map(mediaUrl).find(Boolean);
     if (src) image.src = src;
-    else image.removeAttribute("src");
     image.parentElement.hidden = !src;
     grid.classList.toggle("detail-no-image", !src);
     image.alt = product.name;
-    workshopName.textContent = product.artisan.workshopName;
+    workshopName.textContent = reference ? product.workshopName : product.artisan.workshopName;
     title.textContent = product.name;
-    price.textContent = formatPrice(product.price, saleUnits[product.saleUnit]);
-  }
-  showIdentity(summary);
-  const status = dialog.querySelector("[role=status]");
-  dialog.querySelector(".dialog-close").addEventListener("click", () => dialog.close());
-  dialog.addEventListener("close", () => controller.abort(), { once: true, signal });
-  if (!dialog.open) dialog.showModal();
-
-  const slug = encodeURIComponent(summary.slug);
-  try {
-    const { data: product } = await request("/products/by-slug/" + slug, { signal });
-    if (signal.aborted) return;
-    showIdentity(product);
+    document.title = product.name + " · vCraft";
+    price.textContent = reference ? `${formatPrice(product.price)} / ${product.unit}` : formatPrice(product.price, saleUnits[product.saleUnit]);
     status.textContent = "";
-    dialog.querySelector(".product-description").textContent = product.description;
+    grid.insertAdjacentHTML("beforeend", renderProductionGuide(product, { cover: src, reference, showQr: true }));
+    const description = section.querySelector(".product-description");
+    const specs = section.querySelector(".detail-specs");
+    if (reference) {
+      if (!returnToCatalog) {
+        section.querySelector(".product-back").href = sitePaths.catalog + "?" + new URLSearchParams({ "co-so": product.workshopSlug });
+      }
+      description.textContent = "Ảnh mẫu và giá tham khảo do cơ sở công bố.";
+      specs.querySelector("dt").textContent = "Loại sản phẩm";
+      specs.querySelector("dd").textContent = product.type;
+      specs.hidden = false;
+      return;
+    }
+    description.textContent = product.description ?? "";
     if (product.culturalStory && product.culturalStory !== product.description) {
-      const story = dialog.querySelector(".detail-story");
+      const story = section.querySelector(".detail-story");
       story.querySelector("p").textContent = product.culturalStory;
       story.hidden = false;
     }
     if (product.rawMaterial) {
-      const specs = dialog.querySelector(".detail-specs");
       specs.querySelector("dd").textContent = product.rawMaterial;
       specs.hidden = false;
     }
-    const actions = dialog.querySelector(".detail-actions");
+    const actions = section.querySelector(".detail-actions");
     if (product.price === null) {
       const workshop = document.createElement("a");
       workshop.className = "button button-primary";
       workshop.href = sitePaths.artisans + "?" + new URLSearchParams({ xuong: product.artisan.id });
       workshop.textContent = "Xem hồ sơ xưởng";
-      workshop.addEventListener("click", () => dialog.close());
       actions.append(workshop);
     } else {
       const add = document.createElement("button");
@@ -92,16 +95,23 @@ export async function showProduct(dialog, summary, addToCart) {
       actions.append(add);
     }
   } catch (error) {
-    if (!signal.aborted) status.textContent = error.message;
+    status.textContent = error.message;
+    if (error.status !== 404) {
+      const retry = document.createElement("button");
+      retry.className = "text-button";
+      retry.type = "button";
+      retry.textContent = "Thử lại";
+      retry.addEventListener("click", () => mountProductDetail(section, { slug, reference }, addToCart));
+      status.append(" ", retry);
+    }
     return;
   }
 
-  const target = dialog.querySelector(".detail-batches");
+  const target = section.querySelector(".detail-batches");
   async function loadBatches() {
     target.textContent = "Đang tải lô sản xuất…";
     try {
-      const { data } = await request("/traceability/products/" + slug, { signal });
-      if (signal.aborted) return;
+      const { data } = await request("/traceability/products/" + param);
       if (!data.length) {
         target.textContent = "Sản phẩm chưa có lô công khai.";
         return;
@@ -123,7 +133,6 @@ export async function showProduct(dialog, summary, addToCart) {
       updateLinks();
       target.replaceChildren(label, links);
     } catch {
-      if (signal.aborted) return;
       const retry = document.createElement("button");
       retry.className = "text-button";
       retry.type = "button";

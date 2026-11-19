@@ -3,6 +3,8 @@ import { request } from "../api/http.js";
 import { batchQr } from "../components/batch-qr.js";
 import { renderTimeline } from "./traceability.page.js";
 import { reviewForm } from "./reviews.page.js";
+import { bindFormErrors, clearFormErrors, showFormErrors } from "../components/form-errors.js";
+import { vietnamToday } from "../data/input-values.js";
 
 const labels = {
   DRAFT: "Bản nháp", SENT_TO_ARTISANS: "Đã gửi", ARTISANS_BIDDING: "Đang nhận báo giá",
@@ -13,7 +15,6 @@ const labels = {
 const stages = [
   ["UOM_TO", "Ươm tơ"], ["MAC_CUI", "Mắc cửi"], ["DET_LUA", "Dệt lụa"], ["NHUOM_MAU", "Nhuộm màu"], ["CAN_LANG", "Cán láng"],
 ];
-const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", dateStyle: "short" });
 const displayDate = new Intl.DateTimeFormat("vi-VN", { timeZone: "UTC", dateStyle: "medium" });
 const get = async (path, auth = true) => (await request(path, { auth })).data;
 const write = (path, body, method = "POST") => request(path, { method, body, auth: true });
@@ -67,8 +68,10 @@ export function mountWholesale(container, account) {
     feedback.className = "trade-feedback";
     feedback.setAttribute("role", "status");
     node.append(control, feedback);
+    bindFormErrors(node);
     node.addEventListener("submit", event => {
       event.preventDefault();
+      clearFormErrors(node);
       act(control, () => submit(new FormData(node)));
     });
     return node;
@@ -93,7 +96,9 @@ export function mountWholesale(container, account) {
   async function act(control, action) {
     if (busy || loading) return;
     const profile = account.profile;
-    const feedback = control.closest("form")?.querySelector(".trade-feedback") || status;
+    const fields = control.closest("form");
+    const feedback = fields?.querySelector(".trade-feedback") || status;
+    let failure;
     busy = control.disabled = true;
     syncControls();
     status.textContent = "";
@@ -105,10 +110,13 @@ export function mountWholesale(container, account) {
         await load("Đã lưu.");
       }
     } catch (error) {
-      if (profile === account.profile) feedback.textContent = error.message;
+      if (profile === account.profile) failure = error;
     } finally {
       busy = control.disabled = false;
       syncControls();
+      if (failure) {
+        feedback.textContent = fields && showFormErrors(fields, failure.fields) ? "" : failure.message;
+      }
     }
   }
 
@@ -122,13 +130,14 @@ export function mountWholesale(container, account) {
       <label>Ngày cần hàng<input name="deadline" type="date" required></label>`, "Lưu yêu cầu nháp", async values => {
       const title = values.get("title").trim();
       const specifications = values.get("specifications").trim();
-      if (!title || !specifications) throw new Error("Nhập tên yêu cầu và quy cách sản phẩm.");
       const { data } = await write("/wholesale/quotes", {
         title, specifications, deadline: values.get("deadline"), targetQuantity: Number(values.get("targetQuantity")),
       });
       selected = data.id;
     });
-    fields.elements.namedItem("deadline").min = date.format(new Date());
+    const deadline = fields.elements.namedItem("deadline");
+    deadline.min = vietnamToday();
+    deadline.dataset.minMessage = "Chọn ngày cần hàng từ hôm nay trở đi.";
     create.append(fields);
     if (!quotes.length) return;
     const label = document.createElement("label");

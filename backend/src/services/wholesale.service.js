@@ -1,4 +1,5 @@
 import { findApprovedArtisan, listOpenQuotes, listArtisanAssignments, listBuyerQuotes, listAcceptedQuotes, findBuyerQuote as findBuyerQuoteRow, createQuote as createQuoteRecord, sendQuote as sendQuoteRecord, dispatchQuote as dispatchQuoteRecord, submitBid as submitBidRecord, acceptBids as acceptBidsRecord, assignBids as assignBidsRecord, advanceAssignment as advanceAssignmentRecord } from "../repositories/wholesale.repository.js";
+import { vietnamToday } from "../../../frontend/src/data/input-values.js";
 
 function id(value) {
     if (typeof value !== "string" || !value.trim()) throw new Error("Invalid identifier");
@@ -21,10 +22,6 @@ function money(value, max) {
     const amount = Number(stringValue);
     if (!Number.isFinite(amount) || amount <= 0 || amount > Number(max)) throw new Error("Invalid amount");
     return stringValue;
-}
-
-function vietnamToday() {
-    return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 }
 
 function deadlineDate(value) {

@@ -1,4 +1,5 @@
 import { prisma } from "../database/prisma.js";
+import { lockAssignment, lockProductBatch } from "../database/postgresql/row-locks.js";
 
 const publicBatch = {
     status: { in: ["IN_PROGRESS", "COMPLETED"] },
@@ -41,7 +42,10 @@ export function findBuyerTimelineByBatchCode(batchCode, buyerId) {
             status: { in: ["IN_PROGRESS", "COMPLETED"] },
             orderAssignment: { quotationRequest: { buyerId } },
         },
-        select: timelineFields,
+        select: {
+            ...timelineFields,
+            product: { select: { ...timelineFields.product.select, mediaUrls: true } },
+        },
     });
 }
 
@@ -53,7 +57,7 @@ export function createOwnedBatch(userId, data) {
         const product = await tx.product.findFirst({ where: { id: data.productId, artisan: { userId, verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } } }, select: { artisanId: true } });
         if (!product) return null;
         if (data.orderAssignmentId) {
-            await tx.$queryRaw`SELECT id FROM order_assignments WHERE id = ${data.orderAssignmentId}::uuid FOR UPDATE`;
+            await lockAssignment(tx, data.orderAssignmentId);
             const assignment = await tx.orderAssignment.findFirst({ where: { id: data.orderAssignmentId, artisanId: product.artisanId, status: { in: ["ASSIGNED", "IN_PRODUCTION"] } }, select: { id: true, allocatedQuantity: true } });
             if (!assignment) return null;
             const existing = await tx.productBatch.aggregate({ where: { orderAssignmentId: assignment.id, status: { not: "CANCELLED" } }, _sum: { totalQuantity: true } });
@@ -67,7 +71,7 @@ export function listOwnedBatches(userId, { skip, take }) {
 }
 export function addOwnedLog(userId, batchId, data) {
     return prisma.$transaction(async (tx) => {
-        await tx.$queryRaw`SELECT id FROM product_batches WHERE id = ${batchId}::uuid FOR UPDATE`;
+        await lockProductBatch(tx, batchId);
         const batch = await tx.productBatch.findFirst({ where: { id: batchId, status: "IN_PROGRESS", product: { artisan: { userId, verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } } } }, select: { id: true } });
         if (!batch) return null;
         const count = await tx.batchLog.count({ where: { batchId } });
@@ -77,7 +81,7 @@ export function addOwnedLog(userId, batchId, data) {
 }
 export function completeOwnedBatch(userId, batchId) {
     return prisma.$transaction(async (tx) => {
-        await tx.$queryRaw`SELECT id FROM product_batches WHERE id = ${batchId}::uuid FOR UPDATE`;
+        await lockProductBatch(tx, batchId);
         const batch = await tx.productBatch.findFirst({ where: { id: batchId, status: "IN_PROGRESS", product: { artisan: { userId, verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } } } }, select: { id: true } });
         if (!batch) return null;
         if (await tx.batchLog.count({ where: { batchId } }) !== 5) throw new Error("Incomplete production timeline");
@@ -86,7 +90,7 @@ export function completeOwnedBatch(userId, batchId) {
 }
 export function editOwnedLog(userId, batchId, logId, data) {
     return prisma.$transaction(async (tx) => {
-        await tx.$queryRaw`SELECT id FROM product_batches WHERE id = ${batchId}::uuid FOR UPDATE`;
+        await lockProductBatch(tx, batchId);
         const result = await tx.batchLog.updateMany({ where: { id: logId, batchId, batch: { status: "IN_PROGRESS", product: { artisan: { userId, verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } } } } }, data });
         return result.count ? tx.batchLog.findUnique({ where: { id: logId } }) : null;
     });
