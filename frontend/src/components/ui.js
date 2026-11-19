@@ -1,4 +1,5 @@
 const paths = {
+  user: '<circle cx="12" cy="8" r="3"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/>',
   arrow: '<path d="M4 12h15m-6-6 6 6-6 6"/>',
   upRight: '<path d="M7 17 17 7M7 7h10v10"/>',
   search: '<circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 4 4"/>',
@@ -20,6 +21,7 @@ export function icon(name) {
 }
 
 const currency = new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" });
+export const saleUnits = { METER: "mét", PIECE: "sản phẩm", SET: "bộ", BOX: "hộp" };
 
 export function formatPrice(price, unit) {
   if (price === null) return "Liên hệ";
@@ -27,5 +29,5 @@ export function formatPrice(price, unit) {
 }
 
 export function asset(file) {
-  return `./public/images/${file}`;
+  return `/public/images/${file}`;
 }

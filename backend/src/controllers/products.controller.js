@@ -10,7 +10,7 @@ function parsePositiveInteger(value, fallback, maximum) {
 }
 
 export async function listProducts(request, response) {
-    const { category, artisanId, q } = request.query;
+    const { category, artisanId, q, sort, storefront } = request.query;
     const page = parsePositiveInteger(request.query.page, 1, 10_000);
     const limit = parsePositiveInteger(request.query.limit, 24, 100);
     const validCategory = category === undefined
@@ -18,13 +18,13 @@ export async function listProducts(request, response) {
     const validArtisan = artisanId === undefined || (typeof artisanId === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(artisanId));
 
     const validSearch = q === undefined || (typeof q === "string" && q.trim().length > 0 && q.length <= 100);
-    if (!page || !limit || !validCategory || !validArtisan || !validSearch) {
+    if (!page || !limit || !validCategory || !validArtisan || !validSearch || (storefront !== undefined && storefront !== "true") || (sort !== undefined && !["asc", "desc"].includes(sort))) {
         return response.status(400).json({
             error: { code: "INVALID_QUERY", message: "Tham số danh mục không hợp lệ." },
         });
     }
 
-    const catalog = await listCatalogProducts({ page, limit, category: category?.trim(), artisanId, q: q?.trim() });
+    const catalog = await listCatalogProducts({ page, limit, category: category?.trim(), artisanId, q: q?.trim(), sort, storefront: storefront === "true" });
     return response.json(toCatalogJson(catalog));
 }
 

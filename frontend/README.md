@@ -1,18 +1,20 @@
 # Frontend vCraft
 
-Bản demo lấy bối cảnh làng lụa Nha Xá, phường Duy Tân, tỉnh Ninh Bình. Giao diện dùng HTML, CSS và JavaScript module, với danh mục, giỏ hàng lưu trong trình duyệt, hồ sơ xưởng và nhật ký lô dệt.
+Bản demo lấy bối cảnh làng lụa Nha Xá, phường Duy Tân, tỉnh Ninh Bình. Giao diện dùng HTML, CSS và JavaScript module. Danh mục, hồ sơ xưởng, nhật ký, tài khoản, giỏ hàng và đặt sỉ dùng API và PostgreSQL.
 
 ## Chạy cục bộ
 
-Từ thư mục gốc `vCraft`, chạy lệnh sau rồi mở [localhost:5189](http://127.0.0.1:5189/).
+Khởi tạo PostgreSQL theo [README gốc](../README.md), rồi chạy từ thư mục gốc `vCraft`:
 
 ```powershell
-python -m http.server 5189 --bind 127.0.0.1 --directory frontend
+npm start
 ```
+
+Mở [localhost:5000](http://localhost:5000/) hoặc cổng `PORT` đã cấu hình. Express phục vụ cả frontend và API trên cùng địa chỉ. Sau khi seed, dùng các tài khoản mẫu `buyer@nhaxa.example`, `nep-van@nhaxa.example`, `admin@nhaxa.example` và mật khẩu `SEED_DEMO_PASSWORD` để thử từng vai trò.
 
 ## Dữ liệu và ảnh minh họa
 
-- [Dữ liệu mẫu](src/data/demo-data.js) gồm 24 sản phẩm, 5 xưởng giả lập và 4 lô dệt mã NX-001 đến NX-004. Mở chi tiết sản phẩm có mã lô để xem nhật ký tương ứng. Lô NX-004 minh họa một mẻ nhuộm củ nâu.
+- [Dữ liệu mẫu](src/data/demo-data.js) gồm 24 sản phẩm, 5 xưởng giả lập và 4 lô dệt mã NX-001 đến NX-004. Mở mục Nhật ký lô hoặc chọn lô từ chi tiết sản phẩm để lấy mã QR. Quét mã để xem nhật ký và ảnh công đoạn. Lô NX-004 minh họa một mẻ nhuộm củ nâu.
 - [Ảnh WebP](public/images/) được tạo bằng ImageGen tích hợp. Ảnh đầu trang minh họa xưởng nhuộm lụa Nha Xá. Ảnh con thoi, sản phẩm và chân dung giả lập minh họa nghề dệt.
 - Địa danh và thông tin về nghề nhuộm tham khảo từ [Sở Du lịch Ninh Bình](https://sodulich.ninhbinh.gov.vn/vi/du-lich-lang-nghe/nghe-det-lua-nha-xa-hon-lua-gan-nghin-nam-ben-bo-song-hong-2408.html).
 - [Giấy phép Lora](public/fonts/Lora-OFL.txt) đi kèm các font được lưu cục bộ.

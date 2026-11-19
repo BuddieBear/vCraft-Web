@@ -6,7 +6,7 @@ API đặt dưới `/api`, trả JSON dạng `{ data: ... }` hoặc `{ error: { 
 
 Đặt `JWT_SECRET` thành chuỗi ngẫu nhiên ít nhất 32 byte trong `.env` trước khi đăng nhập. Ví dụ, tự tạo một giá trị bằng `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`. Không dùng giá trị mẫu hoặc chia sẻ secret. API ký token HS256, kiểm tra issuer, audience và thời hạn một giờ; mỗi request được xác thực còn kiểm tra tài khoản hiện đang hoạt động và lấy vai trò từ database.
 
-Các endpoint riêng yêu cầu `Authorization: Bearer <accessToken>`. Mỗi token được ghi nhận trong `auth_sessions`; logout, đổi mật khẩu, reset mật khẩu và logout-all đều thu hồi phiên tương ứng. Yêu cầu reset trả `resetToken` trong môi trường development để kiểm thử cục bộ; production cần nối service gửi email và không trả token trong JSON. Giới hạn đăng nhập/đăng ký dùng bộ nhớ từng tiến trình, cần bộ lưu trữ dùng chung khi chạy nhiều instance. Triển khai qua HTTPS và cấu hình proxy đáng tin cậy phù hợp trước khi đưa ra internet.
+Các endpoint riêng yêu cầu `Authorization: Bearer <accessToken>`. Mỗi token được ghi nhận trong `auth_sessions`. Logout, đổi mật khẩu, reset mật khẩu và logout-all đều thu hồi phiên tương ứng. Tính năng đặt lại mật khẩu gửi email qua Resend với ba biến `PUBLIC_APP_URL` (origin HTTPS khi triển khai production), `PASSWORD_RESET_FROM` (địa chỉ từ tên miền đã xác minh) và `RESEND_API_KEY`. Email chứa liên kết về vCraft có hiệu lực 15 phút. Khi thiếu cấu hình gửi email, API trả 503. Bộ kiểm thử tự động dùng `NODE_ENV=test` và lấy token trực tiếp từ API trong database kiểm thử. Giới hạn đăng nhập/đăng ký dùng bộ nhớ từng tiến trình và cần bộ lưu trữ dùng chung khi chạy nhiều instance.
 
 `CORS_ALLOWED_ORIGINS` là danh sách origin frontend ngăn cách bằng dấu phẩy. Môi trường phát triển mặc định cho phép `http://127.0.0.1:5189` và `http://localhost:5189`; production mặc định không cho phép origin nào. CORS chỉ điều khiển trình duyệt đọc phản hồi, còn API vẫn xác thực và phân quyền từng request.
 
@@ -20,17 +20,20 @@ Các endpoint riêng yêu cầu `Authorization: Bearer <accessToken>`. Mỗi tok
 | POST | `/auth/password/change` | Đăng nhập; đổi mật khẩu bằng mật khẩu hiện tại và thu hồi phiên. |
 | POST | `/auth/password/reset/request` | Công khai; yêu cầu token đặt lại mà không tiết lộ trạng thái email. |
 | POST | `/auth/password/reset/confirm` | Công khai; dùng token một lần để đặt mật khẩu mới. |
-| GET | `/products` | Công khai; `page`, `limit`, `category`, `artisanId`, `q` tìm theo tên sản phẩm, xưởng, danh mục hoặc chất liệu. |
+| GET | `/products` | Công khai; `page`, `limit`, `category`, `artisanId`, `q` tìm theo tên sản phẩm, xưởng, danh mục hoặc chất liệu (có hoặc không dấu tiếng Việt), `sort=asc` hoặc `desc` theo giá. |
 | GET | `/products/:slug`, `/products/by-slug/:slug` | Công khai; gồm giá, tồn kho và điểm đánh giá. |
 | GET | `/categories` | Công khai; danh mục sản phẩm. |
 | GET, POST | `/products/mine`, `/products` | ARTISAN; xem sản phẩm của mình, tạo sản phẩm của xưởng đã duyệt. |
 | PUT, DELETE | `/products/:id` | ARTISAN sở hữu; thay dữ liệu hoặc ẩn sản phẩm. Khi dùng PUT, gửi `expectedStockQuantity` là tồn kho lúc mở form; trả `409 STALE_STOCK` nếu đã thay đổi. |
 | GET | `/artisans` | Công khai; `page`, `limit`, `visitorsOnly=true` hoặc `false`. |
+| GET | `/artisans/reference` | Danh sách cơ sở tham khảo. `location` có địa chỉ, nguồn và tọa độ nếu đã xác minh. |
 | GET | `/artisans/:id` | Công khai. |
 | GET, PATCH | `/artisans/me` | ARTISAN; xem và cập nhật hồ sơ của mình. |
 | POST, DELETE | `/artisans/me/certificates`, `/artisans/me/certificates/:id` | ARTISAN; thêm hoặc xóa chứng nhận. |
 | POST | `/media/images` | ARTISAN hoặc ADMIN; multipart `images`, tối đa 4 ảnh JPEG/PNG/WebP, mỗi ảnh tối đa 5 MB. Ảnh được xoay và chuyển WebP, cạnh tối đa 1600 pixel. |
 | GET | `/traceability/:code`, `/traceability/by-code/:code` | Công khai; timeline của lô được phép công bố. |
+| GET | `/traceability/public/recent` | Công khai; tối đa 24 lô gần đây và tên sản phẩm. |
+| GET | `/traceability/purchased/:code` | BUYER sở hữu yêu cầu sỉ liên kết; xem nhật ký lô của đơn kể cả khi sản phẩm đã ẩn. |
 | GET | `/traceability/:code/qr`, `/traceability/products/:slug` | Công khai; ảnh QR PNG và danh sách lô được công bố. |
 | GET, POST | `/traceability/mine`, `/traceability/batches` | ARTISAN; danh sách lô của mình hoặc tạo lô cho sản phẩm của mình. |
 | POST, PUT | `/traceability/batches/:id/logs`, `/traceability/batches/:id/logs/:logId` | ARTISAN sở hữu; thêm công đoạn theo thứ tự hoặc sửa công đoạn của lô đang sản xuất. |
@@ -40,8 +43,8 @@ Các endpoint riêng yêu cầu `Authorization: Bearer <accessToken>`. Mỗi tok
 | PUT, DELETE | `/news/:id` | ADMIN; thay nội dung hoặc xóa tin. |
 | GET | `/notifications` | Đăng nhập; `page`, `limit`. |
 | PATCH | `/notifications/:id/read` | Đăng nhập; trả `updated: false` nếu không tìm thấy hoặc đã đọc. |
-| GET | `/retail/cart` | BUYER. |
-| PUT | `/retail/cart/:id` | BUYER; `quantity` nguyên, 0 xóa mục. `id` là mã sản phẩm. |
+| GET | `/retail/cart` | BUYER; `product.isAvailable` cho biết sản phẩm còn được phép bán. Đối chiếu số lượng với `stockQuantity`. |
+| PUT | `/retail/cart/:id` | BUYER; `quantity` nguyên, 0 xóa mục. Có thể giảm số lượng mục đã lưu khi tồn kho giảm. `id` là mã sản phẩm. |
 | POST | `/retail/checkout` | BUYER; `recipientName`, `recipientPhone`, `shippingAddress`, tùy chọn `shippingNote`, `paymentMethod`. |
 | GET | `/retail/orders`, `/retail/orders/:id` | BUYER; chỉ đơn của mình, danh sách hỗ trợ `page`, `limit`. |
 | GET | `/retail/sales`, `/retail/admin/orders` | ARTISAN xem đơn có sản phẩm của mình; ADMIN xem tất cả đơn. |
@@ -55,7 +58,7 @@ Các endpoint riêng yêu cầu `Authorization: Bearer <accessToken>`. Mỗi tok
 | POST | `/wholesale/quotes/:id/accept` | BUYER sở hữu yêu cầu; `bidIds`. |
 | GET | `/wholesale/admin/quotes` | ADMIN; lọc `status`, mặc định `BUYER_ACCEPTED`, cùng thầu và phân công; hỗ trợ `page`, `limit`. |
 | POST | `/wholesale/quotes/:id/assignments` | ADMIN; `allocations: [{ bidId, quantity }]`. |
-| PATCH | `/wholesale/assignments/:id` | ARTISAN phụ trách; `status`: `IN_PRODUCTION`, `READY_FOR_DELIVERY`, `COMPLETED` theo thứ tự. Nếu có lô gắn với phân công, không được chuyển sang sẵn sàng giao khi còn lô chưa hoàn thành. |
+| PATCH | `/wholesale/assignments/:id` | ARTISAN phụ trách; `status`: `IN_PRODUCTION`, `READY_FOR_DELIVERY`, `COMPLETED` theo thứ tự. Để sẵn sàng giao, các lô phải hoàn thành và tổng số lượng phải bằng số lượng được phân công. |
 | POST | `/reviews` | BUYER; `targetType`, `artisanId`, `rating`, `comment`, một trong `retailOrderId` hoặc `quotationRequestId`; `productId` bắt buộc cho PRODUCT. |
 | GET | `/reviews/products/:slug`, `/reviews/artisans/:id` | Công khai; đánh giá sản phẩm hoặc xưởng được công bố. |
 | GET, POST | `/admin/artisans/pending`, `/admin/artisans` | ADMIN; xem hồ sơ chờ, cấp tài khoản nghệ nhân với hồ sơ PENDING. |

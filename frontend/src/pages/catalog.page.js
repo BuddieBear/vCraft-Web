@@ -1,46 +1,24 @@
-import { asset, formatPrice, icon } from "../components/ui.js";
-import { artisans, categories, products } from "../data/demo-data.js";
-
-const pageSize = 4;
-const fold = text => text.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replaceAll("đ", "d");
-
-function productCard(product) {
-  const workshop = artisans.find(artisan => artisan.id === product.artisanId);
-  return `
-    <article class="product-card">
-      <button class="product-open" type="button" data-product="${product.id}" aria-label="Xem ${product.name}">
-        <span class="product-image">
-          <img src="${asset(product.image)}" alt="${product.alt}" width="414" height="414" loading="lazy" decoding="async">
-        </span>
-        <span class="product-info">
-          <span class="product-tag">${product.category}</span>
-          <span class="product-name">${product.name}</span>
-          <span class="product-workshop">${workshop.name}</span>
-          <span class="product-bottom"><strong>${formatPrice(product.price, product.unit)}</strong><span class="card-arrow">${icon("upRight")}</span></span>
-        </span>
-      </button>
-    </article>`;
-}
+import { formatPrice, icon, saleUnits } from "../components/ui.js";
+import { mediaUrl, request } from "../api/http.js";
+import { sitePaths } from "../site-paths.js";
 
 export function mountCatalog(container, openProduct) {
   container.innerHTML = `
     <div class="section-heading">
-      <div><p class="eyebrow"><span></span> 03 / Gian lụa</p><h2 id="catalog-title">Mục lục <em>chất liệu.</em></h2></div>
-      <p>Tra mẫu theo loại lụa hoặc tên xưởng. Mở từng mẫu để xem chất liệu, kích thước và nhật ký lô nếu có.</p>
+      <h1 id="catalog-title" class="page-title">Sản phẩm đang bán</h1>
+      <p>Giá và tồn kho do xưởng đang hoạt động cập nhật.</p>
     </div>
     <div class="catalog-layout">
       <aside class="catalog-tools" aria-label="Bộ lọc danh mục">
         <p class="control-label">Tra danh mục</p>
-        <div class="category-list" role="group" aria-label="Lọc theo danh mục">
-          ${categories.map((name, index) => `<button type="button" data-category="${index}" aria-pressed="${index === 0}">${name}</button>`).join("")}
-        </div>
+        <div class="category-list" role="group" aria-label="Lọc theo danh mục"></div>
         <div class="catalog-fields">
           <label class="search-field">
             ${icon("search")}<span class="sr-only">Tìm sản phẩm</span>
-            <input id="catalog-search" type="search" placeholder="Tìm lụa, xưởng…">
+            <input id="catalog-search" type="search" maxlength="100" placeholder="Tìm lụa, xưởng…">
           </label>
           <label class="sort-field"><span class="sr-only">Sắp xếp sản phẩm</span>
-            <select id="catalog-sort"><option value="featured">Nổi bật</option><option value="asc">Giá thấp đến cao</option><option value="desc">Giá cao đến thấp</option></select>
+            <select id="catalog-sort"><option value="">Mặc định</option><option value="asc">Giá thấp đến cao</option><option value="desc">Giá cao đến thấp</option></select>
           </label>
         </div>
       </aside>
@@ -49,54 +27,124 @@ export function mountCatalog(container, openProduct) {
           <p id="result-count" role="status"></p>
           <button type="button" class="text-button" id="clear-catalog" hidden>Xóa bộ lọc ${icon("close")}</button>
         </div>
-        <div class="product-grid" id="product-grid"></div>
-        <nav class="pagination" id="catalog-pages" aria-label="Phân trang sản phẩm"></nav>
+        <div class="product-grid"></div>
+        <nav class="pagination" aria-label="Phân trang sản phẩm" hidden>
+          <button type="button" data-step="-1" aria-label="Trang trước">${icon("left")}</button>
+          <span aria-current="page"></span>
+          <button type="button" data-step="1" aria-label="Trang sau">${icon("right")}</button>
+        </nav>
       </div>
     </div>`;
 
   const search = container.querySelector("#catalog-search");
   const sort = container.querySelector("#catalog-sort");
-  const grid = container.querySelector("#product-grid");
-  const pagination = container.querySelector("#catalog-pages");
+  const grid = container.querySelector(".product-grid");
+  const pagination = container.querySelector(".pagination");
   const count = container.querySelector("#result-count");
   const clear = container.querySelector("#clear-catalog");
-  const chips = [...container.querySelectorAll("[data-category]")];
-  let category = 0;
+  const chips = container.querySelector(".category-list");
+  let category = "";
+  const url = new URL(location.href);
+  let workshopId = url.searchParams.get("xuong");
+  const title = container.querySelector("#catalog-title");
+  const originalTitle = title.innerHTML;
+  const originalPageTitle = document.title;
+  let backToWorkshops;
+  if (workshopId) {
+    backToWorkshops = document.createElement("a");
+    backToWorkshops.className = "text-link artisan-all";
+    backToWorkshops.href = sitePaths.artisans;
+    backToWorkshops.textContent = "Xem tất cả xưởng";
+    container.prepend(backToWorkshops);
+    const id = workshopId;
+    request("/artisans/" + encodeURIComponent(id) + "?storefront=true").then(({ data }) => {
+      if (workshopId !== id) return;
+      title.textContent = data.workshopName;
+      document.title = data.workshopName + " · vCraft";
+    }).catch(() => { /* The product list reports its own loading errors. */ });
+  }
   let page = 1;
-  let workshopId = "";
+  let current;
+  let debounce;
 
-  function update() {
-    const query = fold(search.value.trim());
-    const workshop = artisans.find(artisan => artisan.id === workshopId);
-    const matches = products.filter(product => {
-      const workshopName = artisans.find(artisan => artisan.id === product.artisanId).name;
-      const searchable = fold(`${product.name} ${product.category} ${workshopName} ${product.material}`);
-      return (!category || product.category === categories[category])
-        && (!workshop || product.artisanId === workshop.id)
-        && searchable.includes(query);
+  function addCategory(name, slug) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.textContent = name;
+    chip.dataset.category = slug;
+    chip.setAttribute("aria-pressed", slug === category);
+    chip.addEventListener("click", () => {
+      category = slug;
+      resetPage();
     });
+    chips.append(chip);
+  }
 
-    if (sort.value !== "featured") {
-      const direction = sort.value === "asc" ? 1 : -1;
-      matches.sort((first, second) => {
-        if (first.price === null || second.price === null) return Number(first.price === null) - Number(second.price === null);
-        return direction * (first.price - second.price);
-      });
+  function productCard(product) {
+    const card = document.createElement("article");
+    card.className = "product-card";
+    card.innerHTML = `
+      <button class="product-open" type="button">
+        <span class="product-image"><img width="414" height="414" loading="lazy" decoding="async" alt=""></span>
+        <span class="product-info">
+          <span class="product-tag"></span><span class="product-name"></span><span class="product-workshop"></span>
+          <span class="product-bottom"><strong></strong><span class="card-arrow">${icon("upRight")}</span></span>
+        </span>
+      </button>`;
+    const button = card.querySelector("button");
+    button.setAttribute("aria-label", "Xem " + product.name);
+    button.addEventListener("click", () => openProduct(product));
+    const src = mediaUrl(product.mediaUrls[0]);
+    if (src) card.querySelector("img").src = src;
+    card.querySelector(".product-tag").textContent = product.category?.name || "Lụa Nha Xá";
+    card.querySelector(".product-name").textContent = product.name;
+    card.querySelector(".product-workshop").textContent = product.artisan.workshopName;
+    card.querySelector("strong").textContent = formatPrice(product.price, saleUnits[product.saleUnit]);
+    return card;
+  }
+
+  async function update() {
+    clearTimeout(debounce);
+    current?.abort();
+    const { signal } = current = new AbortController();
+    const query = search.value.trim();
+    const params = new URLSearchParams({ page, limit: 12, storefront: "true" });
+    if (category) params.set("category", category);
+    if (workshopId) params.set("artisanId", workshopId);
+    if (query) params.set("q", query);
+    if (sort.value) params.set("sort", sort.value);
+    clear.hidden = !(category || workshopId || query || sort.value);
+    for (const chip of chips.querySelectorAll("[data-category]")) {
+      chip.setAttribute("aria-pressed", chip.dataset.category === category);
     }
-
-    count.textContent = `${matches.length} sản phẩm${workshop ? ` · ${workshop.name}` : ""}`;
-    clear.hidden = !category && !query && !workshop && sort.value === "featured";
-    chips.forEach((chip, index) => chip.setAttribute("aria-pressed", index === category));
-    const totalPages = Math.ceil(matches.length / pageSize);
-    const start = (page - 1) * pageSize;
-    grid.innerHTML = matches.length
-      ? matches.slice(start, start + pageSize).map(productCard).join("")
-      : '<p class="empty-results">Chưa tìm thấy sản phẩm phù hợp. Thử từ khóa khác hoặc xóa bộ lọc.</p>';
-    pagination.hidden = totalPages < 2;
-    pagination.innerHTML = totalPages < 2 ? "" : `
-      <button type="button" data-page="${page - 1}" aria-label="Trang trước" ${page === 1 ? "disabled" : ""}>${icon("left")}</button>
-      <span tabindex="-1" id="current-page" aria-current="page">Trang ${page} / ${totalPages}</span>
-      <button type="button" data-page="${page + 1}" aria-label="Trang sau" ${page === totalPages ? "disabled" : ""}>${icon("right")}</button>`;
+    count.textContent = "Đang tải sản phẩm…";
+    grid.replaceChildren();
+    pagination.hidden = true;
+    try {
+      const result = await request("/products?" + params, { signal });
+      if (signal.aborted) return;
+      if (!result.data.length && page > 1) {
+        page--;
+        return update();
+      }
+      grid.replaceChildren(...result.data.map(productCard));
+      count.textContent = result.data.length
+        ? `${result.data.length} sản phẩm trên trang${workshopId ? " · " + result.data[0].artisan.workshopName : ""}`
+        : (category || workshopId || query ? "Chưa tìm thấy sản phẩm phù hợp." : "Chưa có hàng do xưởng đăng bán.");
+      pagination.querySelector("[aria-current]").textContent = "Trang " + page;
+      pagination.querySelector('[data-step="-1"]').disabled = page === 1;
+      pagination.querySelector('[data-step="1"]').disabled = !result.pagination.hasNext;
+      pagination.hidden = page === 1 && !result.pagination.hasNext;
+    } catch (error) {
+      if (signal.aborted) return;
+      count.textContent = error.message;
+      const retry = document.createElement("button");
+      retry.type = "button";
+      retry.className = "text-button";
+      retry.textContent = "Thử lại";
+      retry.addEventListener("click", update);
+      grid.append(retry);
+    }
   }
 
   function resetPage() {
@@ -104,30 +152,38 @@ export function mountCatalog(container, openProduct) {
     update();
   }
 
-  chips.forEach((chip, index) => chip.addEventListener("click", () => {
-    category = index;
-    resetPage();
-  }));
-  search.addEventListener("input", resetPage);
+  addCategory("Tất cả", "");
+  request("/categories").then(({ data }) => {
+    data.forEach(item => addCategory(item.name, item.slug));
+  }).catch(() => {
+    const message = document.createElement("p");
+    message.textContent = "Chưa tải được bộ lọc danh mục.";
+    chips.append(message);
+  });
+  search.addEventListener("input", () => {
+    current?.abort();
+    clearTimeout(debounce);
+    debounce = setTimeout(resetPage, 250);
+  });
   sort.addEventListener("change", resetPage);
   clear.addEventListener("click", () => {
-    category = 0;
-    workshopId = "";
+    category = "";
+    workshopId = null;
+    title.innerHTML = originalTitle;
+    document.title = originalPageTitle;
+    backToWorkshops?.remove();
+    url.searchParams.delete("xuong");
+    history.replaceState(null, "", url);
     search.value = "";
-    sort.value = "featured";
+    sort.value = "";
     resetPage();
     search.focus({ preventScroll: true });
   });
-  grid.addEventListener("click", event => {
-    const button = event.target.closest("[data-product]");
-    if (button) openProduct(products.find(product => product.id === button.dataset.product));
-  });
   pagination.addEventListener("click", event => {
-    const button = event.target.closest("[data-page]");
+    const button = event.target.closest("[data-step]");
     if (!button) return;
-    page = Number(button.dataset.page);
+    page += Number(button.dataset.step);
     update();
-    pagination.querySelector("#current-page").focus({ preventScroll: true });
     count.scrollIntoView({ block: "start" });
   });
   update();
@@ -136,14 +192,7 @@ export function mountCatalog(container, openProduct) {
     focusSearch() {
       container.scrollIntoView();
       search.focus({ preventScroll: true });
-    },
-    selectWorkshop(id) {
-      category = 0;
-      search.value = "";
-      workshopId = id;
-      resetPage();
-      container.scrollIntoView();
-      search.focus({ preventScroll: true });
+      return true;
     },
   };
 }

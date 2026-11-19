@@ -3,6 +3,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import jwt from "jsonwebtoken";
 import { jwtSecret } from "../config/security.js";
 import { ApiError } from "../middlewares/api-error.js";
+import { passwordResetDelivery } from "./password-reset-mail.js";
 import { createBuyer, createAuthSession, createPasswordResetToken, consumePasswordResetToken, findActiveCredentialsByEmail, findActiveSession, findPasswordHashById, findUserById, findValidPasswordResetToken, revokeAllAuthSessions, revokeAuthSession, updatePasswordAndRevokeSessions, updateUserProfile } from "../repositories/users.repository.js";
 
 const dummyHash = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6Ttx1g0skAUsV/2jU3BZid7jKkDmO";
@@ -23,12 +24,12 @@ export async function registerBuyer({ email, password, fullName }) {
 }
 
 export async function login({ email, password }) {
-    validatePassword(password);
     const user = await findActiveCredentialsByEmail(email.toLowerCase());
     const valid = await compare(password, user?.passwordHash ?? dummyHash);
     if (!user || !valid) throw new ApiError(401, "INVALID_CREDENTIALS", "Email hoặc mật khẩu không đúng.");
     const issued = issueToken(user);
-    await createAuthSession({ userId: user.id, jti: issued.jti, expiresAt: new Date(Date.now() + 3600_000) });
+    const session = await createAuthSession({ userId: user.id, expectedHash: user.passwordHash, jti: issued.jti, expiresAt: new Date(Date.now() + 3600_000) });
+    if (!session) throw new ApiError(401, "INVALID_CREDENTIALS", "Email hoặc mật khẩu không đúng.");
     const { jti, ...response } = issued;
     return response;
 }
@@ -47,16 +48,25 @@ export async function changePassword(userId, currentPassword, newPassword) {
     const record = await findPasswordHashById(userId);
     if (!record || !await compare(currentPassword, record.passwordHash)) throw new ApiError(401, "INVALID_PASSWORD", "Mật khẩu hiện tại không đúng.");
     if (currentPassword === newPassword) throw new ApiError(400, "PASSWORD_UNCHANGED", "Mật khẩu mới phải khác mật khẩu hiện tại.");
-    await updatePasswordAndRevokeSessions(userId, await hash(newPassword, 12));
+    if (!await updatePasswordAndRevokeSessions(userId, record.passwordHash, await hash(newPassword, 12))) {
+        throw new ApiError(409, "PASSWORD_CHANGED", "Mật khẩu đã thay đổi. Hãy đăng nhập lại.");
+    }
     return { success: true };
 }
 
 export async function requestPasswordReset(email) {
+    const deliver = passwordResetDelivery();
     const user = await findActiveCredentialsByEmail(email.toLowerCase());
     if (!user) return { accepted: true };
     const token = randomBytes(32).toString("base64url");
-    await createPasswordResetToken(user.id, token, new Date(Date.now() + 15 * 60_000));
-    return { accepted: true, ...(process.env.NODE_ENV === "production" ? {} : { resetToken: token }) };
+    if (!await createPasswordResetToken(user.id, user.passwordHash, token, new Date(Date.now() + 15 * 60_000))) return { accepted: true };
+    if (deliver) {
+        // Keep the response independent of whether the account exists.
+        try { await deliver(user.email, token); }
+        catch (error) { console.error("Password recovery email delivery failed.", { code: error.code }); }
+        return { accepted: true };
+    }
+    return { accepted: true, resetToken: token };
 }
 
 export async function resetPassword(token, newPassword) {
@@ -67,8 +77,10 @@ export async function resetPassword(token, newPassword) {
     return { success: true };
 }
 
-export function getProfile(userId) {
-    return findUserById(userId);
+export async function getProfile(userId) {
+    const profile = await findUserById(userId);
+    if (!profile) throw new ApiError(401, "UNAUTHENTICATED", "Tài khoản không hoạt động.");
+    return profile;
 }
 
 export async function updateProfile(userId, data) {

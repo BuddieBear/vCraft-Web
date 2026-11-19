@@ -105,10 +105,10 @@ test("artisan, production, administration, media and retail APIs", async () => {
         assert.equal((await request(`/news/${article.json.data.id}`, { method: "DELETE", token: buyer })).status, 403);
         assert.equal((await request(`/news/${article.json.data.id}`, { method: "DELETE", token: admin })).status, 204);
         assert.equal((await request(`/retail/cart/${product.id}`, { method: "PUT", token: buyer, body: { quantity: 1 } })).status, 200);
-        const online = await request("/retail/checkout", { method: "POST", token: buyer, body: { recipientName: "Buyer", recipientPhone: "123", shippingAddress: "Test", paymentMethod: "VNPAY" } });
+        const online = await request("/retail/checkout", { method: "POST", token: buyer, body: { recipientName: "Buyer", recipientPhone: "0901234567", shippingAddress: "Test", paymentMethod: "VNPAY" } });
         assert.equal(online.status, 422);
         assert.equal(online.json.error.code, "PAYMENT_METHOD_UNAVAILABLE");
-        const order = await request("/retail/checkout", { method: "POST", token: buyer, body: { recipientName: "Buyer", recipientPhone: "123", shippingAddress: "Test" } });
+        const order = await request("/retail/checkout", { method: "POST", token: buyer, body: { recipientName: "Buyer", recipientPhone: "0901234567", shippingAddress: "Test" } });
         assert.equal(order.status, 201);
         const advance = (status, details = {}) => request(`/retail/orders/${order.json.data.id}/status`, { method: "PATCH", token: artisan, body: { status, ...details } });
         assert.equal((await advance("CONFIRMED", { paymentCollected: true })).status, 409);
@@ -121,7 +121,7 @@ test("artisan, production, administration, media and retail APIs", async () => {
         const firstStock = (await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stockQuantity;
         assert.equal((await request(`/retail/cart/${product.id}`, { method: "PUT", token: buyer, body: { quantity: 1 } })).status, 200);
         assert.equal((await request(`/retail/cart/${created.json.data.id}`, { method: "PUT", token: buyer, body: { quantity: 1 } })).status, 200);
-        const mixed = await request("/retail/checkout", { method: "POST", token: buyer, body: { recipientName: "Buyer", recipientPhone: "123", shippingAddress: "Test" } });
+        const mixed = await request("/retail/checkout", { method: "POST", token: buyer, body: { recipientName: "Buyer", recipientPhone: "0901234567", shippingAddress: "Test" } });
         assert.equal(mixed.status, 201);
         const stale = await request(`/products/${created.json.data.id}`, { method: "PUT", token: other, body: replacement });
         assert.equal(stale.status, 409);

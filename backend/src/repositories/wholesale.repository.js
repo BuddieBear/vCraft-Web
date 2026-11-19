@@ -1,5 +1,18 @@
 import { prisma } from "../database/prisma.js";
-export function findBuyerQuote(quoteId, buyerId) { return prisma.quotationRequest.findFirst({ where: { id: quoteId, buyerId, buyer: { isActive: true, role: "BUYER" } }, include: { bids: true, recipients: { select: { artisanId: true } }, assignments: { include: { batches: { select: { id: true, batchCode: true, status: true } } } } } }); }
+export function findBuyerQuote(quoteId, buyerId) {
+    return prisma.quotationRequest.findFirst({
+        where: { id: quoteId, buyerId, buyer: { isActive: true, role: "BUYER" } },
+        include: {
+            bids: { include: { artisan: { select: { workshopName: true } } } },
+            recipients: { select: { artisanId: true } },
+            assignments: { include: {
+                artisan: { select: { workshopName: true } },
+                batches: { select: { id: true, batchCode: true, status: true, productId: true, product: { select: { name: true } } } },
+            } },
+            reviews: { select: { targetType: true, productId: true, artisanId: true } },
+        },
+    });
+}
 
 export async function lockQuote(tx, id) {
         const rows = await tx.$queryRaw`SELECT id FROM quotation_requests WHERE id = ${id}::uuid FOR UPDATE`;
@@ -24,7 +37,8 @@ export function listBuyerQuotes(userId, { skip, take }) {
         return prisma.quotationRequest.findMany({ where: { buyerId: userId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip, take });
 }
 export function listAcceptedQuotes({ skip, take, status = "BUYER_ACCEPTED" }) {
-        return prisma.quotationRequest.findMany({ where: { status }, include: { bids: { select: { id: true, artisanId: true, proposedPrice: true, proposedCompletionDays: true, status: true } }, recipients: { select: { artisanId: true } }, assignments: { select: { id: true, bidId: true, artisanId: true, allocatedQuantity: true, status: true } } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip, take });
+        const artisan = { select: { workshopName: true } };
+        return prisma.quotationRequest.findMany({ where: status === "ALL" ? {} : { status }, include: { bids: { select: { id: true, artisanId: true, proposedPrice: true, proposedCompletionDays: true, status: true, artisan } }, recipients: { select: { artisanId: true } }, assignments: { select: { id: true, bidId: true, artisanId: true, allocatedQuantity: true, status: true, artisan } } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip, take });
 }
 
 export function createQuote(data) {
@@ -83,11 +97,12 @@ export function submitBid(data, deadlinePassed) {
     });
 }
 
-export function acceptBids(userId, quoteId, bidIds) {
+export function acceptBids(userId, quoteId, bidIds, deadlinePassed) {
     return prisma.$transaction(async (tx) => {
         if (!await activeUser(tx, userId, "BUYER")) throw new Error("Buyer is not active");
         const quote = await lockQuote(tx, quoteId);
         if (!quote || quote.buyerId !== userId || quote.status !== "ARTISANS_BIDDING") throw new Error("Quote not found or invalid state");
+        if (deadlinePassed(quote.deadline)) throw new Error("Quote deadline passed");
         if (bidIds.length > quote.targetQuantity) throw new Error("Too many bids for the requested quantity");
         const bids = await tx.bid.findMany({ where: { id: { in: bidIds }, quotationRequestId: quoteId, status: "SUBMITTED", artisan: { verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } } }, include: { artisan: { select: { userId: true } } } });
         if (bids.length !== bidIds.length) throw new Error("Invalid or unavailable bids");
@@ -104,8 +119,12 @@ export function assignBids(userId, quoteId, allocations) {
         if (!await activeUser(tx, userId, "ADMIN")) throw new Error("Admin is not active");
         const quote = await lockQuote(tx, quoteId);
         if (!quote || quote.status !== "BUYER_ACCEPTED") throw new Error("Quote not found or invalid state");
-        const bids = await tx.bid.findMany({ where: { quotationRequestId: quoteId, status: "ACCEPTED" } });
+        const bids = await tx.bid.findMany({
+            where: { quotationRequestId: quoteId, status: "ACCEPTED" },
+            include: { artisan: { select: { verificationStatus: true, user: { select: { isActive: true, role: true } } } } },
+        });
         if (bids.length !== allocations.length || allocations.reduce((sum, item) => sum + item.quantity, 0) !== quote.targetQuantity || bids.some((bid) => !allocations.some((item) => item.bidId === bid.id))) throw new Error("Allocations must cover accepted bids and requested quantity");
+        if (bids.some(({ artisan }) => artisan.verificationStatus !== "APPROVED" || !artisan.user.isActive || artisan.user.role !== "ARTISAN")) throw new Error("Artisan is unavailable");
         const result = [];
         for (const bid of bids) {
             const allocation = allocations.find((item) => item.bidId === bid.id);
@@ -125,9 +144,17 @@ export function advanceAssignment(userId, assignmentId, status) {
         if (!artisan) throw new Error("Artisan is not active");
         const previous = { IN_PRODUCTION: "ASSIGNED", READY_FOR_DELIVERY: "IN_PRODUCTION", COMPLETED: "READY_FOR_DELIVERY" }[status];
         if (status === "READY_FOR_DELIVERY") {
-            await tx.$queryRaw`SELECT id FROM order_assignments WHERE id = ${assignmentId}::uuid AND artisan_id = ${artisan.id}::uuid FOR UPDATE`;
+            const [assignment] = await tx.$queryRaw`SELECT allocated_quantity FROM order_assignments WHERE id = ${assignmentId}::uuid AND artisan_id = ${artisan.id}::uuid FOR UPDATE`;
+            if (!assignment) throw new Error("Assignment not found or invalid state");
             const unfinished = await tx.productBatch.findFirst({ where: { orderAssignmentId: assignmentId, orderAssignment: { artisanId: artisan.id }, status: { in: ["PLANNING", "IN_PROGRESS"] } }, select: { id: true } });
             if (unfinished) throw new Error("Assignment has unfinished batches");
+            const completed = await tx.productBatch.aggregate({
+                where: { orderAssignmentId: assignmentId, status: "COMPLETED" },
+                _sum: { totalQuantity: true },
+            });
+            if ((completed._sum.totalQuantity ?? 0) !== assignment.allocated_quantity) {
+                throw new Error("Assignment batch quantity does not match allocation");
+            }
         }
         const updated = await tx.orderAssignment.updateMany({ where: { id: assignmentId, artisanId: artisan.id, status: previous }, data: { status, ...(status === "IN_PRODUCTION" ? { startedAt: new Date() } : {}), ...(status === "COMPLETED" ? { completedAt: new Date() } : {}) } });
         if (updated.count !== 1) throw new Error("Assignment not found or invalid state");

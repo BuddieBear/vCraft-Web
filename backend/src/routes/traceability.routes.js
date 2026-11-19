@@ -3,6 +3,7 @@ import { z } from "zod";
 import { validate } from "../middlewares/validate-request.js";
 import { ApiError } from "../middlewares/api-error.js";
 import QRCode from "qrcode";
+import { findBuyerTimelineByBatchCode, listRecentPublicBatches } from "../repositories/traceability.repository.js";
 import { getPublicTimeline, getProductBatches, getMyBatches, createBatch, createBatchLog, updateBatchLog, finishBatch } from "../services/traceability.service.js";
 import { batchLandingUrl } from "../config/trace-url.js";
 import { authenticate } from "../middlewares/authenticate.js";
@@ -17,6 +18,12 @@ async function timeline(req, res) {
     res.json({ data: batch });
 }
 router.get("/mine", ...own, validate({ query: pageQuery }), async (req, res) => res.json({ data: await getMyBatches(req.user.id, pageArgs(req.validatedQuery)) }));
+router.get("/public/recent", async (_req, res) => res.json({ data: await listRecentPublicBatches() }));
+router.get("/purchased/:code", authenticate, authorize("BUYER"), validate({ params: codeParams }), async (req, res) => {
+    const batch = await findBuyerTimelineByBatchCode(req.validatedParams.code, req.user.id);
+    if (!batch) throw new ApiError(404, "NOT_FOUND", "Không tìm thấy lô trong đơn của bạn.");
+    res.json({ data: batch });
+});
 router.get("/products/:slug", validate({ params: z.object({ slug: z.string().min(1).max(280) }) }), async (req, res) => res.json({ data: await getProductBatches(req.validatedParams.slug) }));
 router.post("/batches", ...own, validate({ body: z.object({ productId: uuid, orderAssignmentId: uuid.nullable().optional(), batchCode: z.string().min(1).max(50).regex(/^[a-zA-Z0-9_-]+$/).refine((value) => value.toLowerCase() !== "mine"), totalQuantity: z.number().int().positive().max(2147483647) }).strict() }), async (req, res) => res.status(201).json({ data: await createBatch(req.user.id, req.validatedBody) }));
 router.post("/batches/:id/logs", ...own, validate({ params: byId, body: z.object({ stage: z.enum(["UOM_TO", "MAC_CUI", "DET_LUA", "NHUOM_MAU", "CAN_LANG"]), stageTitle: z.string().trim().min(1).max(150), description: z.string().trim().min(1).max(10000), evidenceImageUrls: urls.optional() }).strict() }), async (req, res) => res.status(201).json({ data: await createBatchLog(req.user.id, req.validatedParams.id, req.validatedBody) }));

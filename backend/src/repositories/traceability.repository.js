@@ -1,33 +1,52 @@
 import { prisma } from "../database/prisma.js";
 
-export function findPublicTimelineByBatchCode(batchCode) {
+const publicBatch = {
+    status: { in: ["IN_PROGRESS", "COMPLETED"] },
+    product: { isPublished: true, artisan: { verificationStatus: "APPROVED", user: { isActive: true } } },
+};
+
+const timelineFields = {
+    batchCode: true,
+    status: true,
+    product: { select: { slug: true, name: true, description: true, culturalStory: true, artisan: { select: { workshopName: true } } } },
+    logs: {
+        orderBy: [{ stepOrder: "asc" }, { loggedAt: "asc" }, { id: "asc" }],
+        select: { stage: true, stageTitle: true, description: true, evidenceImageUrls: true, loggedAt: true, stepOrder: true },
+    },
+};
+
+export function listRecentPublicBatches() {
+    return prisma.productBatch.findMany({
+        where: publicBatch,
+        select: { batchCode: true, product: { select: { name: true } } },
+        orderBy: [{ startedAt: "desc" }, { batchCode: "asc" }],
+        take: 24,
+    });
+}
+
+export function findPublicTimelineByBatchCode(batchCode, { includeCover = false } = {}) {
+    return prisma.productBatch.findUnique({
+        where: { batchCode, ...publicBatch },
+        select: includeCover ? {
+            ...timelineFields,
+            product: { select: { ...timelineFields.product.select, mediaUrls: true } },
+        } : timelineFields,
+    });
+}
+
+export function findBuyerTimelineByBatchCode(batchCode, buyerId) {
     return prisma.productBatch.findUnique({
         where: {
             batchCode,
             status: { in: ["IN_PROGRESS", "COMPLETED"] },
-            product: { isPublished: true, artisan: { verificationStatus: "APPROVED", user: { isActive: true } } },
+            orderAssignment: { quotationRequest: { buyerId } },
         },
-        select: {
-            batchCode: true,
-            status: true,
-            product: { select: { slug: true, name: true, culturalStory: true, artisan: { select: { workshopName: true } } } },
-            logs: {
-                orderBy: [{ stepOrder: "asc" }, { loggedAt: "asc" }, { id: "asc" }],
-                select: {
-                    stage: true,
-                    stageTitle: true,
-                    description: true,
-                    evidenceImageUrls: true,
-                    loggedAt: true,
-                    stepOrder: true,
-                },
-            },
-        },
+        select: timelineFields,
     });
 }
 
 export function listPublicProductBatches(slug) {
-    return prisma.productBatch.findMany({ where: { status: { in: ["IN_PROGRESS", "COMPLETED"] }, product: { slug, isPublished: true, artisan: { verificationStatus: "APPROVED", user: { isActive: true } } } }, select: { batchCode: true, status: true, startedAt: true, completedAt: true }, orderBy: [{ startedAt: "desc" }, { batchCode: "asc" }], take: 100 });
+    return prisma.productBatch.findMany({ where: { ...publicBatch, product: { ...publicBatch.product, slug } }, select: { batchCode: true, status: true, startedAt: true, completedAt: true }, orderBy: [{ startedAt: "desc" }, { batchCode: "asc" }], take: 100 });
 }
 export function createOwnedBatch(userId, data) {
     return prisma.$transaction(async (tx) => {

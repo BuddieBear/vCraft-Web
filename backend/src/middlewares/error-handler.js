@@ -17,8 +17,12 @@ export function errorHandler(error, _request, response, next) {
 
     if (error instanceof ApiError) return response.status(error.status).json({ error: { code: error.code, message: error.message } });
     if (error.message === "Quote buyer is unavailable") return response.status(409).json({ error: { code: "BUYER_UNAVAILABLE", message: "Tài khoản người mua không còn hoạt động." } });
+    if (error.message === "Artisan is unavailable") return response.status(409).json({ error: { code: "ARTISAN_UNAVAILABLE", message: "Xưởng chưa được duyệt hoặc tài khoản không còn hoạt động." } });
     if (error.message === "Assignment has unfinished batches") return response.status(409).json({ error: { code: "BATCHES_INCOMPLETE", message: "Còn lô sản xuất chưa hoàn thành." } });
+    if (error.message === "Assignment batch quantity does not match allocation") return response.status(409).json({ error: { code: "BATCH_QUANTITY_MISMATCH", message: "Số lượng trong các lô hoàn thành chưa khớp với phân công." } });
+    if (error.message === "Invalid recipientPhone") return response.status(400).json({ error: { code: "INVALID_PHONE", message: "Số điện thoại người nhận phải có từ 8 đến 15 chữ số." } });
     if (error.message === "Stale product stock") return response.status(409).json({ error: { code: "STALE_STOCK", message: "Tồn kho đã thay đổi. Hãy tải lại sản phẩm trước khi lưu." } });
+    if (error.message === "Stock limit exceeded on cancellation") return response.status(409).json({ error: { code: "STOCK_LIMIT_EXCEEDED", message: "Hoàn tồn sẽ vượt giới hạn tồn kho. Hãy kiểm tra lại tồn kho trước khi hủy đơn." } });
     if (error.message === "Invalid payment confirmation") return response.status(409).json({ error: { code: "PAYMENT_CONFIRMATION_REQUIRED", message: "Kiểm tra và xác nhận đã thu tiền trước khi hoàn tất giao hàng COD." } });
     if (error instanceof multer.MulterError) return response.status(error.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({ error: { code: "INVALID_UPLOAD", message: "Tệp tải lên vượt giới hạn hoặc không hợp lệ." } });
     if (error instanceof ZodError || error.type === "entity.parse.failed" || invalid.has(error.message)) return response.status(400).json({ error: { code: "INVALID_REQUEST", message: "Dữ liệu gửi lên không hợp lệ." } });

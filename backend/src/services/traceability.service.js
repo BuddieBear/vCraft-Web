@@ -1,7 +1,7 @@
 import { findPublicTimelineByBatchCode, listPublicProductBatches, createOwnedBatch, listOwnedBatches, addOwnedLog, completeOwnedBatch, editOwnedLog } from "../repositories/traceability.repository.js";
 import { ApiError } from "../middlewares/api-error.js";
 import { batchLandingUrl } from "../config/trace-url.js";
-export function getPublicTimeline(code) { return findPublicTimelineByBatchCode(code); }
+export function getPublicTimeline(code, options) { return findPublicTimelineByBatchCode(code, options); }
 export function getProductBatches(slug) { return listPublicProductBatches(slug); }
 export function getMyBatches(userId, options) { return listOwnedBatches(userId, options); }
 export async function createBatch(userId, data) {

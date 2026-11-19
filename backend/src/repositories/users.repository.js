@@ -34,14 +34,58 @@ const hashToken = (token) => createHash("sha256").update(token).digest("hex");
 export function findUserById(id) { return prisma.user.findUnique({ where: { id, isActive: true }, select: profileFields }); }
 export function updateUserProfile(id, data) { return prisma.user.update({ where: { id, isActive: true }, data, select: profileFields }); }
 export function findPasswordHashById(id) { return prisma.user.findUnique({ where: { id, isActive: true }, select: { passwordHash: true } }); }
-export function updatePasswordAndRevokeSessions(id, passwordHash) { return prisma.$transaction(async (tx) => { await tx.user.update({ where: { id, isActive: true }, data: { passwordHash } }); await tx.authSession.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: new Date() } }); }); }
-export function createAuthSession({ userId, jti, expiresAt }) { return prisma.authSession.create({ data: { userId, jti, expiresAt }, select: { id: true } }); }
+async function lockActiveUser(tx, id) {
+    const [user] = await tx.$queryRaw`SELECT password_hash FROM users WHERE id = ${id}::uuid AND is_active FOR UPDATE`;
+    return user;
+}
+
+async function invalidateCredentials(tx, userId, now) {
+    await tx.authSession.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: now } });
+    await tx.passwordResetToken.updateMany({ where: { userId, usedAt: null }, data: { usedAt: now } });
+}
+
+export function updatePasswordAndRevokeSessions(id, expectedHash, passwordHash) {
+    return prisma.$transaction(async (tx) => {
+        const updated = await tx.user.updateMany({ where: { id, isActive: true, passwordHash: expectedHash }, data: { passwordHash } });
+        if (!updated.count) return false;
+        await invalidateCredentials(tx, id, new Date());
+        return true;
+    });
+}
+
+export function createAuthSession({ userId, expectedHash, jti, expiresAt }) {
+    return prisma.$transaction(async (tx) => {
+        const user = await lockActiveUser(tx, userId);
+        if (!user || user.password_hash !== expectedHash) return null;
+        return tx.authSession.create({ data: { userId, jti, expiresAt }, select: { id: true } });
+    });
+}
 export function findActiveSession(userId, jti) { return prisma.authSession.findFirst({ where: { userId, jti, revokedAt: null, expiresAt: { gt: new Date() } }, select: { id: true } }); }
 export function revokeAuthSession(userId, jti) { return prisma.authSession.updateMany({ where: { userId, jti, revokedAt: null }, data: { revokedAt: new Date() } }); }
 export function revokeAllAuthSessions(userId) { return prisma.authSession.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } }); }
-export async function createPasswordResetToken(userId, token, expiresAt) { await prisma.passwordResetToken.updateMany({ where: { userId, usedAt: null }, data: { usedAt: new Date() } }); return prisma.passwordResetToken.create({ data: { userId, tokenHash: hashToken(token), expiresAt }, select: { id: true } }); }
+export function createPasswordResetToken(userId, expectedHash, token, expiresAt) {
+    return prisma.$transaction(async tx => {
+        const user = await lockActiveUser(tx, userId);
+        if (!user || user.password_hash !== expectedHash) return null;
+        await tx.passwordResetToken.updateMany({ where: { userId, usedAt: null }, data: { usedAt: new Date() } });
+        return tx.passwordResetToken.create({ data: { userId, tokenHash: hashToken(token), expiresAt }, select: { id: true } });
+    });
+}
 export function findValidPasswordResetToken(token) { return prisma.passwordResetToken.findFirst({ where: { tokenHash: hashToken(token), usedAt: null, expiresAt: { gt: new Date() }, user: { isActive: true } }, select: { id: true, userId: true } }); }
-export function consumePasswordResetToken(id, userId, passwordHash) { return prisma.$transaction(async (tx) => { const result = await tx.passwordResetToken.updateMany({ where: { id, userId, usedAt: null, expiresAt: { gt: new Date() } }, data: { usedAt: new Date() } }); if (!result.count) return false; await tx.user.update({ where: { id, isActive: true }, data: { passwordHash } }); await tx.authSession.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } }); return true; }); }
+export function consumePasswordResetToken(id, userId, passwordHash) {
+    return prisma.$transaction(async (tx) => {
+        if (!await lockActiveUser(tx, userId)) return false;
+        const now = new Date();
+        const result = await tx.passwordResetToken.updateMany({
+            where: { id, userId, usedAt: null, expiresAt: { gt: now } },
+            data: { usedAt: now },
+        });
+        if (!result.count) return false;
+        await tx.user.update({ where: { id: userId, isActive: true }, data: { passwordHash } });
+        await invalidateCredentials(tx, userId, now);
+        return true;
+    });
+}
 
 export function findActiveUserProfile(userId) {
     return prisma.user.findUnique({

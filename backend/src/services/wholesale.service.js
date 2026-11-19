@@ -92,7 +92,7 @@ export function acceptBids({ userId, quoteId, bidIds }) {
     id(userId); id(quoteId);
     if (!Array.isArray(bidIds) || !bidIds.length || new Set(bidIds).size !== bidIds.length) throw new Error("Invalid bids");
     bidIds.forEach(id);
-    return acceptBidsRecord(userId, quoteId, bidIds);
+    return acceptBidsRecord(userId, quoteId, bidIds, deadlinePassed);
 }
 
 export function assignBids({ userId, quoteId, allocations }) {

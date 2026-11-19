@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { prisma } from "../../src/database/prisma.js";
-import { checkout } from "../../src/services/retail.service.js";
+import { checkout, changeOrderStatus } from "../../src/services/retail.service.js";
 import { createQuote, sendQuote, submitBid, acceptBids, assignBids, advanceAssignment } from "../../src/services/wholesale.service.js";
 import { createReview } from "../../src/services/reviews.service.js";
 
@@ -20,12 +20,17 @@ test("checkout, multi-artisan quote and verified review transactions", async () 
         const product = await prisma.product.create({ data: { artisanId: w1.id, name: "test", slug: "commerce-test", price: 20, stockQuantity: 1 } });
         await assert.rejects(prisma.$executeRaw`UPDATE products SET price = 'NaN'::numeric WHERE id = ${product.id}::uuid`);
         for (const u of [buyer, buyer2]) await prisma.cartItem.create({ data: { userId: u.id, productId: product.id, quantity: 1 } });
-        const details = { recipientName: "Test", recipientPhone: "123", shippingAddress: "Test" };
+        const details = { recipientName: "Test", recipientPhone: "0901234567", shippingAddress: "Test" };
         const results = await Promise.allSettled([checkout({ userId: buyer.id, ...details }), checkout({ userId: buyer2.id, ...details })]);
         assert.equal(results.filter((r) => r.status === "fulfilled").length, 1);
         const order = results.find((r) => r.status === "fulfilled").value;
         assert.equal((await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stockQuantity, 0);
         assert.equal(await prisma.retailOrder.count({ where: { id: order.id } }), 1);
+        await prisma.product.update({ where: { id: product.id }, data: { stockQuantity: 2147483647 } });
+        await assert.rejects(changeOrderStatus({ id: order.buyerId, role: "BUYER" }, order.id, "CANCELLED"), /Stock limit exceeded on cancellation/);
+        assert.equal((await prisma.retailOrder.findUniqueOrThrow({ where: { id: order.id } })).status, "PENDING");
+        assert.equal((await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stockQuantity, 2147483647);
+        await prisma.product.update({ where: { id: product.id }, data: { stockQuantity: 0 } });
         const loser = order.buyerId === buyer.id ? buyer2 : buyer;
         assert.equal(await prisma.cartItem.count({ where: { userId: loser.id, productId: product.id } }), 1);
         const available = await prisma.product.create({ data: { artisanId: w1.id, name: "available", slug: "commerce-available", price: 10, stockQuantity: 3 } });
@@ -46,6 +51,9 @@ test("checkout, multi-artisan quote and verified review transactions", async () 
         const review = { userId: order.buyerId, targetType: "PRODUCT", productId: product.id, artisanId: w1.id, retailOrderId: order.id, rating: 5, comment: "Good" };
         await assert.rejects(createReview(review), /Review target is not in a delivered order/);
         await prisma.retailOrder.update({ where: { id: order.id }, data: { paymentStatus: "PAID" } });
+        await assert.rejects(prisma.review.create({
+            data: { buyerId: buyer3.id, productId: product.id, artisanId: w1.id, retailOrderId: order.id, rating: 5, comment: "Wrong order owner", isVerifiedPurchase: true },
+        }), { code: "P2003" });
         const reviews = await Promise.allSettled([createReview(review), createReview(review)]);
         assert.equal(reviews.filter((r) => r.status === "fulfilled").length, 1);
         await assert.rejects(createReview({ ...review, artisanId: w2.id }));
@@ -78,14 +86,23 @@ test("checkout, multi-artisan quote and verified review transactions", async () 
         const allocations = [{ bidId: bid1.id, quantity: 4 }, { bidId: bid2.id, quantity: 6 }];
         await assert.rejects(assignBids({ userId: buyer.id, quoteId: quote.id, allocations }));
         const assignments = await assignBids({ userId: admin.id, quoteId: quote.id, allocations });
+        const wrongAssignment = assignments.find(({ artisanId }) => artisanId === w2.id);
+        await assert.rejects(prisma.productBatch.create({
+            data: { productId: product.id, orderAssignmentId: wrongAssignment.id, batchCode: "COMMERCE-WRONG-WORKSHOP", qrCodeUrl: "https://example.test/qr", totalQuantity: 1 },
+        }), { code: "P2003" });
         for (const assignment of assignments) {
             const actor = assignment.artisanId === w1.id ? a1 : a2;
+            const assignmentProduct = assignment.artisanId === w1.id ? product : await prisma.product.create({ data: { artisanId: w2.id, name: "Second workshop", slug: "commerce-second-workshop", price: 30 } });
+            await prisma.productBatch.create({ data: { productId: assignmentProduct.id, orderAssignmentId: assignment.id, batchCode: assignment.artisanId === w1.id ? "COMMERCE-TEST" : "COMMERCE-TEST-2", qrCodeUrl: "https://example.test/qr", totalQuantity: assignment.allocatedQuantity, status: "COMPLETED" } });
             for (const status of ["IN_PRODUCTION", "READY_FOR_DELIVERY", "COMPLETED"]) await advanceAssignment({ userId: actor.id, assignmentId: assignment.id, status });
         }
         assert.equal((await prisma.quotationRequest.findUniqueOrThrow({ where: { id: quote.id } })).status, "DELIVERED");
+        await assert.rejects(prisma.review.create({
+            data: { buyerId: buyer3.id, targetType: "ARTISAN", artisanId: w1.id, quotationRequestId: quote.id, rating: 5, comment: "Wrong quote owner", isVerifiedPurchase: true },
+        }), { code: "P2003" });
         await createReview({ userId: buyer.id, targetType: "ARTISAN", artisanId: w1.id, quotationRequestId: quote.id, rating: 4, comment: "Good" });
         const assignment = assignments.find((item) => item.artisanId === w1.id);
-        const batch = await prisma.productBatch.create({ data: { productId: product.id, orderAssignmentId: assignment.id, batchCode: "COMMERCE-TEST", qrCodeUrl: "https://example.test/qr", totalQuantity: 4, status: "IN_PROGRESS" } });
+        const batch = await prisma.productBatch.update({ where: { batchCode: "COMMERCE-TEST" }, data: { status: "IN_PROGRESS" } });
         await assert.rejects(createReview({ userId: buyer.id, targetType: "PRODUCT", productId: product.id, artisanId: w1.id, quotationRequestId: quote.id, rating: 5, comment: "Good" }), /Review target is not in a delivered order/);
         await prisma.productBatch.update({ where: { id: batch.id }, data: { status: "COMPLETED" } });
         await createReview({ userId: buyer.id, targetType: "PRODUCT", productId: product.id, artisanId: w1.id, quotationRequestId: quote.id, rating: 5, comment: "Good" });

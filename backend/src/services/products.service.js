@@ -9,8 +9,8 @@ import {
 } from "../repositories/products.repository.js";
 import { ApiError } from "../middlewares/api-error.js";
 
-export async function listCatalogProducts({ page = 1, limit = 24, category, artisanId, q } = {}) {
-    const rows = await listPublicProducts({ skip: (page - 1) * limit, take: limit + 1, category, artisanId, q });
+export async function listCatalogProducts({ page = 1, limit = 24, category, artisanId, q, sort, storefront } = {}) {
+    const rows = await listPublicProducts({ skip: (page - 1) * limit, take: limit + 1, category, artisanId, q, sort, storefront });
     return {
         products: rows.slice(0, limit),
         pagination: { page, limit, hasNext: rows.length > limit },
