@@ -1,17 +1,14 @@
-import { mediaUrl, request } from "../api/http.js";
-import { formatPrice, icon } from "../components/ui.js";
-import { productPagePath, sitePaths } from "../site-paths.js";
+import { request } from "../api/http.js";
+import { icon } from "../components/ui.js";
+import { sitePaths } from "../site-paths.js";
 import { mountSearchSuggestions } from "../components/search-suggestions.js";
+import { referenceProductCard } from "../components/reference-product-card.js";
 
 function card(link, className) {
   const item = document.createElement("article");
   item.className = className;
   item.append(link);
   return item;
-}
-
-function listedPrice(product) {
-  return `${formatPrice(product.price)} / ${product.unit}`;
 }
 
 export function mountReferenceWorkshops(section) {
@@ -156,36 +153,4 @@ export function mountReferenceCatalog(section, slug) {
       return true;
     },
   };
-}
-
-export function referenceProductCard(product) {
-  const control = document.createElement("a");
-  control.href = productPagePath(product.slug, true);
-  control.className = "reference-product-open";
-  control.setAttribute("aria-label", "Xem " + product.name);
-  control.innerHTML = `
-    <span class="reference-product-image"></span>
-    <span class="reference-product-copy">
-      <span class="product-tag"></span><span class="reference-product-title"></span>
-      <span class="reference-product-owner"></span><strong></strong>
-    </span>`;
-  control.querySelector(".reference-product-image").append(productImage(product));
-  control.querySelector(".product-tag").textContent = product.type;
-  control.querySelector(".reference-product-title").textContent = product.name;
-  control.querySelector(".reference-product-owner").textContent = product.workshopName;
-  control.querySelector("strong").textContent = listedPrice(product);
-  return card(control, "reference-card reference-product");
-}
-
-function productImage(product) {
-  const image = document.createElement("img");
-  const src = mediaUrl(product.image);
-  image.width = 600;
-  image.height = 600;
-  image.loading = "lazy";
-  image.decoding = "async";
-  image.alt = product.name;
-  image.referrerPolicy = "no-referrer";
-  if (src) image.src = src;
-  return image;
 }

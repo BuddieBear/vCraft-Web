@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { validate } from "../middlewares/validate-request.js";
 import { ApiError } from "../middlewares/api-error.js";
-import { byId, pageArgs, pageQuery, urls, mediaUrl } from "./schemas.js";
+import { byId, listPage, pageQuery, urls, mediaUrl } from "./schemas.js";
 import { getArtisan, listArtisans, getMyWorkshop, updateMyWorkshop, createCertificate, removeCertificate } from "../services/artisans.service.js";
 import { authenticate } from "../middlewares/authenticate.js";
 import { authorize } from "../middlewares/authorize.js";
@@ -30,6 +30,9 @@ router.patch("/me", ...own, validate({ body: z.object({ workshopName: z.string()
 router.post("/me/certificates", ...own, validate({ body: z.object({ title: z.string().trim().min(1).max(200), issuingAuthority: z.string().trim().min(1).max(200), issuedYear: z.number().int().min(1800).max(new Date().getFullYear()), certificateImageUrl: mediaUrl }).strict() }), async (req, res) => res.status(201).json({ data: await createCertificate(req.user.id, req.validatedBody) }));
 router.delete("/me/certificates/:id", ...own, validate({ params: byId }), async (req, res) => { await removeCertificate(req.user.id, req.validatedParams.id); res.status(204).end(); });
 const storefront = z.literal("true").optional();
-router.get("/", validate({ query: pageQuery.extend({ visitorsOnly: z.enum(["true", "false"]).default("false"), storefront }) }), async (req, res) => res.json({ data: await listArtisans({ ...pageArgs(req.validatedQuery), visitorsOnly: req.validatedQuery.visitorsOnly === "true", storefront: req.validatedQuery.storefront === "true" }) }));
+router.get("/", validate({ query: pageQuery.extend({ visitorsOnly: z.enum(["true", "false"]).default("false"), storefront }) }), async (req, res) => {
+    const query = req.validatedQuery;
+    res.json(await listPage(query, (options) => listArtisans({ ...options, visitorsOnly: query.visitorsOnly === "true", storefront: query.storefront === "true" })));
+});
 router.get("/:id", validate({ params: byId, query: z.object({ storefront }).strict() }), async (req, res) => { const artisan = await getArtisan(req.validatedParams.id, req.validatedQuery.storefront === "true"); if (!artisan) throw new ApiError(404, "NOT_FOUND", "Không tìm thấy xưởng."); res.json({ data: artisan }); });
 export default router;

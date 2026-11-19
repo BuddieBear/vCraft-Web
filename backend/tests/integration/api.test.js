@@ -105,6 +105,9 @@ test("HTTP authentication, access control, validation and commerce", async () =>
         await prisma.user.update({ where: { id: artisanProfile.userId }, data: { isActive: true } });
         const allocation = await allocate();
         assert.equal(allocation.status, 201);
+        const suspend = (isSuspended) => request(`/admin/artisans/${artisanProfile.id}/suspension`, { method: "PATCH", token: adminLogin.json.data.accessToken, body: { isSuspended } });
+        assert.equal((await suspend(true)).status, 204);
+        assert.equal((await request("/traceability/batches", { method: "POST", token: artisanToken, body: { productId: product.id, batchCode: "API-SUSPENDED-NEW", totalQuantity: 1 } })).status, 404);
         const advance = (status) => request(`/wholesale/assignments/${allocation.json.data[0].id}`, { method: "PATCH", token: artisanToken, body: { status } });
         assert.equal((await advance("IN_PRODUCTION")).status, 200);
         assert.equal((await advance("READY_FOR_DELIVERY")).json.error.code, "BATCH_QUANTITY_MISMATCH");
@@ -125,9 +128,24 @@ test("HTTP authentication, access control, validation and commerce", async () =>
             assert.equal((await request(`/traceability/batches/${extraBatch.json.data.id}/logs`, { method: "POST", token: artisanToken, body: { stage, stageTitle: stage, description: "Completed stage" } })).status, 201);
         }
         assert.equal((await request(`/traceability/batches/${extraBatch.json.data.id}/complete`, { method: "POST", token: artisanToken })).status, 200);
+        const assignmentId = allocation.json.data[0].id;
+        const assignmentPage = await request("/wholesale/assignments?limit=1", { token: artisanToken });
+        assert.deepEqual(assignmentPage.json.pagination, { page: 1, limit: 1, hasNext: false });
+        assert.equal(assignmentPage.json.data[0].id, assignmentId);
+        assert.equal(assignmentPage.json.data[0].batchedQuantity, 5);
+        assert.equal(assignmentPage.json.data[0].completedQuantity, 5);
+        const batchesPath = `/traceability/mine?assignmentId=${assignmentId}&limit=1&page=`;
+        const newestBatch = await request(batchesPath + "1", { token: artisanToken });
+        const olderBatch = await request(batchesPath + "2", { token: artisanToken });
+        assert.deepEqual(newestBatch.json.pagination, { page: 1, limit: 1, hasNext: true });
+        assert.equal(newestBatch.json.data[0].id, extraBatch.json.data.id);
+        assert.equal(newestBatch.json.data[0]._count.logs, 5);
+        assert.equal(olderBatch.json.data[0].id, batch.json.data.id);
+        assert.equal(olderBatch.json.pagination.hasNext, false);
         assert.equal((await advance("READY_FOR_DELIVERY")).status, 200);
         assert.equal((await advance("COMPLETED")).status, 200);
         assert.equal((await request(`/wholesale/quotes/${quote.json.data.id}`, { token })).json.data.status, "DELIVERED");
+        assert.equal((await suspend(false)).status, 204);
         const setQuantity = (quantity) => request(`/retail/cart/${product.id}`, { method: "PUT", token, body: { quantity } });
         assert.equal((await setQuantity(3)).status, 200);
         await prisma.product.update({ where: { id: product.id }, data: { stockQuantity: 1 } });

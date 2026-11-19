@@ -35,7 +35,7 @@ Các endpoint riêng yêu cầu `Authorization: Bearer <accessToken>`. Mỗi tok
 | GET | `/traceability/public/recent` | Công khai; tối đa 24 lô gần đây và tên sản phẩm. |
 | GET | `/traceability/purchased/:code` | BUYER sở hữu yêu cầu sỉ liên kết; xem nhật ký lô của đơn kể cả khi sản phẩm đã ẩn. |
 | GET | `/traceability/:code/qr`, `/traceability/products/:slug` | Công khai; ảnh QR PNG và danh sách lô được công bố. |
-| GET, POST | `/traceability/mine`, `/traceability/batches` | ARTISAN; danh sách lô của mình hoặc tạo lô cho sản phẩm của mình. |
+| GET, POST | `/traceability/mine`, `/traceability/batches` | ARTISAN; danh sách lô của mình (`productId`, `assignmentId`, `page`, `limit`) hoặc tạo lô cho sản phẩm của mình. |
 | POST, PUT | `/traceability/batches/:id/logs`, `/traceability/batches/:id/logs/:logId` | ARTISAN sở hữu; thêm công đoạn theo thứ tự hoặc sửa công đoạn của lô đang sản xuất. |
 | POST | `/traceability/batches/:id/complete` | ARTISAN sở hữu; hoàn thành sau khi ghi đủ năm công đoạn. |
 | GET | `/news`, `/news/:slug` | Công khai; danh sách hỗ trợ `page`, `limit`, `category`. |
@@ -51,23 +51,27 @@ Các endpoint riêng yêu cầu `Authorization: Bearer <accessToken>`. Mỗi tok
 | PATCH | `/retail/orders/:id/status` | ARTISAN phụ trách toàn bộ đơn hoặc ADMIN cập nhật trạng thái; BUYER có thể hủy đơn chưa thanh toán đang chờ. Khi giao COD, gửi `{ status: "DELIVERED", paymentCollected: true }` sau khi đã thu tiền. |
 | GET | `/wholesale/quotes`, `/wholesale/quotes/:id` | BUYER; chỉ yêu cầu của mình; danh sách hỗ trợ `page`, `limit`. |
 | POST | `/wholesale/quotes` | BUYER; `title`, `specifications`, `targetQuantity`, `deadline` dạng `YYYY-MM-DD`, tùy chọn `targetArtisanId`, `maxBudget`, `preferredWeaveType`, `attachmentUrls`. |
-| POST | `/wholesale/quotes/:id/send` | BUYER sở hữu yêu cầu. |
-| POST | `/wholesale/quotes/:id/dispatch` | ADMIN điều phối yêu cầu nháp tới danh sách `artisanIds` đã duyệt. |
-| GET | `/wholesale/open-quotes`, `/wholesale/assignments` | ARTISAN đã duyệt; hỗ trợ `page`, `limit`. |
+| POST | `/wholesale/quotes/:id/send` | BUYER sở hữu bản nháp; gửi thẳng tới xưởng đã chọn hoặc mở chào giá cho các xưởng đủ điều kiện. |
+| POST | `/wholesale/quotes/:id/request-dispatch` | BUYER sở hữu bản nháp; chuyển sang `PENDING_DISPATCH` để Ban quản lý nhận điều phối. |
+| POST | `/wholesale/quotes/:id/dispatch` | ADMIN điều phối yêu cầu `PENDING_DISPATCH` tới danh sách `artisanIds` đủ điều kiện. |
+| GET | `/wholesale/open-quotes`, `/wholesale/assignments` | ARTISAN đã duyệt; hỗ trợ `page`, `limit`. Dùng `view=mine` ở `open-quotes` để xem yêu cầu đã chào giá, kể cả khi thầu đã đóng. |
+| GET | `/wholesale/open-quotes/:id` | ARTISAN đã duyệt và thuộc phạm vi yêu cầu đang mở hoặc đã gửi báo giá cho yêu cầu đó. Chỉ trả báo giá của xưởng đang đăng nhập. |
 | POST | `/wholesale/quotes/:id/bids` | ARTISAN; `proposedPrice`, `proposedCompletionDays`, tùy chọn `note`, `sampleImages`. |
 | POST | `/wholesale/quotes/:id/accept` | BUYER sở hữu yêu cầu; `bidIds`. |
-| GET | `/wholesale/admin/quotes` | ADMIN; lọc `status`, mặc định `BUYER_ACCEPTED`, cùng thầu và phân công; hỗ trợ `page`, `limit`. |
+| GET | `/wholesale/admin/quotes` | ADMIN; xem yêu cầu đã gửi, báo giá và phân công. Lọc `status`, mặc định `BUYER_ACCEPTED`; hỗ trợ `page`, `limit`. |
 | POST | `/wholesale/quotes/:id/assignments` | ADMIN; `allocations: [{ bidId, quantity }]`. |
 | PATCH | `/wholesale/assignments/:id` | ARTISAN phụ trách; `status`: `IN_PRODUCTION`, `READY_FOR_DELIVERY`, `COMPLETED` theo thứ tự. Để sẵn sàng giao, các lô phải hoàn thành và tổng số lượng phải bằng số lượng được phân công. |
 | POST | `/reviews` | BUYER; `targetType`, `artisanId`, `rating`, `comment`, một trong `retailOrderId` hoặc `quotationRequestId`; `productId` bắt buộc cho PRODUCT. |
 | GET | `/reviews/products/:slug`, `/reviews/artisans/:id` | Công khai; đánh giá sản phẩm hoặc xưởng được công bố. |
-| GET, POST | `/admin/artisans/pending`, `/admin/artisans` | ADMIN; xem hồ sơ chờ, cấp tài khoản nghệ nhân với hồ sơ PENDING. |
+| GET, POST | `/admin/artisans` | ADMIN; lọc `status` theo `PENDING`, `APPROVED`, `SUSPENDED`, hoặc cấp tài khoản nghệ nhân với hồ sơ `PENDING`. |
+| GET | `/admin/artisans/pending` | ADMIN; danh sách hồ sơ chờ duyệt. |
 | PATCH | `/admin/artisans/:id/verification` | ADMIN; `status` là `APPROVED` hoặc `REJECTED`. |
+| PATCH | `/admin/artisans/:id/suspension` | ADMIN; `isSuspended: true` để đình chỉ, `false` để mở lại xưởng đã duyệt. |
 
 Không gửi `userId` trong body: API lấy danh tính và vai trò từ token đã kiểm tra. Các URL ảnh trong các body nêu trên phải là HTTP hoặc HTTPS. Xung đột trạng thái, bản ghi trùng hoặc tồn kho trả `409`; xác thực và phân quyền trả `401` và `403`. Giao dịch serializable có thể thất bại khi cạnh tranh: người dùng nên tải lại giỏ trước khi thử checkout lần nữa.
 
 Ảnh tải lên được lưu tại `UPLOAD_DIR` (mặc định `storage/uploads`) và trả đường dẫn tương đối `/uploads/...` trên origin của API; cần ổ đĩa bền vững khi triển khai. API phục vụ trang truy xuất tại `/trace/:code`; QR mặc định trỏ tới trang này ở cổng backend. Khi triển khai hoặc quét bằng thiết bị khác, đặt `QR_BASE_URL` tới địa chỉ mà thiết bị có thể truy cập, ví dụ `https://vcraft.example/trace`. Tạo lại ảnh QR nếu địa chỉ trước đó đã thay đổi. Xem [persistence layer](persistence-layer.md) về các giới hạn dữ liệu và migration.
 
-Sau migration `quote_recipients`, chạy lại `grant-runtime.sql` theo README để tài khoản ứng dụng có quyền trên bảng mới. Khi admin điều phối yêu cầu nháp đến một nhóm, chỉ xưởng thuộc nhóm mới xem và gửi chào giá; yêu cầu do người mua gửi vẫn theo phạm vi công khai hoặc xưởng chỉ định. Nội dung tin tức và đánh giá là dữ liệu người dùng; frontend cần hiển thị dưới dạng văn bản hoặc làm sạch HTML trước khi render.
+Sau migration `quote_recipients`, chạy lại `grant-runtime.sql` theo README để tài khoản ứng dụng có quyền trên bảng mới. Chỉ người mua tạo yêu cầu mới có quyền xem bản nháp. Khi Ban quản lý gửi yêu cầu tới một nhóm, quyền xem và chào giá thuộc các xưởng được mời và đủ điều kiện. Khi xưởng bị đình chỉ, sản phẩm và hồ sơ xưởng tạm ẩn khỏi danh mục công khai, đồng thời API chặn sản phẩm mới, lô độc lập mới, checkout và chào giá mới. Nghệ nhân vẫn có thể đăng nhập, xem sản phẩm xưởng khác, xem lịch sử báo giá và xử lý đơn đã được phân công. Nhật ký lô đã công bố vẫn truy cập được theo mã QR. Nội dung tin tức và đánh giá là dữ liệu người dùng; frontend cần hiển thị dưới dạng văn bản hoặc làm sạch HTML trước khi render.
 
 Checkout chỉ hỗ trợ COD và tạo đơn `UNPAID`; yêu cầu thanh toán qua phương thức chưa tích hợp trả `422 PAYMENT_METHOD_UNAVAILABLE`. Khi xác nhận đã giao và thu tiền COD, đơn chuyển sang `DELIVERED` và `PAID` trong cùng giao dịch. Các đơn cũ đã giao mà chưa ghi nhận thu tiền cần đối soát. Đánh giá xác minh của đơn lẻ yêu cầu đơn đã giao và đã thanh toán; với sản phẩm B2B, lô tương ứng phải hoàn thành. Với đơn có sản phẩm từ nhiều xưởng, ADMIN thực hiện chuyển trạng thái toàn đơn vì schema chưa có trạng thái giao hàng riêng cho từng xưởng. Người mua và admin/nghệ nhân chỉ hủy đơn chưa thanh toán ở các trạng thái được phép; khi hủy, tồn kho được hoàn lại trong transaction.

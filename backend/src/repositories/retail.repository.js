@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../database/prisma.js";
 import { lockRetailOrder } from "../database/postgresql/row-locks.js";
+import { tradingWorkshop } from "./artisans.repository.js";
 
 export function findCheckoutBuyer(tx, userId) {
         return tx.user.findFirst({ where: { id: userId, isActive: true, role: "BUYER" }, select: { id: true } });
@@ -19,7 +20,7 @@ export function reserveStock(tx, product, quantity) {
                 where: {
                         id: product.id, artisanId: product.artisanId, isPublished: true,
                         pricingMode: "FIXED", price: product.price, stockQuantity: { gte: quantity },
-                        artisan: { verificationStatus: "APPROVED", user: { isActive: true } },
+                        artisan: tradingWorkshop,
                 },
                 data: { stockQuantity: { decrement: quantity } },
         });
@@ -36,7 +37,7 @@ export function setCartItem(userId, productId, quantity) {
         if (quantity === 0) return tx.cartItem.deleteMany({ where: { userId, productId } });
         const reduced = await tx.cartItem.updateMany({ where: { userId, productId, quantity: { gt: quantity } }, data: { quantity } });
         if (reduced.count) return tx.cartItem.findUniqueOrThrow({ where: { userId_productId: { userId, productId } } });
-        const product = await tx.product.findFirst({ where: { id: productId, isPublished: true, pricingMode: "FIXED", stockQuantity: { gte: quantity }, artisan: { verificationStatus: "APPROVED", user: { isActive: true } } }, select: { id: true } });
+        const product = await tx.product.findFirst({ where: { id: productId, isPublished: true, pricingMode: "FIXED", stockQuantity: { gte: quantity }, artisan: tradingWorkshop }, select: { id: true } });
         if (!product) throw new Error("Product is unavailable or has insufficient stock");
         return tx.cartItem.upsert({ where: { userId_productId: { userId, productId } }, create: { userId, productId, quantity }, update: { quantity } });
     });
@@ -70,13 +71,13 @@ export async function listBuyerCart(userId) {
             where: { userId, user: { isActive: true, role: "BUYER" } },
             select: { id: true, quantity: true, product: { select: {
                 id: true, name: true, slug: true, price: true, pricingMode: true, saleUnit: true, stockQuantity: true, isPublished: true,
-                artisan: { select: { verificationStatus: true, user: { select: { isActive: true } } } },
+                artisan: { select: { verificationStatus: true, isSuspended: true, user: { select: { isActive: true, role: true } } } },
             } } },
             orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         });
         return items.map(({ product: { artisan, ...product }, ...item }) => ({
             ...item,
-            product: { ...product, isAvailable: product.isPublished && product.pricingMode === "FIXED" && product.price !== null && artisan.verificationStatus === "APPROVED" && artisan.user.isActive },
+            product: { ...product, isAvailable: product.isPublished && product.pricingMode === "FIXED" && product.price !== null && artisan.verificationStatus === "APPROVED" && !artisan.isSuspended && artisan.user.isActive && artisan.user.role === "ARTISAN" },
         }));
 }
 

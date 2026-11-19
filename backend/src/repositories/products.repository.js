@@ -3,10 +3,12 @@ import { prisma } from "../database/prisma.js";
 import { findMatchingProductIds } from "../database/postgresql/product-search.js";
 import { recordProductHidden } from "./audit-log.repository.js";
 import { demoWorkshopDomain } from "../data/demo-workshop.js";
+import { lockTradingArtisan } from "../database/postgresql/row-locks.js";
+import { tradingWorkshop } from "./artisans.repository.js";
 
 const publicProducts = {
     isPublished: true,
-    artisan: { verificationStatus: "APPROVED", user: { isActive: true } },
+    artisan: tradingWorkshop,
 };
 
 function publicProductFilter(storefront) {
@@ -103,7 +105,7 @@ export function hideProductWithAudit({ productId, userId }) {
 
 export async function createOwnedProduct(userId, data) {
     return prisma.$transaction(async (tx) => {
-        const workshop = await tx.artisanProfile.findFirst({ where: { userId, verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } }, select: { id: true } });
+        const [workshop] = await lockTradingArtisan(tx, userId);
         if (!workshop) return null;
         return tx.product.create({ data: { ...data, artisanId: workshop.id } });
     });
@@ -113,7 +115,9 @@ export function listOwnedProducts(userId, { skip, take }) {
 }
 export async function replaceOwnedProduct(userId, id, { expectedStockQuantity, ...data }) {
     return prisma.$transaction(async (tx) => {
-        const own = { id, artisan: { userId, verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } } };
+        const [workshop] = await lockTradingArtisan(tx, userId);
+        if (!workshop) return null;
+        const own = { id, artisanId: workshop.id };
         const result = await tx.product.updateMany({ where: { ...own, stockQuantity: expectedStockQuantity }, data });
         if (result.count) return tx.product.findUnique({ where: { id } });
         if (await tx.product.findFirst({ where: own, select: { id: true } })) throw new Error("Stale product stock");

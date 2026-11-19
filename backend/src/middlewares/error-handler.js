@@ -34,7 +34,7 @@ export function errorHandler(error, _request, response, next) {
 
     if (error instanceof ApiError) return response.status(error.status).json({ error: { code: error.code, message: error.message } });
     if (error.message === "Quote buyer is unavailable") return response.status(409).json({ error: { code: "BUYER_UNAVAILABLE", message: "Tài khoản người mua không còn hoạt động." } });
-    if (error.message === "Artisan is unavailable") return response.status(409).json({ error: { code: "ARTISAN_UNAVAILABLE", message: "Xưởng chưa được duyệt hoặc tài khoản không còn hoạt động." } });
+    if (error.message === "Artisan is unavailable") return response.status(409).json({ error: { code: "ARTISAN_UNAVAILABLE", message: "Xưởng hiện không đủ điều kiện tham gia giao dịch." } });
     if (error.message === "Assignment has unfinished batches") return response.status(409).json({ error: { code: "BATCHES_INCOMPLETE", message: "Còn lô sản xuất chưa hoàn thành." } });
     if (error.message === "Assignment batch quantity does not match allocation") return response.status(409).json({ error: { code: "BATCH_QUANTITY_MISMATCH", message: "Số lượng trong các lô hoàn thành chưa khớp với phân công." } });
     if (error.message === "Invalid recipientPhone") return response.status(400).json({ error: { code: "INVALID_PHONE", message: recipientPhoneError, fields: [{ name: "recipientPhone", message: recipientPhoneError }] } });

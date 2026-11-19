@@ -1,7 +1,8 @@
 import { prisma } from "../database/prisma.js";
 import { demoWorkshopDomain } from "../data/demo-workshop.js";
 
-const publicWorkshop = { verificationStatus: "APPROVED", user: { isActive: true } };
+export const tradingWorkshop = { verificationStatus: "APPROVED", isSuspended: false, user: { isActive: true, role: "ARTISAN" } };
+const publicWorkshop = tradingWorkshop;
 const publicStorefront = { ...publicWorkshop, user: { ...publicWorkshop.user, email: { not: { endsWith: demoWorkshopDomain }, mode: "insensitive" } } };
 const fields = {
     id: true, workshopName: true, artisanTitle: true, familyHistory: true,

@@ -1,6 +1,6 @@
 import { formatPrice, icon, saleUnits } from "../components/ui.js";
 import { request, signedIn } from "../api/http.js";
-import { paymentLabel } from "./retail-orders.page.js";
+import { paymentLabel } from "../data/payment-labels.js";
 import { reviewForm } from "./reviews.page.js";
 import { bindFormErrors, clearFormErrors, showFormErrors } from "../components/form-errors.js";
 import { recipientPhoneError, validRecipientPhone } from "../data/input-values.js";

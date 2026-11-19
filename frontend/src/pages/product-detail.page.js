@@ -1,9 +1,10 @@
 import { formatPrice, icon, saleUnits } from "../components/ui.js";
 import { mediaUrl, request } from "../api/http.js";
-import { sitePaths } from "../site-paths.js";
+import { getCatalogProduct } from "../api/catalog.js";
+import { quoteDraftPath, sitePaths } from "../site-paths.js";
 import { renderProductionGuide } from "../components/production-guide.js";
 
-export async function mountProductDetail(section, { slug, reference }, addToCart) {
+export async function mountProductDetail(section, { slug, reference }, addToCart, account) {
   section.innerHTML = `
     <a class="text-link product-back" href="${sitePaths.catalog}${reference ? "" : "?mua=1"}">${icon("left")} Về danh mục</a>
     <div class="detail-grid">
@@ -29,12 +30,11 @@ export async function mountProductDetail(section, { slug, reference }, addToCart
   const status = section.querySelector("[role=status]");
   grid.classList.add("detail-no-image");
   const param = encodeURIComponent(slug);
-  const endpoint = reference ? "/artisans/reference/products/" + param : "/products/by-slug/" + param + "?storefront=true";
   const previous = document.referrer && new URL(document.referrer);
   const returnToCatalog = previous?.origin === location.origin && previous.pathname === sitePaths.catalog;
   if (returnToCatalog) section.querySelector(".product-back").href = previous.href;
   try {
-    const { data: product } = await request(endpoint);
+    const product = await getCatalogProduct(slug, reference);
     const src = (reference ? [product.image] : product.mediaUrls).map(mediaUrl).find(Boolean);
     if (src) image.src = src;
     image.parentElement.hidden = !src;
@@ -48,6 +48,16 @@ export async function mountProductDetail(section, { slug, reference }, addToCart
     grid.insertAdjacentHTML("beforeend", renderProductionGuide(product, { cover: src, reference, showQr: true }));
     const description = section.querySelector(".product-description");
     const specs = section.querySelector(".detail-specs");
+    const actions = section.querySelector(".detail-actions");
+    const wholesale = document.createElement("a");
+    wholesale.className = "button button-outline";
+    wholesale.href = quoteDraftPath(slug, reference);
+    wholesale.textContent = "Đặt sỉ theo mẫu";
+    wholesale.dataset.buyerAction = "";
+    function syncBuyerActions(profile) {
+      for (const control of actions.querySelectorAll("[data-buyer-action]")) control.hidden = Boolean(profile && profile.role !== "BUYER");
+    }
+    account.onChange(syncBuyerActions);
     if (reference) {
       if (!returnToCatalog) {
         section.querySelector(".product-back").href = sitePaths.catalog + "?" + new URLSearchParams({ "co-so": product.workshopSlug });
@@ -56,6 +66,8 @@ export async function mountProductDetail(section, { slug, reference }, addToCart
       specs.querySelector("dt").textContent = "Loại sản phẩm";
       specs.querySelector("dd").textContent = product.type;
       specs.hidden = false;
+      actions.append(wholesale);
+      syncBuyerActions(account.profile);
       return;
     }
     description.textContent = product.description ?? "";
@@ -68,17 +80,16 @@ export async function mountProductDetail(section, { slug, reference }, addToCart
       specs.querySelector("dd").textContent = product.rawMaterial;
       specs.hidden = false;
     }
-    const actions = section.querySelector(".detail-actions");
-    if (product.price === null) {
-      const workshop = document.createElement("a");
-      workshop.className = "button button-primary";
-      workshop.href = sitePaths.artisans + "?" + new URLSearchParams({ xuong: product.artisan.id });
-      workshop.textContent = "Xem hồ sơ xưởng";
-      actions.append(workshop);
-    } else {
+    const workshop = document.createElement("a");
+    workshop.className = "button button-outline";
+    workshop.href = sitePaths.artisans + "?" + new URLSearchParams({ xuong: product.artisan.id });
+    workshop.textContent = "Xem hồ sơ xưởng";
+    actions.append(workshop);
+    if (product.price !== null) {
       const add = document.createElement("button");
       add.type = "button";
       add.className = "button button-primary";
+      add.dataset.buyerAction = "";
       add.append(product.stockQuantity ? "Thêm vào giỏ" : "Hết hàng");
       if (product.stockQuantity) add.insertAdjacentHTML("afterbegin", icon("bag"));
       add.disabled = !product.stockQuantity;
@@ -94,6 +105,8 @@ export async function mountProductDetail(section, { slug, reference }, addToCart
       });
       actions.append(add);
     }
+    actions.append(wholesale);
+    syncBuyerActions(account.profile);
   } catch (error) {
     status.textContent = error.message;
     if (error.status !== 404) {
@@ -101,7 +114,7 @@ export async function mountProductDetail(section, { slug, reference }, addToCart
       retry.className = "text-button";
       retry.type = "button";
       retry.textContent = "Thử lại";
-      retry.addEventListener("click", () => mountProductDetail(section, { slug, reference }, addToCart));
+      retry.addEventListener("click", () => mountProductDetail(section, { slug, reference }, addToCart, account));
       status.append(" ", retry);
     }
     return;

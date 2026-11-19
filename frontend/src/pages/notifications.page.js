@@ -1,4 +1,5 @@
 import { request } from "../api/http.js";
+import { biddingPagePath, pageSegment, quotePagePath, quotePageRoot, sitePaths } from "../site-paths.js";
 
 export function mountNotifications(section, account) {
   section.innerHTML = `
@@ -31,6 +32,16 @@ export function mountNotifications(section, account) {
         time.dateTime = item.createdAt;
         time.textContent = new Date(item.createdAt).toLocaleString("vi-VN");
         card.append(heading, body, time);
+        const artisan = account.profile?.role === "ARTISAN";
+        const canFollow = artisan || account.profile?.role === "BUYER";
+        const quoteId = canFollow && typeof item.linkUrl === "string" && pageSegment(item.linkUrl, artisan ? sitePaths.bidding : quotePageRoot);
+        if (quoteId && /^[a-f0-9-]{36}$/i.test(quoteId)) {
+          const link = document.createElement("a");
+          link.className = "text-link notification-link";
+          link.href = artisan ? biddingPagePath(quoteId) : quotePagePath(quoteId);
+          link.textContent = "Xem yêu cầu báo giá";
+          card.append(link);
+        }
         if (!item.isRead) {
           const read = document.createElement("button");
           read.className = "button button-outline";

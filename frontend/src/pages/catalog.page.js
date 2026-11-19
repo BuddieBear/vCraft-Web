@@ -26,6 +26,7 @@ export function mountCatalog(container) {
       <div class="catalog-body">
         <div id="catalog-results" class="catalog-summary">
           <p id="result-count" role="status"></p>
+          <button type="button" class="text-button" data-retry-catalog hidden>Thử lại</button>
           <button type="button" class="text-button" id="clear-catalog" hidden>Xóa bộ lọc ${icon("close")}</button>
         </div>
         <div class="product-grid"></div>
@@ -42,7 +43,10 @@ export function mountCatalog(container) {
   const sort = container.querySelector("#catalog-sort");
   const grid = container.querySelector(".product-grid");
   const pagination = container.querySelector(".pagination");
+  const previous = pagination.querySelector('[data-step="-1"]');
+  const next = pagination.querySelector('[data-step="1"]');
   const count = container.querySelector("#result-count");
+  const retry = container.querySelector("[data-retry-catalog]");
   const clear = container.querySelector("#clear-catalog");
   const chips = container.querySelector(".category-list");
   const url = new URL(location.href);
@@ -108,7 +112,17 @@ export function mountCatalog(container) {
     return card;
   }
 
-  async function update() {
+  function showLoading() {
+    retry.hidden = true;
+    previous.disabled = next.disabled = true;
+    grid.setAttribute("aria-busy", "true");
+    count.textContent = grid.childElementCount
+      ? "Đang tìm sản phẩm… Kết quả trước đó vẫn hiển thị."
+      : "Đang tải sản phẩm…";
+    showMatches([]);
+  }
+
+  async function update(fallbackPage = page > 1 ? page - 1 : 1) {
     clearTimeout(debounce);
     current?.abort();
     const { signal } = current = new AbortController();
@@ -120,7 +134,7 @@ export function mountCatalog(container) {
       else address.searchParams.delete(name);
     }
     if (address.href !== location.href) history.replaceState(history.state, "", address);
-    showMatches([]);
+    showLoading();
     const params = new URLSearchParams({ page, limit: 12, storefront: "true" });
     if (category) params.set("category", category);
     if (workshopId) params.set("artisanId", workshopId);
@@ -130,15 +144,12 @@ export function mountCatalog(container) {
     for (const chip of chips.querySelectorAll("[data-category]")) {
       chip.setAttribute("aria-pressed", chip.dataset.category === category);
     }
-    count.textContent = "Đang tải sản phẩm…";
-    grid.replaceChildren();
-    pagination.hidden = true;
     try {
       const result = await request("/products?" + params, { signal });
       if (signal.aborted) return;
       if (!result.data.length && page > 1) {
-        page = 1;
-        return update();
+        page = fallbackPage;
+        return update(1);
       }
       grid.replaceChildren(...result.data.map(productCard));
       showMatches(result.data);
@@ -146,18 +157,15 @@ export function mountCatalog(container) {
         ? `${result.data.length} sản phẩm trên trang${workshopId ? " · " + result.data[0].artisan.workshopName : ""}`
         : (category || workshopId || query ? "Chưa tìm thấy sản phẩm phù hợp." : "Chưa có hàng do xưởng đăng bán.");
       pagination.querySelector("[aria-current]").textContent = "Trang " + page;
-      pagination.querySelector('[data-step="-1"]').disabled = page === 1;
-      pagination.querySelector('[data-step="1"]').disabled = !result.pagination.hasNext || page === 10000;
+      previous.disabled = page === 1;
+      next.disabled = !result.pagination.hasNext || page === 10000;
       pagination.hidden = page === 1 && !result.pagination.hasNext;
     } catch (error) {
       if (signal.aborted) return;
-      count.textContent = error.message;
-      const retry = document.createElement("button");
-      retry.type = "button";
-      retry.className = "text-button";
-      retry.textContent = "Thử lại";
-      retry.addEventListener("click", update);
-      grid.append(retry);
+      count.textContent = error.message + (grid.childElementCount ? " Đang hiển thị kết quả trước đó." : "");
+      retry.hidden = false;
+    } finally {
+      if (!signal.aborted) grid.removeAttribute("aria-busy");
     }
   }
 
@@ -174,12 +182,20 @@ export function mountCatalog(container) {
     message.textContent = "Chưa tải được bộ lọc danh mục.";
     chips.append(message);
   });
-  search.addEventListener("input", event => {
+  function stopSearch() {
     current?.abort();
     clearTimeout(debounce);
+    showLoading();
+  }
+  function scheduleSearch(event) {
     if (event.isComposing) return;
+    stopSearch();
     debounce = setTimeout(resetPage, 250);
-  });
+  }
+  search.addEventListener("input", scheduleSearch);
+  search.addEventListener("compositionstart", stopSearch);
+  search.addEventListener("compositionend", scheduleSearch);
+  retry.addEventListener("click", () => update());
   sort.addEventListener("change", resetPage);
   clear.addEventListener("click", () => {
     category = "";
@@ -194,7 +210,7 @@ export function mountCatalog(container) {
   });
   pagination.addEventListener("click", event => {
     const button = event.target.closest("[data-step]");
-    if (!button) return;
+    if (!button || button.disabled) return;
     page += Number(button.dataset.step);
     update();
     count.scrollIntoView({ block: "start" });

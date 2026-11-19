@@ -19,7 +19,15 @@ export function mountArtisanAdministration(section, account) {
           <button class="button button-primary" type="submit">Cấp tài khoản</button>
         </form>
       </details>
-      <h2>Hồ sơ chờ duyệt</h2>
+      <div class="trade-toolbar" data-workshop-filter>
+        <label>Trạng thái xưởng
+          <select name="workshopStatus">
+            <option value="PENDING">Chờ duyệt</option>
+            <option value="APPROVED">Đang hoạt động</option>
+            <option value="SUSPENDED">Đang đình chỉ</option>
+          </select>
+        </label>
+      </div>
       <div class="trade-content"></div>
       <button class="button button-outline" type="button" data-more hidden>Xem thêm</button>
     </div>`;
@@ -29,6 +37,7 @@ export function mountArtisanAdministration(section, account) {
   const form = content.querySelector("form");
   const signIn = section.querySelector("[data-sign-in]");
   const more = section.querySelector("[data-more]");
+  const filter = section.querySelector("[name=workshopStatus]");
   let page = 1;
   let version = 0;
 
@@ -43,10 +52,12 @@ export function mountArtisanAdministration(section, account) {
       return;
     }
     if (!append) page = 1;
+    const kind = filter.value;
     status.textContent = "Đang tải hồ sơ…";
     more.disabled = true;
     try {
-      const { data } = await request(`/admin/artisans/pending?page=${page}&limit=24`, { auth: true });
+      const params = new URLSearchParams({ page, limit: 24, status: kind });
+      const { data, pagination } = await request("/admin/artisans?" + params, { auth: true });
       if (current !== version) return;
       if (!append) list.replaceChildren();
       for (const item of data) {
@@ -58,23 +69,29 @@ export function mountArtisanAdministration(section, account) {
         body.textContent = [item.user.fullName, item.user.email, item.address].join(" · ");
         const actions = document.createElement("div");
         actions.className = "trade-toolbar";
-        for (const [label, value] of [["Duyệt hồ sơ", "APPROVED"], ["Từ chối", "REJECTED"]]) {
+        const actionOptions = kind === "PENDING"
+          ? [["Duyệt hồ sơ", "/verification", { status: "APPROVED" }, "Đã duyệt hồ sơ."], ["Từ chối", "/verification", { status: "REJECTED" }, "Đã từ chối hồ sơ."]]
+          : kind === "APPROVED"
+            ? [["Đình chỉ xưởng", "/suspension", { isSuspended: true }, "Đã đình chỉ xưởng."]]
+            : [["Mở lại xưởng", "/suspension", { isSuspended: false }, "Đã mở lại xưởng."]];
+        for (const [label, endpoint, body, message] of actionOptions) {
           const button = document.createElement("button");
           button.type = "button";
           button.className = "button button-outline";
           button.textContent = label;
+          button.disabled = kind !== "PENDING" && !item.user.isActive;
           button.addEventListener("click", () => save(actions, async () => {
-            await request("/admin/artisans/" + encodeURIComponent(item.id) + "/verification", { method: "PATCH", auth: true, body: { status: value } });
-            await load(false, "Đã xử lý hồ sơ.");
+            await request("/admin/artisans/" + encodeURIComponent(item.id) + endpoint, { method: "PATCH", auth: true, body });
+            await load(false, message);
           }));
           actions.append(button);
         }
         card.append(heading, body, actions);
         list.append(card);
       }
-      status.textContent = message || (list.children.length ? "" : "Chưa có hồ sơ chờ duyệt.");
+      status.textContent = message || (list.children.length ? "" : "Chưa có xưởng ở trạng thái này.");
       more.textContent = "Xem thêm";
-      more.hidden = data.length < 24;
+      more.hidden = !pagination.hasNext;
       page++;
     } catch (error) {
       if (current === version) {
@@ -102,10 +119,16 @@ export function mountArtisanAdministration(section, account) {
     save(form, async () => {
       await request("/admin/artisans", { method: "POST", auth: true, body });
       form.reset();
+      filter.value = "PENDING";
       await load(false, "Đã cấp tài khoản. Hồ sơ đang chờ duyệt.");
     });
   });
   signIn.addEventListener("click", account.open);
+  filter.addEventListener("change", () => {
+    list.replaceChildren();
+    more.hidden = true;
+    load();
+  });
   more.addEventListener("click", () => load(true));
   account.onChange(() => load());
   load();

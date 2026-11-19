@@ -6,7 +6,7 @@ import { authenticate } from "../middlewares/authenticate.js";
 import { authorize } from "../middlewares/authorize.js";
 import { validate } from "../middlewares/validate-request.js";
 import { ApiError } from "../middlewares/api-error.js";
-import { byId, uuid, urls, pageArgs, pageQuery, money } from "./schemas.js";
+import { byId, uuid, urls, listPage, pageQuery, money } from "./schemas.js";
 import { getMyProducts, createProduct, replaceProduct, hideCatalogProduct } from "../services/products.service.js";
 
 const router = Router();
@@ -23,7 +23,7 @@ function validatePricing(v, ctx) {
 const productBody = productFields.superRefine(validatePricing);
 const replaceBody = productFields.extend({ expectedStockQuantity: stockQuantity }).superRefine(validatePricing);
 const own = [authenticate, authorize("ARTISAN")];
-router.get("/mine", ...own, validate({ query: pageQuery }), async (req, res) => res.json({ data: await getMyProducts(req.user.id, pageArgs(req.validatedQuery)) }));
+router.get("/mine", ...own, validate({ query: pageQuery }), async (req, res) => res.json(await listPage(req.validatedQuery, (options) => getMyProducts(req.user.id, options))));
 router.post("/", ...own, validate({ body: productBody }), async (req, res) => res.status(201).json({ data: await createProduct(req.user.id, req.validatedBody) }));
 router.put("/:id", ...own, validate({ params: byId, body: replaceBody }), async (req, res) => res.json({ data: await replaceProduct(req.user.id, req.validatedParams.id, req.validatedBody) }));
 router.delete("/:id", ...own, validate({ params: byId }), async (req, res) => { if (!await hideCatalogProduct({ userId: req.user.id, productId: req.validatedParams.id })) throw new ApiError(404, "NOT_FOUND", "Không tìm thấy sản phẩm đang công bố."); res.status(204).end(); });

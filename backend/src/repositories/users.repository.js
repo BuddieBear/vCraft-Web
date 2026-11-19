@@ -12,13 +12,35 @@ export function createArtisanAccount(userId, account, profile) {
         return user;
     });
 }
-export function listPendingArtisans({ skip, take }) {
-    return prisma.artisanProfile.findMany({ where: { verificationStatus: "PENDING" }, select: { id: true, userId: true, workshopName: true, address: true, createdAt: true, user: { select: { email: true, fullName: true, isActive: true } } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], skip, take });
+export function listAdminArtisans({ skip, take, status }) {
+    const approved = status === "APPROVED" || status === "SUSPENDED";
+    return prisma.artisanProfile.findMany({
+        where: {
+            verificationStatus: approved ? "APPROVED" : status,
+            ...(approved && { isSuspended: status === "SUSPENDED" }),
+        },
+        select: { id: true, userId: true, workshopName: true, address: true, createdAt: true, user: { select: { email: true, fullName: true, isActive: true } } },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }], skip, take,
+    });
 }
 export function decideArtisan(adminId, id, verificationStatus) {
     return prisma.$transaction(async (tx) => {
         const result = await tx.artisanProfile.updateMany({ where: { id, verificationStatus: "PENDING" }, data: { verificationStatus, verifiedAt: verificationStatus === "APPROVED" ? new Date() : null } });
         if (result.count) await tx.auditLog.create({ data: { userId: adminId, action: `ARTISAN_${verificationStatus}`, targetTable: "artisan_profiles", targetRecordId: id } });
+        return result;
+    });
+}
+
+export function setArtisanSuspension(adminId, id, isSuspended) {
+    return prisma.$transaction(async (tx) => {
+        const result = await tx.artisanProfile.updateMany({
+            where: { id, verificationStatus: "APPROVED", isSuspended: !isSuspended, user: { isActive: true, role: "ARTISAN" } },
+            data: { isSuspended },
+        });
+        if (result.count) await tx.auditLog.create({ data: {
+            userId: adminId, action: isSuspended ? "ARTISAN_SUSPENDED" : "ARTISAN_REOPENED",
+            targetTable: "artisan_profiles", targetRecordId: id,
+        } });
         return result;
     });
 }
@@ -30,7 +52,7 @@ export function findActiveCredentialsByEmail(email) {
     });
 }
 
-const profileFields = { id: true, fullName: true, email: true, phone: true, avatarUrl: true, role: true };
+const profileFields = { id: true, fullName: true, email: true, phone: true, avatarUrl: true, role: true, artisanProfile: { select: { isSuspended: true } } };
 const hashToken = (token) => createHash("sha256").update(token).digest("hex");
 export function findUserById(id) { return prisma.user.findUnique({ where: { id, isActive: true }, select: profileFields }); }
 export function updateUserProfile(id, data) { return prisma.user.update({ where: { id, isActive: true }, data, select: profileFields }); }

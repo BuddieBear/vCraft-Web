@@ -1,5 +1,5 @@
 import { prisma } from "../database/prisma.js";
-import { lockAssignment, lockProductBatch } from "../database/postgresql/row-locks.js";
+import { lockAssignment, lockProductBatch, lockTradingArtisan } from "../database/postgresql/row-locks.js";
 
 const publicBatch = {
     status: { in: ["IN_PROGRESS", "COMPLETED"] },
@@ -54,6 +54,7 @@ export function listPublicProductBatches(slug) {
 }
 export function createOwnedBatch(userId, data) {
     return prisma.$transaction(async (tx) => {
+        if (!data.orderAssignmentId && !(await lockTradingArtisan(tx, userId)).length) return null;
         const product = await tx.product.findFirst({ where: { id: data.productId, artisan: { userId, verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } } }, select: { artisanId: true } });
         if (!product) return null;
         if (data.orderAssignmentId) {
@@ -66,8 +67,18 @@ export function createOwnedBatch(userId, data) {
         return tx.productBatch.create({ data });
     });
 }
-export function listOwnedBatches(userId, { skip, take }) {
-    return prisma.productBatch.findMany({ where: { product: { artisan: { userId, user: { isActive: true, role: "ARTISAN" } } } }, include: { logs: { orderBy: { stepOrder: "asc" } } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip, take });
+export function listOwnedBatches(userId, { skip, take, assignmentId, productId }) {
+    return prisma.productBatch.findMany({
+        where: {
+            product: { artisan: { userId, user: { isActive: true, role: "ARTISAN" } } },
+            ...(productId && { productId }),
+            ...(assignmentId && { orderAssignmentId: assignmentId, status: { not: "CANCELLED" } }),
+        },
+        include: assignmentId || productId
+            ? { product: { select: { isPublished: true } }, _count: { select: { logs: true } } }
+            : { logs: { orderBy: { stepOrder: "asc" } } },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip, take,
+    });
 }
 export function addOwnedLog(userId, batchId, data) {
     return prisma.$transaction(async (tx) => {

@@ -244,6 +244,7 @@ export function mountArtisanMap(section, { embedded = false } = {}) {
       </div>
       <aside class="map-directory" aria-labelledby="${directoryId}">
         <${directoryTag} id="${directoryId}">Cơ sở dệt lụa</${directoryTag}>
+        <label class="map-visit-filter"><input type="checkbox" data-visits-only disabled> Chỉ xưởng đón khách</label>
         <p class="map-feedback" role="status" data-workshop-state>Đang tải danh sách cơ sở…</p>
         <button class="text-button" type="button" data-workshop-retry hidden>Tải lại danh sách</button>
         <div class="map-workshops"></div>
@@ -256,6 +257,7 @@ export function mountArtisanMap(section, { embedded = false } = {}) {
   const legend = section.querySelector(".map-legend");
   const workshopStatus = section.querySelector("[data-workshop-state]");
   const workshopRetry = section.querySelector("[data-workshop-retry]");
+  const visitsOnly = section.querySelector("[data-visits-only]");
   const list = section.querySelector(".map-workshops");
   let L, map, markers;
   let workshopPoints = [];
@@ -263,6 +265,7 @@ export function mountArtisanMap(section, { embedded = false } = {}) {
   let references = [];
   let viewChanged = false;
   let fittingVillage = false;
+  let incomplete = false;
 
   function showVillage() {
     const wide = map.getSize().x >= 650;
@@ -279,6 +282,7 @@ export function mountArtisanMap(section, { embedded = false } = {}) {
     const directory = new Intl.Collator("vi");
     const knownNames = new Set(registered.map(workshop => workshop.workshopName.toLocaleLowerCase("vi")));
     const workshops = [...registered, ...references.filter(workshop => !knownNames.has(workshop.workshopName.toLocaleLowerCase("vi")))]
+      .filter(workshop => !visitsOnly.checked || workshop.isOpenForVisitors)
       .sort((a, b) => directory.compare(a.workshopName, b.workshopName));
     const points = new Map();
     list.replaceChildren();
@@ -334,6 +338,14 @@ export function mountArtisanMap(section, { embedded = false } = {}) {
       if (!viewChanged) showVillage();
     }
     return { count: workshops.length, pinned: [...points.values()].reduce((sum, group) => sum + group.entries.length, 0) };
+  }
+
+  function refreshDirectory() {
+    const { count, pinned } = renderWorkshops();
+    workshopStatus.textContent = count ? `${pinned}/${count} cơ sở có tọa độ công khai`
+      : visitsOnly.checked ? "Chưa có xưởng xác nhận đón khách." : "Chưa có cơ sở công khai.";
+    if (incomplete) workshopStatus.textContent += " Chưa tải được đầy đủ danh sách.";
+    workshopRetry.hidden = !incomplete;
   }
 
   async function loadMap() {
@@ -392,33 +404,16 @@ export function mountArtisanMap(section, { embedded = false } = {}) {
       action: "Xem mẫu của cơ sở",
       href: sitePaths.catalog + "?" + new URLSearchParams({ "co-so": workshop.slug }),
     }));
-    const { count, pinned } = renderWorkshops();
-    const incomplete = accounts.status === "rejected" || catalog.status === "rejected";
-    workshopStatus.textContent = count ? `${pinned}/${count} cơ sở có tọa độ công khai` : "Chưa có cơ sở công khai.";
-    if (incomplete) {
-      workshopStatus.textContent = count
-        ? `${workshopStatus.textContent}. Chưa tải được một phần danh sách.`
-        : "Chưa tải được danh sách cơ sở.";
-      workshopRetry.hidden = false;
-    }
+    incomplete = accounts.status === "rejected" || catalog.status === "rejected";
+    visitsOnly.disabled = accounts.status !== "fulfilled";
+    if (visitsOnly.disabled) visitsOnly.checked = false;
+    refreshDirectory();
   }
 
   mapRetry.addEventListener("click", loadMap);
   mapReset.addEventListener("click", showVillage);
   workshopRetry.addEventListener("click", loadWorkshops);
-  function start() {
-    loadMap();
-    loadWorkshops();
-  }
-
-  if (embedded && "IntersectionObserver" in window) {
-    const observer = new IntersectionObserver(([entry]) => {
-      if (!entry.isIntersecting) return;
-      observer.disconnect();
-      start();
-    }, { rootMargin: "240px 0px" });
-    observer.observe(section);
-  } else {
-    start();
-  }
+  visitsOnly.addEventListener("change", refreshDirectory);
+  loadMap();
+  loadWorkshops();
 }

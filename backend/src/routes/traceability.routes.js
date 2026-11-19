@@ -8,7 +8,7 @@ import { getPublicTimeline, getPublicProductionProduct, getProductBatches, getMy
 import { batchLandingUrl, productLandingUrl } from "../config/trace-url.js";
 import { authenticate } from "../middlewares/authenticate.js";
 import { authorize } from "../middlewares/authorize.js";
-import { byId, uuid, urls, pageArgs, pageQuery } from "./schemas.js";
+import { byId, uuid, urls, listPage, pageQuery } from "./schemas.js";
 import { timeline } from "../controllers/traceability.controller.js";
 const router = Router();
 const own = [authenticate, authorize("ARTISAN")];
@@ -23,7 +23,10 @@ function productQr(reference) {
         res.type("png").send(await QRCode.toBuffer(productLandingUrl(slug, reference), { type: "png", width: 320, margin: 4 }));
     };
 }
-router.get("/mine", ...own, validate({ query: pageQuery }), async (req, res) => res.json({ data: await getMyBatches(req.user.id, pageArgs(req.validatedQuery)) }));
+router.get("/mine", ...own, validate({ query: pageQuery.extend({ assignmentId: uuid.optional(), productId: uuid.optional() }) }), async (req, res) => {
+    const query = req.validatedQuery;
+    res.json(await listPage(query, (options) => getMyBatches(req.user.id, { ...options, assignmentId: query.assignmentId, productId: query.productId })));
+});
 router.get("/public/recent", async (_req, res) => res.json({ data: await listRecentPublicBatches() }));
 router.get("/purchased/:code", authenticate, authorize("BUYER"), validate({ params: codeParams }), async (req, res) => {
     const batch = await findBuyerTimelineByBatchCode(req.validatedParams.code, req.user.id);

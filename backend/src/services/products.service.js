@@ -28,7 +28,7 @@ export function getMyProducts(userId, options) {
 }
 export async function createProduct(userId, data) {
     const product = await createOwnedProduct(userId, data);
-    if (!product) throw new ApiError(403, "FORBIDDEN", "Xưởng chưa được duyệt.");
+    if (!product) throw new ApiError(403, "FORBIDDEN", "Xưởng cần được duyệt và đang hoạt động để đăng sản phẩm.");
     return product;
 }
 export async function replaceProduct(userId, id, data) {

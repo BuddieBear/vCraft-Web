@@ -4,6 +4,7 @@ import { prisma } from "../../src/database/prisma.js";
 import { checkout, changeOrderStatus } from "../../src/services/retail.service.js";
 import { createQuote, sendQuote, submitBid, acceptBids, assignBids, advanceAssignment } from "../../src/services/wholesale.service.js";
 import { createReview } from "../../src/services/reviews.service.js";
+import { quotePagePath } from "../../../frontend/src/site-paths.js";
 
 test("checkout, multi-artisan quote and verified review transactions", async () => {
     assert.equal(process.env.NODE_ENV, "test");
@@ -97,6 +98,9 @@ test("checkout, multi-artisan quote and verified review transactions", async () 
             for (const status of ["IN_PRODUCTION", "READY_FOR_DELIVERY", "COMPLETED"]) await advanceAssignment({ userId: actor.id, assignmentId: assignment.id, status });
         }
         assert.equal((await prisma.quotationRequest.findUniqueOrThrow({ where: { id: quote.id } })).status, "DELIVERED");
+        assert.equal(await prisma.notification.count({ where: {
+            userId: buyer.id, type: "ORDER_STATUS", linkUrl: quotePagePath(quote.id),
+        } }), 3 * assignments.length);
         await assert.rejects(prisma.review.create({
             data: { buyerId: buyer3.id, targetType: "ARTISAN", artisanId: w1.id, quotationRequestId: quote.id, rating: 5, comment: "Wrong quote owner", isVerifiedPurchase: true },
         }), { code: "P2003" });

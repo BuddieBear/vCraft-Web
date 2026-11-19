@@ -1,5 +1,6 @@
 import { request, signedIn } from "../api/http.js";
 import { formatPrice } from "../components/ui.js";
+import { paymentLabel } from "../data/payment-labels.js";
 
 const orderStates = {
   PENDING: "Chờ xác nhận",
@@ -8,14 +9,9 @@ const orderStates = {
   DELIVERED: "Đã giao",
   CANCELLED: "Đã hủy",
 };
-const paymentStates = { UNPAID: "Chưa thu tiền", PAID: "Đã thu tiền", FAILED: "Thất bại", REFUNDED: "Đã hoàn tiền" };
 const nextState = { PENDING: "CONFIRMED", CONFIRMED: "SHIPPING", SHIPPING: "DELIVERED" };
 const nextLabel = { CONFIRMED: "Xác nhận đơn", SHIPPING: "Bắt đầu giao", DELIVERED: "Xác nhận đã giao" };
 const pageSize = 50;
-
-export function paymentLabel(order) {
-  return (order.paymentMethod === "COD" ? "COD · " : "") + (paymentStates[order.paymentStatus] || order.paymentStatus);
-}
 
 export function mountRetailOrders(section, account) {
   section.innerHTML = `

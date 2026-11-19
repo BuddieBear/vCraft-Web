@@ -17,7 +17,7 @@ export function findMatchingProductIds(tx, { skip, take, category, artisanId, q,
         JOIN users u ON u.id = a.user_id
         LEFT JOIN categories c ON c.id = p.category_id
         CROSS JOIN (SELECT ${foldVietnamese(Prisma.sql`${q}::text`)} AS needle) term
-        WHERE p.is_published AND a.verification_status = 'APPROVED' AND u.is_active
+        WHERE p.is_published AND a.verification_status = 'APPROVED' AND NOT a.is_suspended AND u.is_active AND u.role = 'ARTISAN'
             ${category ? Prisma.sql`AND c.slug = ${category}` : Prisma.empty}
             ${artisanId ? Prisma.sql`AND p.artisan_id = ${artisanId}::uuid` : Prisma.empty}
             ${storefront ? Prisma.sql`AND right(lower(u.email), length(${demoWorkshopDomain}::text)) <> ${demoWorkshopDomain}` : Prisma.empty}

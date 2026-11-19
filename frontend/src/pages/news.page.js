@@ -1,9 +1,71 @@
 import { request, mediaUrl } from "../api/http.js";
+import { newsArticlePath, sitePaths } from "../site-paths.js";
+import { icon } from "../components/ui.js";
 
 const categories = {
   PRICE_ANNOUNCEMENT: "Giá nguyên liệu", POWER_OUTAGE: "Lịch cúp điện",
   POLICY_SUPPORT: "Chính sách", FESTIVAL_EVENT: "Sự kiện",
 };
+const publishedDate = new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Ho_Chi_Minh" });
+
+function articleMeta(item) {
+  const meta = document.createElement("p");
+  meta.className = "news-meta";
+  meta.textContent = categories[item.category] + " · " + publishedDate.format(new Date(item.publishedAt));
+  return meta;
+}
+
+function addPicture(card, item) {
+  const src = mediaUrl(item.thumbnailUrl);
+  if (!src) return;
+  const picture = document.createElement("img");
+  picture.src = src;
+  picture.alt = "";
+  picture.loading = "lazy";
+  picture.referrerPolicy = "no-referrer";
+  card.append(picture);
+}
+
+function articleLink(item, label) {
+  const link = document.createElement("a");
+  link.href = newsArticlePath(item.slug);
+  link.className = "text-link";
+  link.textContent = label;
+  return link;
+}
+
+export async function mountNewsArticle(section, slug) {
+  section.innerHTML = `
+    <a href="${sitePaths.news}" class="text-link product-back">${icon("left")} Tin cộng đồng</a>
+    <article class="news-article trade-card">
+      <h1 id="news-title" class="page-title">Tin cộng đồng</h1>
+      <p role="status">Đang tải bài viết…</p>
+    </article>`;
+  const article = section.querySelector("article");
+  const status = article.querySelector("[role=status]");
+  try {
+    const { data } = await request("/news/" + encodeURIComponent(slug));
+    article.querySelector("h1").textContent = data.title;
+    document.title = data.title + " · vCraft";
+    article.append(articleMeta(data));
+    addPicture(article, data);
+    const body = document.createElement("p");
+    body.className = "news-body";
+    body.textContent = data.content;
+    article.append(body);
+    status.remove();
+  } catch (error) {
+    status.textContent = error.message;
+    if (error.status !== 404) {
+      const retry = document.createElement("button");
+      retry.className = "text-button";
+      retry.type = "button";
+      retry.textContent = "Thử lại";
+      retry.addEventListener("click", () => mountNewsArticle(section, slug));
+      article.append(retry);
+    }
+  }
+}
 
 export function mountNews(section, account) {
   const options = Object.entries(categories).map(([key, label]) => `<option value="${key}">${label}</option>`).join("");
@@ -41,43 +103,28 @@ export function mountNews(section, account) {
   let page = 1;
 
   function render(item, admin) {
+    if (!admin) {
+      const card = document.createElement("article");
+      card.className = "trade-card";
+      const heading = document.createElement("h2");
+      heading.append(articleLink(item, (item.isPinned ? "Đã ghim · " : "") + item.title));
+      card.append(heading, articleMeta(item));
+      addPicture(card, item);
+      return card;
+    }
     const summary = document.createElement("summary");
     summary.textContent = (item.isPinned ? "Đã ghim · " : "") + item.title;
     const card = document.createElement("details");
     card.className = "trade-card";
-    const meta = document.createElement("p");
-    meta.textContent = categories[item.category] + " · " + new Date(item.publishedAt).toLocaleString("vi-VN");
-    const picture = document.createElement("img");
-    const src = mediaUrl(item.thumbnailUrl);
-    picture.alt = "";
-    picture.loading = "lazy";
     const body = document.createElement("p");
     body.className = "news-body";
-    card.append(summary, meta);
-    if (src) {
-      picture.src = src;
-      card.append(picture);
-    }
+    card.append(summary, articleMeta(item));
+    addPicture(card, item);
     card.append(body);
-    if (!admin) {
-      let loaded = false;
-      card.addEventListener("toggle", async () => {
-        if (!card.open || loaded) return;
-        loaded = true;
-        body.textContent = "Đang tải nội dung…";
-        try {
-          const { data } = await request("/news/" + encodeURIComponent(item.slug));
-          body.textContent = data.content;
-        } catch (error) {
-          body.textContent = error.message + " Đóng rồi mở lại để thử lại.";
-          loaded = false;
-        }
-      });
-      return card;
-    }
     body.textContent = item.content;
     const actions = document.createElement("div");
     actions.className = "trade-toolbar";
+    if (Date.parse(item.publishedAt) <= Date.now()) actions.append(articleLink(item, "Xem bài đã đăng"));
     const edit = document.createElement("button");
     edit.type = "button";
     edit.className = "button button-outline";

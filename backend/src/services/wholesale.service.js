@@ -1,5 +1,6 @@
-import { findApprovedArtisan, listOpenQuotes, listArtisanAssignments, listBuyerQuotes, listAcceptedQuotes, findBuyerQuote as findBuyerQuoteRow, createQuote as createQuoteRecord, sendQuote as sendQuoteRecord, dispatchQuote as dispatchQuoteRecord, submitBid as submitBidRecord, acceptBids as acceptBidsRecord, assignBids as assignBidsRecord, advanceAssignment as advanceAssignmentRecord } from "../repositories/wholesale.repository.js";
+import { findApprovedArtisan, findArtisanQuote, listOpenQuotes, listArtisanAssignments, listBuyerQuotes, listAcceptedQuotes, findBuyerQuote as findBuyerQuoteRow, createQuote as createQuoteRecord, sendQuote as sendQuoteRecord, submitForDispatch, dispatchQuote as dispatchQuoteRecord, submitBid as submitBidRecord, acceptBids as acceptBidsRecord, assignBids as assignBidsRecord, advanceAssignment as advanceAssignmentRecord } from "../repositories/wholesale.repository.js";
 import { vietnamToday } from "../../../frontend/src/data/input-values.js";
+import { biddingPagePath, quotePagePath } from "../../../frontend/src/site-paths.js";
 
 function id(value) {
     if (typeof value !== "string" || !value.trim()) throw new Error("Invalid identifier");
@@ -39,7 +40,15 @@ export async function listArtisanWork(userId, options, assignments = false) {
     id(userId);
     const artisan = await findApprovedArtisan(userId);
     if (!artisan) throw new Error("Artisan is not active");
-    return assignments ? listArtisanAssignments(artisan.id, options) : listOpenQuotes(artisan.id, { ...options, today: new Date(`${vietnamToday()}T00:00:00.000Z`) });
+    if (assignments) return listArtisanAssignments(artisan.id, options);
+    if (artisan.isSuspended && options.view !== "mine") return [];
+    return listOpenQuotes(artisan.id, { ...options, today: new Date(`${vietnamToday()}T00:00:00.000Z`) });
+}
+
+export async function getArtisanQuote(userId, quoteId) {
+    const artisan = await findApprovedArtisan(userId);
+    if (!artisan) throw new Error("Artisan is not active");
+    return findArtisanQuote(artisan.id, quoteId, new Date(`${vietnamToday()}T00:00:00.000Z`), artisan.isSuspended);
 }
 
 export function listQuotesForBuyer(userId, options) {
@@ -67,14 +76,19 @@ export function createQuote({ userId, title, specifications, targetQuantity, dea
 
 export function sendQuote({ userId, quoteId }) {
     id(userId); id(quoteId);
-    return sendQuoteRecord(userId, quoteId, deadlinePassed);
+    return sendQuoteRecord(userId, quoteId, deadlinePassed, biddingPagePath(quoteId));
+}
+
+export function requestDispatch({ userId, quoteId }) {
+    id(userId); id(quoteId);
+    return submitForDispatch(userId, quoteId, deadlinePassed);
 }
 
 export function dispatchQuote({ userId, quoteId, artisanIds }) {
     id(userId); id(quoteId);
     if (!Array.isArray(artisanIds) || !artisanIds.length || new Set(artisanIds).size !== artisanIds.length) throw new Error("Invalid allocations");
     artisanIds.forEach(id);
-    return dispatchQuoteRecord(userId, quoteId, artisanIds, deadlinePassed);
+    return dispatchQuoteRecord(userId, quoteId, artisanIds, deadlinePassed, biddingPagePath(quoteId));
 }
 
 export function submitBid({ userId, quoteId, proposedPrice, proposedCompletionDays, note = null, sampleImages = [] }) {
@@ -82,14 +96,14 @@ export function submitBid({ userId, quoteId, proposedPrice, proposedCompletionDa
     const price = money(proposedPrice, "9999999999.99");
     if (!Array.isArray(sampleImages) || sampleImages.some((sample) => typeof sample !== "string" || sample.length > 500)) throw new Error("Invalid images");
     if (note != null && (typeof note !== "string" || note.length > 10000)) throw new Error("Invalid note");
-    return submitBidRecord({ userId, quoteId, price, proposedCompletionDays, note, sampleImages }, deadlinePassed);
+    return submitBidRecord({ userId, quoteId, price, proposedCompletionDays, note, sampleImages }, deadlinePassed, quotePagePath(quoteId));
 }
 
 export function acceptBids({ userId, quoteId, bidIds }) {
     id(userId); id(quoteId);
     if (!Array.isArray(bidIds) || !bidIds.length || new Set(bidIds).size !== bidIds.length) throw new Error("Invalid bids");
     bidIds.forEach(id);
-    return acceptBidsRecord(userId, quoteId, bidIds, deadlinePassed);
+    return acceptBidsRecord(userId, quoteId, bidIds, deadlinePassed, biddingPagePath(quoteId));
 }
 
 export function assignBids({ userId, quoteId, allocations }) {
@@ -102,5 +116,5 @@ export function assignBids({ userId, quoteId, allocations }) {
 export function advanceAssignment({ userId, assignmentId, status }) {
     id(userId); id(assignmentId);
     if (!["IN_PRODUCTION", "READY_FOR_DELIVERY", "COMPLETED"].includes(status)) throw new Error("Invalid transition");
-    return advanceAssignmentRecord(userId, assignmentId, status);
+    return advanceAssignmentRecord(userId, assignmentId, status, quotePagePath);
 }

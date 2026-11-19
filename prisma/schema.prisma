@@ -82,6 +82,7 @@ enum BatchStatus {
 
 enum QuoteStatus {
   DRAFT
+  PENDING_DISPATCH
   SENT_TO_ARTISANS
   ARTISANS_BIDDING
   BUYER_ACCEPTED
@@ -241,6 +242,7 @@ model ArtisanProfile {
   coverImageUrl      String?                   @map("cover_image_url") @db.VarChar(500)
   galleryImages      String[]                  @default([]) @map("gallery_images")
   verificationStatus ArtisanVerificationStatus @default(PENDING) @map("verification_status")
+  isSuspended        Boolean                   @default(false) @map("is_suspended")
   verifiedAt         DateTime?                 @map("verified_at") @db.Timestamptz()
   averageRating      Decimal                   @default(5.00) @map("average_rating") @db.Decimal(3, 2)
   totalReviews       Int                       @default(0) @map("total_reviews")

@@ -38,6 +38,7 @@ test("fresh ORM migration, idempotent seed, pricing and rating rollups", { timeo
         SEED_DEMO_PASSWORD: randomBytes(24).toString("base64url"),
         JWT_SECRET: randomBytes(48).toString("base64url"),
         CORS_ALLOWED_ORIGINS: "http://127.0.0.1:5189",
+        SITE_CSP_REPORT_ONLY: "false",
         UPLOAD_DIR: resolve(tmpdir(), `vcraft-upload-test-${randomBytes(8).toString("hex")}`),
     };
     const run = (...args) => execFileSync(process.execPath, args, {

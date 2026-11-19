@@ -1,39 +1,35 @@
 import { asset, icon } from "../components/ui.js";
 import { request } from "../api/http.js";
-import { sitePaths } from "../site-paths.js";
-import { referenceProductCard } from "./workshop-reference.page.js";
-import { mountArtisanMap } from "./artisan-map.page.js";
-
-export const homeMapId = "ban-do-lang-nghe";
+import { homeMapId, newsArticlePath, sitePaths } from "../site-paths.js";
+import { referenceProductCard } from "../components/reference-product-card.js";
 
 export function renderHome(container) {
   container.innerHTML = `
-    <div class="hero section-shell">
-      <div class="hero-copy">
-        <p class="eyebrow"><span></span> Sổ tay làng lụa · Ninh Bình</p>
-        <h1 id="hero-title">Nha Xá, <em>sắc lụa bên sông.</em></h1>
-        <p class="hero-intro">Theo một tấm lụa qua bàn tay người thợ, từ khung cửi đến mẻ nhuộm củ nâu, lá bàng.</p>
+    <div class="hero">
+      <div class="hero-copy section-shell">
+        <p class="eyebrow"><span></span> Sổ tay làng nghề · Ninh Bình</p>
+        <h1 id="hero-title">Lụa Nha Xá <em>bên sông Hồng</em></h1>
+        <p class="hero-intro">Xem những mẫu lụa của làng, tìm xưởng để ghé thăm và theo dõi từng lô từ khung cửi đến thành phẩm.</p>
         <div class="hero-actions">
-          <a class="button button-primary" href="${sitePaths.catalog}">Khám phá mẫu lụa ${icon("arrow")}</a>
-          <a class="button button-outline" href="${sitePaths.journal}">Nhật ký lô</a>
+          <a class="button button-primary" href="${sitePaths.catalog}">Xem mẫu lụa ${icon("arrow")}</a>
+          <a class="button button-outline" href="${sitePaths.journal}">Tra nhật ký lô</a>
         </div>
       </div>
       <figure class="hero-photo">
-        <img src="${asset("hero-nha-xa.webp")}" srcset="${asset("hero-nha-xa-small.webp")} 640w, ${asset("hero-nha-xa.webp")} 1280w"
-          sizes="(max-width: 760px) calc(100vw - 32px), (max-width: 1400px) 52vw, 740px"
-          width="1280" height="960" alt="Minh họa người thợ hong tấm lụa nâu đồng trong xưởng nhuộm" fetchpriority="high">
-        <figcaption>Minh họa hong lụa sau nhuộm</figcaption>
+        <img src="${asset("nha-xa-weaver.webp")}" srcset="${asset("nha-xa-weaver-small.webp")} 720w, ${asset("nha-xa-weaver.webp")} 1600w"
+          sizes="100vw" width="1600" height="900" alt="Người thợ nâng mép tấm lụa đỏ bên khung cửi gỗ" fetchpriority="high">
+        <figcaption>Ảnh minh họa nghề dệt lụa</figcaption>
       </figure>
     </div>
     <nav class="hero-index section-shell" aria-label="Mục lục sổ tay">
-      <a href="${sitePaths.artisans}"><strong>Hồ sơ xưởng</strong>${icon("upRight")}</a>
-      <a href="#${homeMapId}"><strong>Bản đồ làng nghề</strong>${icon("arrow")}</a>
-      <a href="${sitePaths.news}"><strong>Tin cộng đồng</strong>${icon("upRight")}</a>
+      <a href="${sitePaths.artisans}"><span class="hero-index-icon">${icon("thread")}</span><strong>Hồ sơ xưởng</strong>${icon("upRight")}</a>
+      <a href="#${homeMapId}"><span class="hero-index-icon">${icon("pin")}</span><strong>Bản đồ làng nghề</strong>${icon("arrow")}</a>
+      <a href="${sitePaths.news}"><span class="hero-index-icon">${icon("grid")}</span><strong>Tin cộng đồng</strong>${icon("upRight")}</a>
     </nav>
 
     <section class="home-featured section-shell" aria-labelledby="home-silk-title" hidden>
       <div class="section-heading">
-        <div><h2 id="home-silk-title">Mẫu lụa nổi bật</h2><p>Ảnh mẫu và giá tham khảo theo công bố của từng cơ sở.</p></div>
+        <div><h2 id="home-silk-title">Mẫu lụa từ các xưởng</h2><p>Ảnh mẫu và giá tham khảo theo công bố của từng cơ sở.</p></div>
         <a class="text-link" href="${sitePaths.catalog}">Xem tất cả mẫu lụa ${icon("arrow")}</a>
       </div>
       <div class="reference-grid"></div>
@@ -54,7 +50,10 @@ export function renderHome(container) {
       </div>
     </section>
 
-    <section id="${homeMapId}" class="home-map section-shell" aria-labelledby="home-map-title"></section>
+    <section id="${homeMapId}" class="home-map section-shell" aria-labelledby="home-map-title">
+      <h2 id="home-map-title" class="page-title">Bản đồ làng nghề</h2>
+      <p role="status">Đang tải bản đồ khi bạn cuộn tới đây…</p>
+    </section>
 
     <div class="home-discover section-shell">
       <section aria-labelledby="home-news-title">
@@ -71,7 +70,7 @@ export function renderHome(container) {
     </div>`;
 
   const mapSection = container.querySelector("#" + homeMapId);
-  mountArtisanMap(mapSection, { embedded: true });
+  loadHomeMap(mapSection);
   if (location.hash === "#" + homeMapId) mapSection.scrollIntoView();
 
   const featured = container.querySelector(".home-featured");
@@ -91,12 +90,41 @@ export function renderHome(container) {
   request("/news?limit=3").then(({ data }) => {
     if (!data.length) return;
     const list = container.querySelector(".home-news-titles");
-    for (const { title } of data) {
+    for (const { title, slug } of data) {
       const item = document.createElement("li");
-      item.textContent = title;
+      const link = document.createElement("a");
+      link.href = newsArticlePath(slug);
+      link.textContent = title;
+      item.append(link);
       list.append(item);
     }
     list.hidden = false;
     container.querySelector("[data-news-intro]").hidden = true;
   }).catch(() => { /* The full news page handles loading errors. */ });
+}
+
+function loadHomeMap(section) {
+  async function start() {
+    try {
+      const { mountArtisanMap } = await import("./artisan-map.page.js");
+      mountArtisanMap(section, { embedded: true });
+    } catch {
+      section.querySelector("[role=status]").textContent = "Chưa tải được bản đồ.";
+      const link = document.createElement("a");
+      link.className = "text-link";
+      link.href = sitePaths.map;
+      link.textContent = "Mở trang bản đồ";
+      section.append(link);
+    }
+  }
+  if (!("IntersectionObserver" in window)) {
+    start();
+    return;
+  }
+  const observer = new IntersectionObserver(([entry]) => {
+    if (!entry.isIntersecting) return;
+    observer.disconnect();
+    start();
+  }, { rootMargin: "240px 0px" });
+  observer.observe(section);
 }
