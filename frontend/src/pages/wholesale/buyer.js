@@ -2,7 +2,7 @@ import { formatPrice } from "../../components/ui.js";
 import { request } from "../../api/http.js";
 import { getCatalogProduct } from "../../api/catalog.js";
 import { batchQr } from "../../components/batch-qr.js";
-import { vietnamToday } from "../../data/input-values.js";
+import { quoteBudgetError, quoteBudgetMax, validPositiveAmount, vietnamToday } from "../../data/input-values.js";
 import { weaveTypes } from "../../data/weave-types.js";
 import { productPagePath, quotePagePath } from "../../site-paths.js";
 import { renderTimeline } from "../traceability.page.js";
@@ -48,12 +48,14 @@ export async function buyerView(root, { form, query, list, signal }) {
     <label>Quy cách<textarea name="specifications" required maxlength="10000"></textarea></label>
     <label>Loại lụa<select name="preferredWeaveType"><option value="">Chọn loại lụa</option>${Object.entries(weaveTypes).map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}</select></label>
     <label>Số lượng<input name="targetQuantity" type="number" min="1" max="2147483647" required></label>
+    <label>Ngân sách tối đa (đồng)<input name="maxBudget" type="number" min="0.01" max="${quoteBudgetMax}" step="0.01" inputmode="decimal"></label>
     <label>Ngày cần hàng<input name="deadline" type="date" required></label>`, "Lưu yêu cầu nháp", async values => {
     const { data } = await write("/wholesale/quotes", {
       title: values.get("title").trim(),
       specifications: values.get("specifications").trim(),
       deadline: values.get("deadline"),
       targetQuantity: Number(values.get("targetQuantity")),
+      ...(values.get("maxBudget") !== "" && { maxBudget: values.get("maxBudget") }),
       ...(values.get("preferredWeaveType") && { preferredWeaveType: values.get("preferredWeaveType") }),
       ...(targetId && values.has("sendToWorkshop") && { targetArtisanId: targetId }),
     });
@@ -62,6 +64,12 @@ export async function buyerView(root, { form, query, list, signal }) {
   const deadline = fields.elements.namedItem("deadline");
   deadline.min = vietnamToday();
   deadline.dataset.minMessage = "Chọn ngày cần hàng từ hôm nay trở đi.";
+  const budget = fields.elements.namedItem("maxBudget");
+  budget.dataset.minMessage = "Ngân sách phải lớn hơn 0. Để trống nếu chưa xác định.";
+  budget.addEventListener("input", () => {
+    const value = budget.value;
+    budget.setCustomValidity(value && !validPositiveAmount(value, quoteBudgetMax) ? quoteBudgetError : "");
+  });
   if (source?.error) create.append(paragraph("Chưa tải được mẫu lụa. Bạn có thể nhập thông tin để đặt sỉ."));
   if (sample) {
     const link = document.createElement("a");

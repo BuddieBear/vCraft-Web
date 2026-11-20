@@ -2,6 +2,11 @@ import { mediaUrl } from "../api/http.js";
 import { productPagePath } from "../site-paths.js";
 import { formatPrice } from "./ui.js";
 
+export function referenceProductPrice({ price, unit }) {
+  if (price == null) return "Chưa công bố giá";
+  return unit ? `${formatPrice(price)} / ${unit}` : formatPrice(price);
+}
+
 export function referenceProductCard(product) {
   const control = document.createElement("a");
   control.href = productPagePath(product.slug, true);
@@ -26,7 +31,7 @@ export function referenceProductCard(product) {
   control.querySelector(".product-tag").textContent = product.type;
   control.querySelector(".reference-product-title").textContent = product.name;
   control.querySelector(".reference-product-owner").textContent = product.workshopName;
-  control.querySelector("strong").textContent = `${formatPrice(product.price)} / ${product.unit}`;
+  control.querySelector("strong").textContent = referenceProductPrice(product);
   const item = document.createElement("article");
   item.className = "reference-card reference-product";
   item.append(control);

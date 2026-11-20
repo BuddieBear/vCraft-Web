@@ -4,13 +4,15 @@ import { authenticate } from "../middlewares/authenticate.js";
 import { authorize } from "../middlewares/authorize.js";
 import { validate } from "../middlewares/validate-request.js";
 import { byId, uuid, money, urls, pageQuery } from "./schemas.js";
+import { quoteBudgetMax, validPositiveAmount } from "../../../frontend/src/data/input-values.js";
 import * as actions from "../controllers/wholesale.controller.js";
 
 const router = Router();
+const maxBudget = money.refine(value => validPositiveAmount(value, quoteBudgetMax)).nullish();
 router.use(authenticate);
 router.get("/quotes", authorize("BUYER"), validate({ query: pageQuery }), actions.buyerQuotes);
 router.get("/admin/quotes", authorize("ADMIN"), validate({ query: pageQuery.extend({ status: z.enum(["ALL", "DRAFT", "PENDING_DISPATCH", "SENT_TO_ARTISANS", "ARTISANS_BIDDING", "BUYER_ACCEPTED", "IN_PRODUCTION", "DELIVERED", "CANCELLED"]).default("BUYER_ACCEPTED") }) }), actions.adminQuotes);
-router.post("/quotes", authorize("BUYER"), validate({ body: z.object({ title: z.string().trim().min(1).max(255), specifications: z.string().trim().min(1).max(10000), targetQuantity: z.number().int().positive().max(2147483647), deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), targetArtisanId: uuid.nullable().optional(), maxBudget: money.nullable().optional(), preferredWeaveType: z.enum(["LUA_VAN", "LUA_GAM", "LUA_SATIN", "LUA_TWILL", "LUA_TO_TAM_THO", "PHU_KIEN_LUA"]).optional(), attachmentUrls: urls.optional() }).strict() }), actions.draftQuote);
+router.post("/quotes", authorize("BUYER"), validate({ body: z.object({ title: z.string().trim().min(1).max(255), specifications: z.string().trim().min(1).max(10000), targetQuantity: z.number().int().positive().max(2147483647), deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), targetArtisanId: uuid.nullable().optional(), maxBudget, preferredWeaveType: z.enum(["LUA_VAN", "LUA_GAM", "LUA_SATIN", "LUA_TWILL", "LUA_TO_TAM_THO", "PHU_KIEN_LUA"]).optional(), attachmentUrls: urls.optional() }).strict() }), actions.draftQuote);
 router.get("/quotes/:id", authorize("BUYER"), validate({ params: byId }), actions.buyerQuote);
 router.post("/quotes/:id/send", authorize("BUYER"), validate({ params: byId }), actions.sendDraft);
 router.post("/quotes/:id/request-dispatch", authorize("BUYER"), validate({ params: byId }), actions.submitDispatch);

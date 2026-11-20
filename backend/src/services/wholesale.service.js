@@ -1,5 +1,5 @@
 import { findApprovedArtisan, findArtisanQuote, listOpenQuotes, listArtisanAssignments, listBuyerQuotes, listAcceptedQuotes, findBuyerQuote as findBuyerQuoteRow, createQuote as createQuoteRecord, sendQuote as sendQuoteRecord, submitForDispatch, dispatchQuote as dispatchQuoteRecord, submitBid as submitBidRecord, acceptBids as acceptBidsRecord, assignBids as assignBidsRecord, advanceAssignment as advanceAssignmentRecord } from "../repositories/wholesale.repository.js";
-import { vietnamToday } from "../../../frontend/src/data/input-values.js";
+import { quoteBudgetMax, validPositiveAmount, vietnamToday } from "../../../frontend/src/data/input-values.js";
 import { biddingPagePath, quotePagePath } from "../../../frontend/src/site-paths.js";
 
 function id(value) {
@@ -19,9 +19,7 @@ function positive(value) {
 
 function money(value, max) {
     const stringValue = String(value ?? "").trim();
-    if (!/^\d+(\.\d{1,2})?$/.test(stringValue)) throw new Error("Invalid amount");
-    const amount = Number(stringValue);
-    if (!Number.isFinite(amount) || amount <= 0 || amount > Number(max)) throw new Error("Invalid amount");
+    if (!validPositiveAmount(stringValue, max)) throw new Error("Invalid amount");
     return stringValue;
 }
 
@@ -68,7 +66,7 @@ export async function findBuyerQuote({ userId, quoteId }) {
 
 export function createQuote({ userId, title, specifications, targetQuantity, deadline, targetArtisanId = null, maxBudget = null, preferredWeaveType = "LUA_VAN", attachmentUrls = [] }) {
     id(userId);
-    const data = { userId, title: text(title, 255), specifications: text(specifications, 10000), targetQuantity: positive(targetQuantity), deadline: deadlineDate(deadline), targetArtisanId, maxBudget: maxBudget === null ? null : money(maxBudget, "999999999999.99"), preferredWeaveType, attachmentUrls };
+    const data = { userId, title: text(title, 255), specifications: text(specifications, 10000), targetQuantity: positive(targetQuantity), deadline: deadlineDate(deadline), targetArtisanId, maxBudget: maxBudget === null ? null : money(maxBudget, quoteBudgetMax), preferredWeaveType, attachmentUrls };
     if (targetArtisanId !== null) id(targetArtisanId);
     if (!Array.isArray(attachmentUrls) || attachmentUrls.some((url) => typeof url !== "string" || url.length > 500)) throw new Error("Invalid attachments");
     return createQuoteRecord(data);

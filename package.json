@@ -14,7 +14,8 @@
     "db:status": "prisma migrate status",
     "db:seed": "node prisma/seed.js",
     "db:json": "node backend/scripts/export-catalog.js",
-    "db:test": "node --test backend/tests/integration/orm.test.js"
+    "db:test": "node --test backend/tests/integration/orm.test.js",
+    "test": "npm run db:test"
   },
   "dependencies": {
     "@maplibre/maplibre-gl-leaflet": "0.1.4",

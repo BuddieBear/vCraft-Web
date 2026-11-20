@@ -3,12 +3,13 @@ import { mediaUrl, request } from "../api/http.js";
 import { getCatalogProduct } from "../api/catalog.js";
 import { quoteDraftPath, sitePaths } from "../site-paths.js";
 import { renderProductionGuide } from "../components/production-guide.js";
+import { referenceProductPrice } from "../components/reference-product-card.js";
 
 export async function mountProductDetail(section, { slug, reference }, addToCart, account) {
   section.innerHTML = `
     <a class="text-link product-back" href="${sitePaths.catalog}${reference ? "" : "?mua=1"}">${icon("left")} Về danh mục</a>
     <div class="detail-grid">
-      <div class="detail-visual" hidden><img class="detail-image" width="414" height="414" alt="" referrerpolicy="no-referrer"></div>
+      <figure class="detail-visual" hidden><img class="detail-image" width="414" height="414" alt="" referrerpolicy="no-referrer"><figcaption hidden></figcaption></figure>
       <div class="detail-copy">
         <header class="detail-heading">
           <p class="eyebrow"></p><h1 id="detail-title">Chi tiết sản phẩm</h1><p class="detail-price"></p>
@@ -40,10 +41,15 @@ export async function mountProductDetail(section, { slug, reference }, addToCart
     image.parentElement.hidden = !src;
     grid.classList.toggle("detail-no-image", !src);
     image.alt = product.name;
+    if (src && product.imageCredit) {
+      const caption = image.parentElement.querySelector("figcaption");
+      caption.textContent = product.imageCredit;
+      caption.hidden = false;
+    }
     workshopName.textContent = reference ? product.workshopName : product.artisan.workshopName;
     title.textContent = product.name;
     document.title = product.name + " · vCraft";
-    price.textContent = reference ? `${formatPrice(product.price)} / ${product.unit}` : formatPrice(product.price, saleUnits[product.saleUnit]);
+    price.textContent = reference ? referenceProductPrice(product) : formatPrice(product.price, saleUnits[product.saleUnit]);
     status.textContent = "";
     grid.insertAdjacentHTML("beforeend", renderProductionGuide(product, { cover: src, reference, showQr: true }));
     const description = section.querySelector(".product-description");
@@ -62,7 +68,7 @@ export async function mountProductDetail(section, { slug, reference }, addToCart
       if (!returnToCatalog) {
         section.querySelector(".product-back").href = sitePaths.catalog + "?" + new URLSearchParams({ "co-so": product.workshopSlug });
       }
-      description.textContent = "Ảnh mẫu và giá tham khảo do cơ sở công bố.";
+      description.textContent = product.price == null ? "Mẫu lụa được ghi nhận trong tư liệu công khai." : "Giá tham khảo theo niêm yết của cơ sở.";
       specs.querySelector("dt").textContent = "Loại sản phẩm";
       specs.querySelector("dd").textContent = product.type;
       specs.hidden = false;

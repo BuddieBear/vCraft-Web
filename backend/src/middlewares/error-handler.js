@@ -2,7 +2,7 @@ import { isPersistenceConflict } from "../database/prisma.js";
 import { ZodError } from "zod";
 import { ApiError } from "./api-error.js";
 import multer from "multer";
-import { recipientPhoneError } from "../../../frontend/src/data/input-values.js";
+import { quoteBudgetError, recipientPhoneError } from "../../../frontend/src/data/input-values.js";
 
 const invalid = new Set(["Invalid identifier", "Invalid text", "Invalid quantity", "Invalid amount", "Invalid deadline", "Invalid attachments", "Invalid images", "Invalid note", "Invalid bids", "Invalid allocations", "Invalid transition", "Invalid userId", "Invalid cart item", "Invalid review target", "Provide one order", "Invalid review", "Invalid media", "Invalid recipientName", "Invalid recipientPhone", "Invalid shippingAddress", "Invalid shippingNote", "Invalid paymentMethod"]);
 const conflict = new Set(["Quote not found or invalid state", "Quote deadline passed", "No eligible artisan", "Artisan cannot bid on quote", "Invalid or unavailable bids", "Too many bids for the requested quantity", "Allocations must cover accepted bids and requested quantity", "Assignment not found", "Assignment not found or invalid state", "Product is unavailable or has insufficient stock", "Product is unavailable, changed price, or has insufficient stock", "Cart is empty", "Cart changed during checkout", "Artisan is unavailable", "Review target is not in a delivered order", "Invalid production step", "Incomplete production timeline", "Invalid order transition", "Batch exceeds allocated quantity"]);
@@ -18,6 +18,7 @@ function validationFields(issues) {
             message = issue.minimum === 1 ? "Vui lòng điền mục này." : `Nhập ít nhất ${issue.minimum} ký tự.`;
         }
         if (issue.code === "too_big" && issue.origin === "string") message = `Nhập tối đa ${issue.maximum} ký tự.`;
+        if (name === "maxBudget") message = quoteBudgetError;
         fields.set(name, { name, message });
     }
     return [...fields.values()];

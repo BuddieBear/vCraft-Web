@@ -5,10 +5,13 @@ import { checkout, changeOrderStatus } from "../../src/services/retail.service.j
 import { createQuote, sendQuote, submitBid, acceptBids, assignBids, advanceAssignment } from "../../src/services/wholesale.service.js";
 import { createReview } from "../../src/services/reviews.service.js";
 import { quotePagePath } from "../../../frontend/src/site-paths.js";
+import { randomBytes } from "node:crypto";
+import { assertIsolatedTestDatabase } from "../test-env.js";
 
 test("checkout, multi-artisan quote and verified review transactions", async () => {
-    assert.equal(process.env.NODE_ENV, "test");
-    const user = (email, role) => prisma.user.create({ data: { email, role, passwordHash: "test", fullName: email } });
+    assertIsolatedTestDatabase();
+    const runId = randomBytes(6).toString("hex");
+    const user = (email, role) => prisma.user.create({ data: { email: email.replace("@", `-${runId}@`), role, passwordHash: "test", fullName: email } });
     try {
         const buyer = await user("commerce-buyer@example.test", "BUYER");
         const buyer2 = await user("commerce-buyer2@example.test", "BUYER");
@@ -18,7 +21,7 @@ test("checkout, multi-artisan quote and verified review transactions", async () 
         const a2 = await user("commerce-a2@example.test", "ARTISAN");
         const workshop = (owner) => prisma.artisanProfile.create({ data: { userId: owner.id, workshopName: owner.email, address: "test", latitude: 0, longitude: 0, verificationStatus: "APPROVED" } });
         const w1 = await workshop(a1); const w2 = await workshop(a2);
-        const product = await prisma.product.create({ data: { artisanId: w1.id, name: "test", slug: "commerce-test", price: 20, stockQuantity: 1 } });
+        const product = await prisma.product.create({ data: { artisanId: w1.id, name: "test", slug: `commerce-test-${runId}`, price: 20, stockQuantity: 1 } });
         await assert.rejects(prisma.$executeRaw`UPDATE products SET price = 'NaN'::numeric WHERE id = ${product.id}::uuid`);
         for (const u of [buyer, buyer2]) await prisma.cartItem.create({ data: { userId: u.id, productId: product.id, quantity: 1 } });
         const details = { recipientName: "Test", recipientPhone: "0901234567", shippingAddress: "Test" };
@@ -34,13 +37,13 @@ test("checkout, multi-artisan quote and verified review transactions", async () 
         await prisma.product.update({ where: { id: product.id }, data: { stockQuantity: 0 } });
         const loser = order.buyerId === buyer.id ? buyer2 : buyer;
         assert.equal(await prisma.cartItem.count({ where: { userId: loser.id, productId: product.id } }), 1);
-        const available = await prisma.product.create({ data: { artisanId: w1.id, name: "available", slug: "commerce-available", price: 10, stockQuantity: 3 } });
-        const unavailable = await prisma.product.create({ data: { artisanId: w1.id, name: "empty", slug: "commerce-empty", price: 10, stockQuantity: 0 } });
+        const available = await prisma.product.create({ data: { artisanId: w1.id, name: "available", slug: `commerce-available-${runId}`, price: 10, stockQuantity: 3 } });
+        const unavailable = await prisma.product.create({ data: { artisanId: w1.id, name: "empty", slug: `commerce-empty-${runId}`, price: 10, stockQuantity: 0 } });
         await prisma.cartItem.createMany({ data: [available, unavailable].map((p) => ({ userId: buyer3.id, productId: p.id, quantity: 1 })) });
         await assert.rejects(checkout({ userId: buyer3.id, ...details }));
         assert.equal((await prisma.product.findUniqueOrThrow({ where: { id: available.id } })).stockQuantity, 3);
         assert.equal(await prisma.cartItem.count({ where: { userId: buyer3.id } }), 2);
-        const expensive = await prisma.product.create({ data: { artisanId: w1.id, name: "expensive", slug: "commerce-large-total", price: "9999999999.99", stockQuantity: 2 } });
+        const expensive = await prisma.product.create({ data: { artisanId: w1.id, name: "expensive", slug: `commerce-large-total-${runId}`, price: "9999999999.99", stockQuantity: 2 } });
         await prisma.cartItem.deleteMany({ where: { userId: buyer3.id } });
         await prisma.cartItem.create({ data: { userId: buyer3.id, productId: expensive.id, quantity: 2 } });
         await assert.rejects(checkout({ userId: buyer3.id, ...details }), { code: "ORDER_TOTAL_TOO_LARGE" });
@@ -66,8 +69,8 @@ test("checkout, multi-artisan quote and verified review transactions", async () 
         assert.equal(rated.totalReviews, 2);
         assert.equal(rated.averageRating.toString(), "3");
 
-        await assert.rejects(createQuote({ userId: buyer.id, title: "Order", specifications: "Silk", targetQuantity: 10, deadline: "2099-02-30" }));
-        await assert.rejects(createQuote({ userId: buyer.id, title: "Order", specifications: "Silk", targetQuantity: 10, deadline: "2099-01-01", maxBudget: "NaN" }));
+        await assert.rejects(async () => createQuote({ userId: buyer.id, title: "Order", specifications: "Silk", targetQuantity: 10, deadline: "2099-02-30" }));
+        await assert.rejects(async () => createQuote({ userId: buyer.id, title: "Order", specifications: "Silk", targetQuantity: 10, deadline: "2099-01-01", maxBudget: "NaN" }));
         const smallQuote = await createQuote({ userId: buyer.id, title: "Single item", specifications: "Silk", targetQuantity: 1, deadline: "2099-01-01" });
         await sendQuote({ userId: buyer.id, quoteId: smallQuote.id });
         const small1 = await submitBid({ userId: a1.id, quoteId: smallQuote.id, proposedPrice: 20, proposedCompletionDays: 5 });
@@ -76,8 +79,8 @@ test("checkout, multi-artisan quote and verified review transactions", async () 
         assert.equal((await prisma.quotationRequest.findUniqueOrThrow({ where: { id: smallQuote.id } })).status, "ARTISANS_BIDDING");
         const quote = await createQuote({ userId: buyer.id, title: "Order", specifications: "Silk", targetQuantity: 10, deadline: "2099-01-01" });
         await sendQuote({ userId: buyer.id, quoteId: quote.id });
-        await assert.rejects(submitBid({ userId: a1.id, quoteId: quote.id, proposedPrice: "NaN", proposedCompletionDays: 5 }));
-        await assert.rejects(submitBid({ userId: a1.id, quoteId: quote.id, proposedPrice: "0.001", proposedCompletionDays: 5 }));
+        await assert.rejects(async () => submitBid({ userId: a1.id, quoteId: quote.id, proposedPrice: "NaN", proposedCompletionDays: 5 }));
+        await assert.rejects(async () => submitBid({ userId: a1.id, quoteId: quote.id, proposedPrice: "0.001", proposedCompletionDays: 5 }));
         const bid1 = await submitBid({ userId: a1.id, quoteId: quote.id, proposedPrice: 20, proposedCompletionDays: 5 });
         const bid2 = await submitBid({ userId: a2.id, quoteId: quote.id, proposedPrice: 30, proposedCompletionDays: 7 });
         const decisions = await Promise.allSettled([acceptBids({ userId: buyer.id, quoteId: quote.id, bidIds: [bid1.id, bid2.id] }), acceptBids({ userId: buyer.id, quoteId: quote.id, bidIds: [bid1.id, bid2.id] })]);

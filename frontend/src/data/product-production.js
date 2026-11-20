@@ -51,13 +51,23 @@ function gift(prepare, arrange, check) {
   ];
 }
 
-function floral(pattern, preparation, check) {
+function floral(pattern, preparation, check, illustration = "weave-floral") {
   return [
     guide("Chọn sợi và bố trí ô hoa", preparation, "warp-loom", "Dàn sợi dọc trước khi đưa ô hoa vào dệt."),
-    guide("Tạo hoa văn khi dệt", `Với lụa hoa dệt, go điều khiển cách đan sợi theo ô lặp. Dệt thử một đoạn để kiểm tra ${pattern}, rồi giữ nhịp sợi đều khi dệt dài.`, "weave-floral", "Vải lụa hoa đang dệt. Hình trong ảnh minh họa cấu trúc, không thể hiện đúng mã hoa."),
+    guide("Tạo hoa văn khi dệt", `Với lụa hoa dệt, go điều khiển cách đan sợi theo ô lặp. Dệt thử một đoạn để kiểm tra ${pattern}, rồi giữ nhịp sợi đều khi dệt dài.`, illustration, "Vải hoa đang dệt, minh họa cách hình thành họa tiết trên khung."),
     guide("Hoàn thiện mặt vải", "Làm sạch hồ và xử lý bề mặt theo thành phần sợi. Ổn định khổ vải trước khi đo chiều dài.", "press-silk", "Mặt lụa được xử lý phẳng qua vải lót."),
     finish(check, "Kiểm hoa văn và đo vải"),
   ];
+}
+
+function shiftingSatin(colors, check) {
+  return wovenSurface(
+    `So bảng màu ${colors}, bố trí hệ sợi và căn sức căng đều theo khổ vải.`,
+    "Dệt thử kiểu satin. Các đoạn sợi nổi trên bề mặt phản sáng theo góc nhìn. So cả hai mặt của đoạn dệt thử để kiểm tra hiệu ứng lên màu.",
+    "weave-satin",
+    "Giũ hồ nếu cần rồi hong phẳng. Là qua vải lót ở nhiệt độ phù hợp để tránh tạo vệt bóng trên mặt satin.",
+    check,
+  );
 }
 
 const products = new Map(Object.entries({
@@ -115,6 +125,38 @@ const products = new Map(Object.entries({
 }));
 
 const references = new Map(Object.entries({
+  "vai-lua-satin-st38-07": shiftingSatin("xanh ngọc ánh hồng", "So mặt xanh ngọc với mặt hồng ánh tím của ST38.07 dưới ánh sáng tự nhiên. Trải vải kiểm tra mặt satin và đo khổ."),
+  "vai-lua-satin-st41": shiftingSatin("tím xanh ánh hồng", "Xoay mẫu ST41 dưới cùng một nguồn sáng để so ánh tím xanh và hồng. Kiểm tra bề mặt, biên vải và chiều dài."),
+  "ao-dai-hoa-cuc-xanh-acu25": [
+    guide("So mẫu hoa cúc và chọn rập", "Trải nền lụa xanh, kiểm tra chiều hoa cúc và chọn rập theo bảng cỡ may sẵn của ACU25.", "stretch-silk", "Mặt vải lụa được trải phẳng trước khi cắt."),
+    guide("Canh hoa rồi cắt từng chi tiết", "Canh chiều sợi ở thân trước, thân sau và tay. Đặt rập để tránh cắt dở họa tiết ở phần dễ nhìn thấy. Chừa đường ráp và đường lên lai."),
+    guide("Ráp áo và hoàn thiện hai tà", "Ráp vai, tay và đường sườn đến điểm xẻ tà. Hoàn thiện cổ, nẹp và mép tà, rồi là nhẹ qua vải lót.", "press-silk", "Làm phẳng lụa qua lớp vải lót."),
+    finish("Đối chiếu bảng cỡ, kiểm tra tà rủ cân và đường may không nhăn ở vùng có hoa cúc."),
+  ],
+  "khan-lua-nhuom-tu-nhien-nhaxasilk": [
+    guide("Chuẩn bị lụa và mẫu thử", "Làm sạch nền tơ tằm. Cắt một mảnh thử từ cùng tấm lụa để kiểm tra sắc độ trước khi nhuộm khăn.", "cut-scarf", "Đo và cắt vải lụa."),
+    guide("Nhuộm mẫu bằng dịch màu tự nhiên", "Chuẩn bị dịch màu theo sắc cần đạt. Nhúng thử, hong mảnh thử rồi so với mã màu của mẫu khăn trước khi nhuộm phần vải còn lại.", "dye-cu-nau", "Ví dụ minh họa một cách nhuộm lụa bằng nguyên liệu tự nhiên."),
+    guide("Xả màu và khâu mép", "Xả phần màu dư, hong ở nơi thoáng, cắt theo kích thước khăn và khâu viền.", "roll-hem", "Cuốn và khâu mép khăn lụa."),
+    finish("So màu đã khô với mẫu đã chọn. Kiểm tra đường viền, các góc và mức độ đều màu."),
+  ],
+  "khan-lua-da-sac-xanh-den-vu-viet": dyedScarf("65 × 180 cm", "Thử hai sắc xanh đậm và đen trên cùng nền lụa. Nhuộm theo từng vùng để tạo khoảng chuyển sắc mềm giữa các tông.", "dye-gradient", "Trải khăn kiểm vùng chuyển xanh–đen, đo kích thước và kiểm tra mép sau khi khăn khô."),
+  "khan-lua-tron-mot-mau-vu-viet": [
+    guide("Dệt nền khăn trơn", "Dệt mặt trơn từ sợi tơ tằm, giữ mật độ sợi đều để mặt khăn mịn và hai biên thẳng.", "weave-undyed", "Mặt vải trơn trên khung, trước khi xử lý màu."),
+    guide("So một màu theo mẫu", "Thử tông đã chọn trên mảnh vải cùng nền. Nhuộm toàn bộ phôi cùng một màu và đảo đều để tránh các nếp đậm nhạt.", "dye-violet", "Ví dụ nhuộm đồng màu trên vải lụa."),
+    guide("Cắt và khâu viền", "Cắt phôi theo chiều sợi, chừa đường cuốn mép để đạt cỡ 65 × 180 cm sau khi hoàn thiện.", "roll-hem", "Cuốn và khâu mép khăn lụa."),
+    finish("Kiểm sắc độ ở giữa và hai đầu khăn, đo lại kích thước và thử độ rủ."),
+  ],
+  "lua-hoa-tiet-cham-bi-bi03": floral("khoảng cách, hàng và kích thước chấm", "Canh các hàng chấm theo mẫu BI03. Giữ khoảng trống quanh từng chấm khi bố trí ô lặp.", "Soi mẫu BI03 để kiểm tra chấm không dính nhau và hàng chấm chạy thẳng khi trải vải.", "weave-midnight"),
+  "lua-hoa-tiet-bo-cong-anh-bca06": floral("dáng cụm bồ công anh và hạt nhỏ", "So màu nền với bảng BCA06. Đặt các cụm hoa và hạt tỏa theo đúng nhịp của mẫu.", "So BCA06 dưới ánh sáng nghiêng để kiểm tra nét hoa và độ đều của các ô lặp.", "weave-moss"),
+  "lua-to-tam-hoa-sen-shd02": floral("đường viền cánh sen của mẫu SHD02", "Dàn sợi theo khổ cần dệt và bố trí phần cánh sen của SHD02 trong từng ô hoa.", "Đối chiếu đúng mã SHD02, kiểm tra mép cánh sen và các chỗ nối hoa giữa hai ô.", "weave-brocade"),
+  "lua-satin-son-thuy": wovenSurface("So mẫu màu đã chọn trong bảng satin Sơn Thúy, bố trí sợi theo khổ và dàn đều các đầu sợi dọc.", "Dệt đoạn thử kiểu satin và nhìn nghiêng để phát hiện vùng bóng không đều. Giữ sức căng ổn định khi dệt hết tấm.", "weave-satin", "Làm sạch hồ và hong vải. Hạn chế miết hoặc ép quá mạnh lên mặt phải.", "Kiểm tra độ bóng, độ rủ và sắc độ theo mẫu màu trước khi cắt."),
+  "lua-hoa-cuc-son-thuy": floral("nét cánh hoa cúc và phần nhụy", "Đặt tâm hoa cúc và hướng cánh theo mẫu Sơn Thúy trước khi dàn sợi.", "Trải vải để kiểm tra độ sắc của cánh, nhụy và sự liên tục của ô hoa.", "weave-floral"),
+  "vai-to-tam-thuc-lien": [
+    guide("Chuẩn bị và dàn sợi tơ", "Se sợi theo độ mảnh cần dệt rồi dàn sợi dọc lên khung. Kiểm tra hai biên để giữ khổ tấm lụa.", "warp-loom", "Dàn sợi tơ trên khung dệt."),
+    guide("Dệt tấm lụa", "Dệt một đoạn thử để so mặt vải và độ rủ. Theo dõi sức căng của sợi dọc và mật độ sợi ngang khi dệt tiếp.", "weave-undyed", "Minh họa tấm lụa trước khi xử lý màu."),
+    guide("Làm sạch và hoàn thiện màu", "Xử lý vải sau dệt, giữ màu mộc hoặc nhuộm theo mẫu. Hong phẳng và so màu sau khi khô.", "air-dry", "Hong các tấm lụa sau khi xử lý màu."),
+    finish("Kiểm tra đường biên, mặt vải và độ đều màu. Đo khổ trước khi cuộn tấm lụa.", "Kiểm và đo vải"),
+  ],
   "lua-hoa-sen-shd21": floral("cánh sen và nét hồ điệp", "Chuẩn bị sợi theo thành phần tơ tằm và viscose do Nhaxasilk công bố. Căn bố cục sen và hồ điệp theo ô hoa.", "Trải mẫu SHD21 để kiểm tra họa tiết sen, hồ điệp và sự liền mạch ở ô hoa kế tiếp."),
   "lua-hoa-tiet-tho-roi-tr38": floral("nét của họa tiết Thọ Rơi", "Chuẩn bị sợi tơ tằm và viscose theo mô tả của Nhaxasilk. Bố trí ô hoa Thọ Rơi và canh khoảng lặp.", "So mẫu TR38 theo từng đoạn vải, kiểm tra nét hoa và đo theo mét dài."),
   "lua-hoa-sen-shd19": floral("hình sen theo mẫu SHD19", "So hình sen trên mẫu SHD19 và chuẩn bị hệ sợi theo thông số của cơ sở. Lên khung theo khổ đặt.", "Kiểm tra đúng mẫu SHD19 và ô hoa lặp đều trước khi đo vải."),
@@ -132,6 +174,6 @@ export function productProduction(product, { reference = false, cover } = {}) {
   const steps = (reference ? references : products).get(product.slug);
   if (!steps) return [];
   return steps.map(({ productImage, ...step }) => productImage && cover
-    ? { ...step, image: { src: cover, alt: product.name, caption: reference ? "Ảnh mẫu do cơ sở công bố" : "Ảnh minh họa thành phẩm" } }
+    ? { ...step, image: { src: cover, alt: product.name, caption: product.imageCredit ?? (reference ? "Ảnh mẫu do cơ sở công bố" : "Ảnh minh họa thành phẩm") } }
     : step);
 }

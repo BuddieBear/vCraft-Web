@@ -29,7 +29,7 @@ export function renderHome(container) {
 
     <section class="home-featured section-shell" aria-labelledby="home-silk-title" hidden>
       <div class="section-heading">
-        <div><h2 id="home-silk-title">Mẫu lụa từ các xưởng</h2><p>Ảnh mẫu và giá tham khảo theo công bố của từng cơ sở.</p></div>
+        <div><h2 id="home-silk-title">Mẫu lụa từ các xưởng</h2><p>Có vải dệt, khăn và áo dài từ các cơ sở Nha Xá.</p></div>
         <a class="text-link" href="${sitePaths.catalog}">Xem tất cả mẫu lụa ${icon("arrow")}</a>
       </div>
       <div class="reference-grid"></div>
@@ -75,13 +75,12 @@ export function renderHome(container) {
 
   const featured = container.querySelector(".home-featured");
   request("/artisans/reference/products").then(({ data }) => {
-    const groups = new Set();
+    const workshops = new Set();
     const highlights = data.filter(product => {
-      const group = product.workshopName + " · " + product.type;
-      if (groups.has(group)) return false;
-      groups.add(group);
+      if (workshops.has(product.workshopName)) return false;
+      workshops.add(product.workshopName);
       return true;
-    }).slice(0, 3);
+    }).slice(0, 4);
     if (!highlights.length) return;
     featured.querySelector(".reference-grid").append(...highlights.map(referenceProductCard));
     featured.hidden = false;

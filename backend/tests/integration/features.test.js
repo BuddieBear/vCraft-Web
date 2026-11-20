@@ -5,11 +5,12 @@ import { join } from "node:path";
 import sharp from "sharp";
 import { app } from "../../src/app.js";
 import { prisma } from "../../src/database/prisma.js";
-import { vietnamToday } from "../../../frontend/src/data/input-values.js";
+import { quoteBudgetError, vietnamToday } from "../../../frontend/src/data/input-values.js";
 import { biddingPagePath, newsArticlePath, quotePagePath, sitePaths } from "../../../frontend/src/site-paths.js";
+import { assertIsolatedTestDatabase } from "../test-env.js";
 
 test("artisan, production, administration, media and retail APIs", async () => {
-    assert.equal(process.env.NODE_ENV, "test");
+    assertIsolatedTestDatabase();
     const server = app.listen(0, "127.0.0.1");
     await new Promise((resolve) => server.once("listening", resolve));
     const base = `http://127.0.0.1:${server.address().port}`;
@@ -75,6 +76,11 @@ test("artisan, production, administration, media and retail APIs", async () => {
         const pastQuote = await request("/wholesale/quotes", { method: "POST", token: buyer, body: { title: "Đặt lụa", specifications: "Tơ", targetQuantity: 5, deadline: "2000-01-01" } });
         assert.equal(pastQuote.status, 400);
         assert.equal(pastQuote.json.error.fields[0].name, "deadline");
+        for (const maxBudget of [0, "0", -1, "1e3", "1.001", "1000000000000"]) {
+            const quote = await request("/wholesale/quotes", { method: "POST", token: buyer, body: { title: "Đặt lụa", specifications: "Tơ", targetQuantity: 5, deadline: "2099-01-01", maxBudget } });
+            assert.equal(quote.status, 400);
+            assert.deepEqual(quote.json.error.fields, [{ name: "maxBudget", message: quoteBudgetError }]);
+        }
         const invalidPhone = await request("/retail/checkout", { method: "POST", token: buyer, body: { recipientName: "Test", shippingAddress: "Test", recipientPhone: "abc" } });
         assert.equal(invalidPhone.status, 400);
         assert.equal(invalidPhone.json.error.fields[0].name, "recipientPhone");
@@ -107,11 +113,13 @@ test("artisan, production, administration, media and retail APIs", async () => {
         assert.equal((await request("/products", { method: "POST", token: other, body: newProduct })).status, 403);
         assert.equal((await request("/wholesale/open-quotes", { token: other })).status, 403);
         assert.equal((await request(`/admin/artisans/${newArtisan.json.data.artisanProfile.id}/verification`, { method: "PATCH", token: admin, body: { status: "APPROVED" } })).status, 204);
-        const direct = await request("/wholesale/quotes", { method: "POST", token: buyer, body: { title: "Gửi riêng", specifications: "Test", targetQuantity: 1, deadline: "2099-01-01", targetArtisanId: newArtisan.json.data.artisanProfile.id } });
+        const direct = await request("/wholesale/quotes", { method: "POST", token: buyer, body: { title: "Gửi riêng", specifications: "Test", targetQuantity: 1, deadline: "2099-01-01", targetArtisanId: newArtisan.json.data.artisanProfile.id, maxBudget: "2500000.25" } });
         assert.equal(direct.status, 201);
+        assert.equal(direct.json.data.maxBudget, "2500000.25");
         await assert.rejects(prisma.artisanProfile.delete({ where: { id: newArtisan.json.data.artisanProfile.id } }), { code: "P2003" });
         const routedQuote = await request("/wholesale/quotes", { method: "POST", token: buyer, body: { title: "Gửi nhóm", specifications: "Test", targetQuantity: 5, deadline: "2099-01-01" } });
         assert.equal(routedQuote.status, 201);
+        assert.equal(routedQuote.json.data.maxBudget, null);
         const quoteId = routedQuote.json.data.id;
         const firstPage = await request("/wholesale/quotes?page=1&limit=1", { token: buyer });
         const secondPage = await request("/wholesale/quotes?page=2&limit=1", { token: buyer });
@@ -306,6 +314,8 @@ test("artisan, production, administration, media and retail APIs", async () => {
         assert.equal((await request("/auth/me", { token: viewer })).status, 200);
     } finally {
         if (uploaded) await unlink(join(process.env.UPLOAD_DIR, uploaded.split("/").pop()));
+        server.closeAllConnections?.();
+        server.closeIdleConnections?.();
         await new Promise((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
         await prisma.$disconnect();
     }

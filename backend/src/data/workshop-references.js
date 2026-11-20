@@ -2,12 +2,32 @@ export const workshopReferences = [
     {
         slug: "nhaxasilk",
         name: "Công ty CP Lụa Nha Xá (Nhaxasilk)",
-        description: "Vải lụa hoa và lụa trơn trong danh mục Nhaxasilk.",
+        description: "Vải lụa hoa, satin đổi sắc, khăn nhuộm tự nhiên và áo dài may sẵn.",
         location: {
             address: "Ngã tư Nha Xá, phường Duy Tân, Ninh Bình",
             source: "https://nhaxasilk.com/lien-he",
         },
         products: [
+            {
+                slug: "vai-lua-satin-st38-07", name: "Vải lụa satin ST38.07", type: "Vải lụa satin", price: 259000, unit: "mét dài",
+                image: "https://nhaxasilk.com/wp-content/uploads/2023/06/ST38.07-1-300x300.jpg",
+                url: "https://nhaxasilk.com/vai-lua-satin-st38-07",
+            },
+            {
+                slug: "vai-lua-satin-st41", name: "Vải lụa satin ST41", type: "Vải lụa satin", price: 259000, unit: "mét dài",
+                image: "https://nhaxasilk.com/wp-content/uploads/2023/06/ST41-1-300x300.jpg",
+                url: "https://nhaxasilk.com/vai-lua-satin-st41",
+            },
+            {
+                slug: "ao-dai-hoa-cuc-xanh-acu25", name: "Áo dài may sẵn hoa cúc xanh ACU25", type: "Áo dài", price: 900000, unit: "áo",
+                image: "https://nhaxasilk.com/wp-content/uploads/2022/06/ao-dai-may-san-xanh-nhaxasilk-4-300x300.jpg",
+                url: "https://nhaxasilk.com/ao-dai-may-san-hoa-tiet-hoa-cuc",
+            },
+            {
+                slug: "khan-lua-nhuom-tu-nhien-nhaxasilk", name: "Khăn lụa tơ tằm nhuộm màu tự nhiên", type: "Khăn lụa", price: 400000, unit: "sản phẩm",
+                image: "https://nhaxasilk.com/wp-content/uploads/2021/04/KTNA-01-1024x1024-1-300x300.jpg",
+                url: "https://nhaxasilk.com/khan-lua-to-tam-nhuom-mau-tu-nhien",
+            },
             {
                 slug: "lua-hoa-sen-shd21", name: "Lụa Hoa Sen SHD21", type: "Vải lụa hoa", price: 162000, unit: "mét dài",
                 image: "https://nhaxasilk.com/wp-content/uploads/2024/08/22-600x600.jpg.webp",
@@ -28,7 +48,7 @@ export const workshopReferences = [
     {
         slug: "vu-viet-silk",
         name: "Vũ Việt Silk",
-        description: "Vải lụa hoa và khăn đũi từ danh mục công khai của Vũ Việt Silk.",
+        description: "Vải lụa hoa sen, bồ công anh, chấm bi, cùng khăn lụa và khăn đũi.",
         location: {
             address: "Số 9 đường Mương Nha Xá, phường Duy Tân, Ninh Bình",
             latitude: 20.6644888,
@@ -37,6 +57,31 @@ export const workshopReferences = [
             source: "https://luatotamnhaxa.vn/lien-he",
         },
         products: [
+            {
+                slug: "khan-lua-da-sac-xanh-den-vu-viet", name: "Khăn lụa đa sắc màu xanh đen", type: "Khăn lụa", price: 300000, unit: "mét dài",
+                image: "https://luatotamnhaxa.vn/wp-content/uploads/2025/03/lua-to-tam-nha-xa-18-500x500.png",
+                url: "https://luatotamnhaxa.vn/san-pham/khan-lua-da-sac-mau-xanh-den",
+            },
+            {
+                slug: "khan-lua-tron-mot-mau-vu-viet", name: "Khăn lụa tơ tằm trơn một màu", type: "Khăn lụa", price: 300000, unit: "mét dài",
+                image: "https://luatotamnhaxa.vn/wp-content/uploads/2025/03/lua-to-tam-nha-xa-13-1-500x500.png",
+                url: "https://luatotamnhaxa.vn/san-pham/khan-lua-to-tam-tron-mot-mau",
+            },
+            {
+                slug: "lua-hoa-tiet-cham-bi-bi03", name: "Lụa họa tiết chấm bi BI03", type: "Vải lụa hoa", price: 162000, unit: "mét dài",
+                image: "https://luatotamnhaxa.vn/wp-content/uploads/2025/03/lua-to-tam-nha-xa-37-500x500.png",
+                url: "https://luatotamnhaxa.vn/san-pham/lua-hoa-tiet-cham-bi-bi03",
+            },
+            {
+                slug: "lua-hoa-tiet-bo-cong-anh-bca06", name: "Lụa họa tiết bồ công anh BCA06", type: "Vải lụa hoa", price: 162000, unit: "mét dài",
+                image: "https://luatotamnhaxa.vn/wp-content/uploads/2025/03/bang-mau-lua-to-tam-nha-xa-bo-cong-anh-6-1-500x500.png",
+                url: "https://luatotamnhaxa.vn/san-pham/lua-hoa-tiet-bo-cong-anh-bca06",
+            },
+            {
+                slug: "lua-to-tam-hoa-sen-shd02", name: "Lụa tơ tằm hoa sen SHD02", type: "Vải lụa hoa", price: 162000, unit: "mét dài",
+                image: "https://luatotamnhaxa.vn/wp-content/uploads/2025/03/lua-to-tam-nha-xa-2-500x500.png",
+                url: "https://luatotamnhaxa.vn/san-pham/lua-to-tam-hoa-sen-shd02",
+            },
             {
                 slug: "lua-hoa-tiet-bo-cong-anh-bca01", name: "Lụa Họa Tiết Bồ Công Anh BCA01", type: "Vải lụa hoa", price: 162000, unit: "mét dài",
                 image: "https://luatotamnhaxa.vn/wp-content/uploads/2025/03/bang-mau-lua-to-tam-nha-xa-bo-cong-anh-1.png",
@@ -53,6 +98,46 @@ export const workshopReferences = [
                 url: "https://luatotamnhaxa.vn/san-pham/khan-dui-choang-co-mau-xanh-navy",
             },
         ],
+    },
+    {
+        slug: "son-thuy-silk",
+        name: "Sơn Thúy Silk",
+        description: "Vải satin và lụa dệt họa tiết của cơ sở Lê Thanh Sơn.",
+        location: {
+            address: "Làng Nha Xá, phường Duy Tân, Ninh Bình",
+            source: "https://idtc.moit.gov.vn/doanh_nghiep/doanh-nghiep/ho-kinh-doanh-le-thanh-son/",
+        },
+        products: [
+            {
+                slug: "lua-satin-son-thuy", name: "Vải lụa satin Sơn Thúy", type: "Vải lụa satin", price: 90000,
+                image: "https://down-vn.img.susercontent.com/file/vn-11134211-7r98o-lv43b63ikknu63",
+                url: "https://shopee.vn/product/895283259/25214383325",
+            },
+            {
+                slug: "lua-hoa-cuc-son-thuy", name: "Vải lụa họa tiết hoa cúc Sơn Thúy", type: "Vải lụa hoa", price: 139000,
+                image: "https://down-vn.img.susercontent.com/file/vn-11134211-7r98o-lx6lh5yputi312",
+                url: "https://shopee.vn/product/895283259/23779887042",
+            },
+        ],
+    },
+    {
+        slug: "thuc-lien-silk",
+        name: "Thực Liên Silk",
+        description: "Cơ sở gia đình dệt, nhuộm lụa và làm phụ kiện từ lụa tại Nha Xá.",
+        location: {
+            address: "Làng Nha Xá, phường Duy Tân, Ninh Bình",
+            source: "https://nongthon.vietnamtourism.gov.vn/ha-nam-nang-tam-san-pham-lua-to-tam-nha-xa/",
+        },
+        products: [
+            {
+                slug: "vai-to-tam-thuc-lien", name: "Vải lụa tơ tằm Thực Liên", type: "Vải lụa tơ tằm", price: null, unit: "mét dài",
+                image: "https://image.vietnamnews.vn//uploadvnnews/Article/2024/1/25/328497_luag.jpg",
+                imageCredit: "Ảnh sản phẩm của Thực Liên Silk · Phạm Thị Lan Hương, Việt Nam News",
+                url: "https://vietnamnews.vn/sunday-features/1639800/silk-village-preserves-ancient-weaving-craft.html",
+            },
+        ],
+        knownProducts: ["Khăn lụa", "Trang phục lụa", "Túi lụa", "Túi ngủ lụa"],
+        source: "https://vietnamnews.vn/sunday-features/1639800/silk-village-preserves-ancient-weaving-craft.html",
     },
     {
         slug: "htx-hong-tien",

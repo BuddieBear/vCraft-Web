@@ -69,6 +69,10 @@ export function mountReferenceCatalog(section, slug) {
     </div>
     <p class="reference-status" role="status"></p>
     <div class="reference-grid"></div>
+    <section class="reference-other-products" hidden>
+      <h2>Các dòng sản phẩm của cơ sở</h2>
+      <ul class="reference-known-products"></ul>
+    </section>
     <button class="text-button" type="button" hidden>Thử lại</button>`;
   const heading = section.querySelector("h1");
   const description = section.querySelector(".reference-description");
@@ -101,7 +105,14 @@ export function mountReferenceCatalog(section, slug) {
     if (address.href !== location.href) history.replaceState(history.state, "", address);
     const matches = products.filter(product =>
       (!type.value || product.type === type.value) && searchKey(`${product.name} ${product.type} ${product.workshopName}`).includes(query));
-    if (sort.value) matches.sort((a, b) => sort.value === "asc" ? a.price - b.price : b.price - a.price);
+    if (sort.value) {
+      const direction = sort.value === "asc" ? 1 : -1;
+      matches.sort((a, b) => {
+        if (a.price == null) return b.price == null ? 0 : 1;
+        if (b.price == null) return -1;
+        return direction * (a.price - b.price);
+      });
+    }
     grid.replaceChildren(...matches.map(referenceProductCard));
     showMatches(matches);
     status.textContent = matches.length ? "" : "Chưa tìm thấy mẫu phù hợp.";
@@ -115,24 +126,25 @@ export function mountReferenceCatalog(section, slug) {
       if (slug) {
         heading.textContent = data.name;
         document.title = data.name + " · vCraft";
-        if (!data.products.length && data.knownProducts?.length) {
-          description.textContent = "Các dòng sản phẩm ghi nhận theo Cục Du lịch Quốc gia Việt Nam.";
-          status.textContent = "Chưa tìm thấy ảnh từng mẫu và giá niêm yết của cơ sở.";
-          filters.hidden = true;
-          const list = document.createElement("ul");
-          list.className = "reference-known-products";
-          for (const name of data.knownProducts) {
+        description.textContent = data.description;
+        if (data.knownProducts?.length) {
+          const otherProducts = section.querySelector(".reference-other-products");
+          otherProducts.querySelector("ul").replaceChildren(...data.knownProducts.map(name => {
             const item = document.createElement("li");
             item.textContent = name;
-            list.append(item);
-          }
-          grid.replaceChildren(list);
+            return item;
+          }));
+          otherProducts.hidden = false;
+        }
+        if (!data.products.length) {
+          status.textContent = "Chưa có ảnh và giá cho từng mẫu.";
+          filters.hidden = true;
           return;
         }
         products = data.products.map(product => ({ ...product, workshopName: data.name }));
       } else products = data;
       const productTypes = new Set(products.map(product => product.type));
-      for (const name of productTypes) type.add(new Option(name, name));
+      for (const name of [...productTypes].sort((a, b) => a.localeCompare(b, "vi"))) type.add(new Option(name, name));
       if (productTypes.has(requestedType)) type.value = requestedType;
       updateProducts();
     } catch (error) {

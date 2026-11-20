@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
-import { env } from "../../src/config/env.js";
 import { prisma } from "../../src/database/prisma.js";
 import { toProductDetailJson } from "../../src/presenters/product.presenter.js";
 import { recordProductHidden } from "../../src/repositories/audit-log.repository.js";
@@ -9,9 +8,10 @@ import { hideProductOwnedByUser } from "../../src/repositories/products.reposito
 import { findPublicTimelineByBatchCode } from "../../src/repositories/traceability.repository.js";
 import { findActiveCredentialsByEmail, findActiveUserProfile } from "../../src/repositories/users.repository.js";
 import { getCatalogProduct, hideCatalogProduct } from "../../src/services/products.service.js";
+import { assertIsolatedTestDatabase } from "../test-env.js";
 
 test("repositories, public DTO and product audit transaction", async () => {
-    assert.equal(env.nodeEnv, "test", "Run on a seeded test or local development database.");
+    assertIsolatedTestDatabase();
 
     const id = randomUUID();
     const slug = `persistence-test-${id}`;

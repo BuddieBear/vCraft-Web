@@ -104,7 +104,7 @@ Chạy lại `grant-runtime.sql` sau migration thêm bảng để cấp quyền 
 
 ### Kiểm thử ORM
 
-Tạo database trống riêng có tên bắt đầu bằng `vcraft_orm_test_`, ví dụ `vcraft_orm_test_dev`, với quyền đủ để chạy migration. Đặt `ORM_TEST_DATABASE_URL` trỏ vào đó rồi chạy `npm run db:test`. Bộ kiểm thử chạy migration và seed trên database kiểm thử và để lại dữ liệu để kiểm tra. Mỗi lượt dùng một database trống.
+Tạo database PostgreSQL trống riêng có tên bắt đầu bằng `vcraft_orm_test_`, ví dụ `vcraft_orm_test_dev`, với quyền đủ để chạy migration. Đặt `ORM_TEST_DATABASE_URL` trỏ vào database này rồi chạy `npm test` hoặc `npm run db:test`. Cả hai lệnh kiểm tra database đích trước khi chạy migration, seed và các bài kiểm thử tích hợp. Mỗi lượt dùng một database trống. Dữ liệu kiểm thử được giữ lại để đối chiếu.
 
 ## 5. Chạy API danh mục
 
