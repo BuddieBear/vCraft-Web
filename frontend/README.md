@@ -1,20 +1,27 @@
 # Frontend vCraft
 
-Bản demo lấy bối cảnh làng lụa Nha Xá, phường Duy Tân, tỉnh Ninh Bình. Giao diện dùng HTML, CSS và JavaScript module, với danh mục, giỏ hàng lưu trong trình duyệt, hồ sơ xưởng và nhật ký lô dệt.
+Bản demo lấy bối cảnh làng lụa Nha Xá, phường Duy Tân, tỉnh Ninh Bình. Giao diện dùng HTML, CSS và JavaScript module. Danh mục, hồ sơ xưởng, nhật ký, tài khoản, giỏ hàng và đặt sỉ dùng API và PostgreSQL.
 
 ## Chạy cục bộ
 
-Từ thư mục gốc `vCraft`, chạy lệnh sau rồi mở [localhost:5189](http://127.0.0.1:5189/).
+Khởi tạo PostgreSQL theo [README gốc](../README.md), rồi chạy từ thư mục gốc `vCraft`:
 
 ```powershell
-python -m http.server 5189 --bind 127.0.0.1 --directory frontend
+npm start
 ```
+
+Mở [localhost:5000](http://localhost:5000/) hoặc cổng `PORT` đã cấu hình. Express phục vụ cả frontend và API trên cùng địa chỉ. Sau khi seed, dùng các tài khoản mẫu `buyer@nhaxa.example`, `nep-van@nhaxa.example`, `admin@nhaxa.example` và mật khẩu `SEED_DEMO_PASSWORD` để thử từng vai trò.
 
 ## Dữ liệu và ảnh minh họa
 
-- [Dữ liệu mẫu](src/data/demo-data.js) gồm 24 sản phẩm, 5 xưởng giả lập và 4 lô dệt mã NX-001 đến NX-004. Mở chi tiết sản phẩm có mã lô để xem nhật ký tương ứng. Lô NX-004 minh họa một mẻ nhuộm củ nâu.
+- [Dữ liệu mẫu](src/data/demo-data.js) gồm 24 sản phẩm, 5 xưởng giả lập và 4 lô dệt mã NX-001 đến NX-004. Mở mục Nhật ký lô hoặc chọn lô từ chi tiết sản phẩm để lấy QR của lô. Lô NX-004 minh họa một mẻ nhuộm củ nâu.
+- [Hướng dẫn theo sản phẩm](src/data/product-production.js) dùng chung trong chi tiết sản phẩm, trang quy trình mở từ QR và trang truy xuất lô. Ảnh minh họa thao tác được tạo bằng ImageGen và có chú thích. Các mẫu của Nhaxasilk và Vũ Việt Silk dùng ảnh thành phẩm do cơ sở công bố. Phần hướng dẫn tham khảo [quy trình dệt lụa Nha Xá](https://nhaxa.vn/blog/quy-trinh-san-xuat-lua-to-tam-truyen-thong) và [thông tin mẫu lụa của Nhaxasilk](https://nhaxasilk.com/lua-hoa-tiet-tho-roi-tr38).
+- QR dùng đường dẫn từ `QR_BASE_URL`. Khi demo bằng điện thoại, đặt URL này về máy chủ mà điện thoại có thể truy cập, giữ phần đường dẫn `/trace`.
 - [Ảnh WebP](public/images/) được tạo bằng ImageGen tích hợp. Ảnh đầu trang minh họa xưởng nhuộm lụa Nha Xá. Ảnh con thoi, sản phẩm và chân dung giả lập minh họa nghề dệt.
 - Địa danh và thông tin về nghề nhuộm tham khảo từ [Sở Du lịch Ninh Bình](https://sodulich.ninhbinh.gov.vn/vi/du-lich-lang-nghe/nghe-det-lua-nha-xa-hon-lua-gan-nghin-nam-ben-bo-song-hong-2408.html).
+- Bản đồ tải đường, địa danh và công trình ở khu vực đang xem từ [OpenFreeMap](https://openfreemap.org/quick_start/) qua MapLibre trên Leaflet. Mức chi tiết phụ thuộc độ phủ OpenStreetMap và mức thu phóng. Khi nền vector không tải được, bản đồ chuyển sang nền ảnh.
+- [Lớp công trình quanh Nha Xá](public/maps/nha-xa-buildings.geojson) trích từ Overture Maps Buildings bản `2026-11-18.0` theo hộp tọa độ `106.014,20.6575,106.0288,20.6708` (kinh độ, vĩ độ). GeoJSON chứa đường bao đã cắt và giản lược để hiển thị trên Leaflet. [Nguồn và ghi công](https://docs.overturemaps.org/attribution/#buildings) · [Giấy phép ODbL](https://opendatacommons.org/licenses/odbl/1-0/)
+- Mốc làng dùng [điểm Nha Xá trên OpenStreetMap](https://www.openstreetmap.org/node/9959123317). Vị trí đền dùng [tọa độ Đền Lảnh Giang](https://thayungkhiem.vn/van-dao/dia-diem/den-lanh-giang) và đối chiếu địa danh tại [UBND phường Duy Tân](https://duytan.ninhbinh.gov.vn/khai-mac-le-hoi-den-lanh-giang-nam-2026).
 - [Giấy phép Lora](public/fonts/Lora-OFL.txt) đi kèm các font được lưu cục bộ.
 
 <details>

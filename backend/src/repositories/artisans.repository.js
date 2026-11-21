@@ -1,6 +1,9 @@
 import { prisma } from "../database/prisma.js";
+import { demoWorkshopDomain } from "../data/demo-workshop.js";
 
-const publicWorkshop = { verificationStatus: "APPROVED", user: { isActive: true } };
+export const tradingWorkshop = { verificationStatus: "APPROVED", isSuspended: false, user: { isActive: true, role: "ARTISAN" } };
+const publicWorkshop = tradingWorkshop;
+const publicStorefront = { ...publicWorkshop, user: { ...publicWorkshop.user, email: { not: { endsWith: demoWorkshopDomain }, mode: "insensitive" } } };
 const fields = {
     id: true, workshopName: true, artisanTitle: true, familyHistory: true,
     address: true, latitude: true, longitude: true, openingHours: true,
@@ -8,16 +11,16 @@ const fields = {
     averageRating: true, totalReviews: true,
 };
 
-export function listPublicArtisans({ skip = 0, take = 24, visitorsOnly = false } = {}) {
+export function listPublicArtisans({ skip = 0, take = 24, visitorsOnly = false, storefront = false } = {}) {
     return prisma.artisanProfile.findMany({
-        where: { ...publicWorkshop, ...(visitorsOnly ? { isOpenForVisitors: true } : {}) },
+        where: { ...(storefront ? publicStorefront : publicWorkshop), ...(visitorsOnly ? { isOpenForVisitors: true } : {}) },
         select: fields, orderBy: [{ workshopName: "asc" }, { id: "asc" }], skip, take,
     });
 }
 
-export function findPublicArtisan(id) {
+export function findPublicArtisan(id, storefront = false) {
     return prisma.artisanProfile.findUnique({
-        where: { id, ...publicWorkshop },
+        where: { id, ...(storefront ? publicStorefront : publicWorkshop) },
         select: { ...fields, certificates: { select: { id: true, title: true, issuingAuthority: true, issuedYear: true, certificateImageUrl: true } } },
     });
 }

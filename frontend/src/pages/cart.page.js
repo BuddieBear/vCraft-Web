@@ -1,105 +1,232 @@
-import { asset, formatPrice, icon } from "../components/ui.js";
-import { products } from "../data/demo-data.js";
+import { formatPrice, icon, saleUnits } from "../components/ui.js";
+import { request, signedIn } from "../api/http.js";
+import { paymentLabel } from "../data/payment-labels.js";
+import { reviewForm } from "./reviews.page.js";
+import { bindFormErrors, clearFormErrors, showFormErrors } from "../components/form-errors.js";
+import { recipientPhoneError, validRecipientPhone } from "../data/input-values.js";
 
-const key = "vcraft-demo-cart-v1";
-const maxQuantity = 99;
-const orderable = new Map(products.filter(product => product.price !== null).map(product => [product.id, product]));
+export function mountCart(dialog, updateBadge, notify, account) {
+  let items = [];
+  let busy = false;
+  let revision = 0;
+  const orderStatus = {
+    PENDING: "Chờ xác nhận", CONFIRMED: "Đã xác nhận", SHIPPING: "Đang giao", DELIVERED: "Đã giao", CANCELLED: "Đã hủy",
+  };
 
-function loadCart() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(key) || "{}");
-    return new Map(Object.entries(saved || {}).filter(([id, quantity]) =>
-      orderable.has(id) && Number.isInteger(quantity) && quantity > 0 && quantity <= maxQuantity));
-  } catch {
-    return new Map();
-  }
-}
-
-export function mountCart(dialog, updateBadge, notify) {
-  const cart = loadCart();
-
-  function itemCount() {
-    return [...cart.values()].reduce((total, quantity) => total + quantity, 0);
-  }
-
-  function save() {
-    try {
-      localStorage.setItem(key, JSON.stringify(Object.fromEntries(cart)));
-    } catch {
-      // The current page can still hold the cart if browser storage is unavailable.
+  async function refresh() {
+    const version = ++revision;
+    if (!signedIn() || account.profile?.role !== "BUYER") {
+      items = [];
+      updateBadge(0);
+      return;
     }
+    const { data } = await request("/retail/cart", { auth: true });
+    if (version !== revision) return;
+    items = data;
     updateBadge(itemCount());
   }
 
-  function render() {
-    const items = [...cart].map(([id, quantity]) => [orderable.get(id), quantity]);
-    const total = items.reduce((sum, [product, quantity]) => sum + product.price * quantity, 0);
-    dialog.innerHTML = `
-      <div class="cart-header"><h2 id="cart-title">Giỏ lụa <small>(${itemCount()})</small></h2>
-        <button type="button" class="icon-button" data-cart-action="close" aria-label="Đóng giỏ hàng">${icon("close")}</button>
-      </div>
-      ${items.length ? `
-        <ul class="cart-items">
-          ${items.map(([product, quantity]) => `
-            <li>
-              <img src="${asset(product.image)}" alt="" width="76" height="76">
-              <div>
-                <strong>${product.name}</strong><p>${formatPrice(product.price, product.unit)}</p>
-                <div class="quantity">
-                  <button type="button" data-id="${product.id}" data-cart-action="decrease" aria-label="Giảm số lượng ${product.name}">${icon("minus")}</button>
-                  <span>${quantity}</span>
-                  <button type="button" data-id="${product.id}" data-cart-action="increase" aria-label="Tăng số lượng ${product.name}" ${quantity === maxQuantity ? "disabled" : ""}>${icon("plus")}</button>
-                  <button class="remove" type="button" data-id="${product.id}" data-cart-action="remove" aria-label="Xóa ${product.name}">Xóa</button>
-                </div>
-              </div>
-            </li>`).join("")}
-        </ul>
-        <div class="cart-total"><span>Tạm tính</span><strong>${formatPrice(total)}</strong></div>
-        <button class="button button-primary cart-checkout" type="button" data-cart-action="checkout">Xác nhận đơn mẫu ${icon("arrow")}</button>
-        <p class="cart-footnote">Đơn thử chỉ dùng dữ liệu trong trình duyệt.</p>` : `
-        <div class="cart-empty">${icon("bag")}<p>Giỏ lụa đang trống.</p>
-        <button class="button button-outline" type="button" data-cart-action="close">Tiếp tục khám phá</button></div>`}
-    `;
+  function itemCount() {
+    return items.reduce((count, item) => count + item.quantity, 0);
   }
 
-  dialog.addEventListener("click", event => {
-    const control = event.target.closest("[data-cart-action]");
+  function render() {
+    dialog.innerHTML = `
+      <div class="cart-header"><h2 id="cart-title">Giỏ lụa <small>(${itemCount()})</small></h2>
+        <button type="button" class="icon-button" data-action="close" aria-label="Đóng giỏ hàng">${icon("close")}</button>
+      </div>
+      <p class="cart-footnote" role="status"></p>
+      <ul class="cart-items"></ul>
+      <div class="cart-total" hidden><span>Tạm tính</span><strong></strong></div>
+      <form class="account-form checkout-form" hidden>
+        <label>Tên người nhận<input name="recipientName" autocomplete="name" maxlength="120" required></label>
+        <label>Số điện thoại<input name="recipientPhone" type="tel" autocomplete="tel" inputmode="tel" maxlength="20" required></label>
+        <label>Địa chỉ giao hàng<textarea name="shippingAddress" autocomplete="street-address" maxlength="2000" required></textarea></label>
+        <button class="button button-primary cart-checkout" type="submit">Đặt hàng · trả khi nhận</button>
+      </form>
+      <button class="text-button" type="button" data-action="orders">Xem đơn hàng</button>
+      <div class="cart-orders"></div>`;
+    const list = dialog.querySelector(".cart-items");
+    const status = dialog.querySelector("[role=status]");
+    const orders = dialog.querySelector('[data-action="orders"]');
+    orders.hidden = account.profile?.role !== "BUYER";
+    if (!items.length) {
+      status.textContent = "Giỏ lụa đang trống.";
+      return;
+    }
+    let canCheckout = true;
+    for (const { product, quantity } of items) {
+      const line = document.createElement("li");
+      line.innerHTML = `
+        <div>
+          <strong></strong><p></p>
+          <div class="quantity">
+            <button type="button" data-action="decrease" aria-label="Giảm số lượng">${icon("minus")}</button>
+            <span></span>
+            <button type="button" data-action="increase" aria-label="Tăng số lượng">${icon("plus")}</button>
+            <button class="remove" type="button" data-action="remove">Xóa</button>
+          </div>
+        </div>`;
+      line.dataset.product = product.id;
+      line.querySelector("strong").textContent = product.name;
+      const price = line.querySelector("p");
+      price.textContent = formatPrice(product.price, saleUnits[product.saleUnit]);
+      const available = product.isAvailable ?? (product.isPublished && product.price !== null);
+      if (!available || quantity > product.stockQuantity) {
+        canCheckout = false;
+        const warning = document.createElement("p");
+        warning.textContent = available
+          ? `Tồn kho còn ${product.stockQuantity}. Hãy giảm số lượng hoặc xóa sản phẩm.`
+          : "Sản phẩm hiện không thể đặt. Hãy xóa khỏi giỏ để tiếp tục.";
+        price.after(warning);
+      }
+      line.querySelector("span").textContent = quantity;
+      line.querySelector('[data-action="increase"]').disabled = !available || quantity >= product.stockQuantity;
+      list.append(line);
+    }
+    const total = dialog.querySelector(".cart-total");
+    total.hidden = false;
+    total.querySelector("strong").textContent = formatPrice(items.reduce((sum, { product, quantity }) => sum + Number(product.price) * quantity, 0));
+    const form = dialog.querySelector("form");
+    bindFormErrors(form);
+    form.hidden = false;
+    form.querySelector('[type="submit"]').disabled = !canCheckout;
+    form.elements.namedItem("recipientName").value = account.profile?.fullName || "";
+    form.elements.namedItem("recipientPhone").value = account.profile?.phone || "";
+  }
+
+  async function updateQuantity(id, quantity, product) {
+    const buyer = account.profile;
+    await request("/retail/cart/" + encodeURIComponent(id), { method: "PUT", body: { quantity }, auth: true });
+    try {
+      await refresh();
+    } catch {
+      if (buyer !== account.profile) return;
+      const item = items.find(entry => entry.product.id === id);
+      if (quantity === 0) items = items.filter(entry => entry !== item);
+      else if (item) item.quantity = quantity;
+      else if (product) items.push({ product: { ...product, isAvailable: true }, quantity });
+      updateBadge(itemCount());
+      notify("Đã cập nhật giỏ hàng. Danh sách sẽ được tải lại khi mở giỏ.");
+    }
+  }
+
+  function report(error) {
+    const status = dialog.querySelector("[role=status]");
+    if (status) status.textContent = error.message;
+  }
+
+  async function requireBuyer() {
+    const profile = await account.resolveProfile();
+    if (profile?.role === "BUYER") return profile;
+    if (signedIn()) throw new Error("Giỏ hàng dành cho tài khoản người mua.");
+    account.open();
+    return false;
+  }
+
+  dialog.addEventListener("click", async event => {
+    const control = event.target.closest("[data-action]");
     if (!control) return;
-    const action = control.dataset.cartAction;
-    const id = control.dataset.id;
+    const action = control.dataset.action;
     if (action === "close") {
       dialog.close();
       return;
     }
-    if (action === "checkout") {
-      cart.clear();
-      save();
-      dialog.close();
-      notify("Đã xác nhận đơn mẫu.");
-      return;
-    }
-    const quantity = cart.get(id);
-    if (action === "remove" || (action === "decrease" && quantity === 1)) cart.delete(id);
-    else if (action === "increase" && quantity < maxQuantity) cart.set(id, quantity + 1);
-    else if (action === "decrease") cart.set(id, quantity - 1);
-    save();
-    render();
-    const next = dialog.querySelector(`[data-id="${id}"][data-cart-action="${action}"]:enabled`);
-    (next || dialog.querySelector("[data-cart-action=close]")).focus();
+    if (busy) return;
+    busy = control.disabled = true;
+    try {
+      if (action === "orders") {
+        const { data } = await request("/retail/orders?limit=24", { auth: true });
+        const target = dialog.querySelector(".cart-orders");
+        const heading = document.createElement("h3");
+        heading.textContent = data.length ? "Đơn hàng gần đây" : "Bạn chưa có đơn hàng.";
+        const orders = document.createElement("ul");
+        for (const order of data) {
+          const item = document.createElement("li");
+          item.textContent = `${order.orderCode} · ${orderStatus[order.status]} · ${formatPrice(order.totalAmount)} · ${paymentLabel(order)}`;
+          if (order.status === "DELIVERED" && order.paymentStatus === "PAID") {
+            const review = reviewForm(order, "retailOrderId", order.items.map(line => ({
+              productId: line.productId, productName: line.product.name,
+              artisanId: line.artisanId, workshopName: line.artisan.workshopName,
+            })));
+            if (review) item.append(review);
+          }
+          orders.append(item);
+        }
+        target.replaceChildren(heading, orders);
+        return;
+      }
+      const id = control.closest("[data-product]").dataset.product;
+      const item = items.find(entry => entry.product.id === id);
+      const form = dialog.querySelector("form");
+      const draft = new FormData(form);
+      await updateQuantity(id, action === "remove" ? 0 : item.quantity + (action === "increase" ? 1 : -1));
+      if (!dialog.open) return;
+      render();
+      for (const [key, value] of draft) dialog.querySelector("form").elements.namedItem(key).value = value;
+    } catch (error) {
+      report(error);
+    } finally { busy = control.disabled = false; }
   });
 
-  updateBadge(itemCount());
+  dialog.addEventListener("submit", async event => {
+    if (!event.target.matches(".checkout-form")) return;
+    event.preventDefault();
+    const form = event.target;
+    const button = form.querySelector("button");
+    if (busy || button.disabled) return;
+    clearFormErrors(form);
+    dialog.querySelector("[role=status]").textContent = "";
+    const values = Object.fromEntries(new FormData(form));
+    if (!validRecipientPhone(values.recipientPhone)) {
+      showFormErrors(form, [{ name: "recipientPhone", message: recipientPhoneError }]);
+      return;
+    }
+    busy = button.disabled = true;
+    try {
+      const { data } = await request("/retail/checkout", {
+        method: "POST", auth: true, body: { ...values, paymentMethod: "COD" },
+      });
+      items = [];
+      updateBadge(0);
+      dialog.close();
+      notify("Đã tạo đơn " + data.orderCode + ".");
+    } catch (error) {
+      if (!showFormErrors(form, error.fields)) report(error);
+    } finally { busy = button.disabled = false; }
+  });
+
+  account.onChange(() => {
+    if (!account.profile && dialog.open) dialog.close();
+    refresh().catch(() => { /* Keep the last confirmed cart while the API is unreachable. */ });
+  });
+
   return {
-    add(product) {
-      const quantity = cart.get(product.id) || 0;
-      if (!orderable.has(product.id) || quantity === maxQuantity) return false;
-      cart.set(product.id, quantity + 1);
-      save();
-      return true;
+    async add(product) {
+      if (busy) return false;
+      busy = true;
+      try {
+        const buyer = await requireBuyer();
+        if (!buyer) return false;
+        await refresh();
+        if (buyer !== account.profile) return false;
+        const quantity = items.find(item => item.product.id === product.id)?.quantity || 0;
+        await updateQuantity(product.id, quantity + 1, product);
+        return true;
+      } finally { busy = false; }
     },
-    open() {
-      render();
-      dialog.showModal();
+    async open() {
+      if (busy) return;
+      busy = true;
+      try {
+        const buyer = await requireBuyer();
+        if (!buyer) return;
+        await refresh();
+        if (buyer !== account.profile) return;
+        render();
+        if (!dialog.open) dialog.showModal();
+      } catch (error) { notify(error.message); }
+      finally { busy = false; }
     },
   };
 }

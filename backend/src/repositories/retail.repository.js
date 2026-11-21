@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../database/prisma.js";
+import { lockRetailOrder } from "../database/postgresql/row-locks.js";
+import { tradingWorkshop } from "./artisans.repository.js";
 
 export function findCheckoutBuyer(tx, userId) {
         return tx.user.findFirst({ where: { id: userId, isActive: true, role: "BUYER" }, select: { id: true } });
@@ -18,7 +20,7 @@ export function reserveStock(tx, product, quantity) {
                 where: {
                         id: product.id, artisanId: product.artisanId, isPublished: true,
                         pricingMode: "FIXED", price: product.price, stockQuantity: { gte: quantity },
-                        artisan: { verificationStatus: "APPROVED", user: { isActive: true } },
+                        artisan: tradingWorkshop,
                 },
                 data: { stockQuantity: { decrement: quantity } },
         });
@@ -33,7 +35,9 @@ export function setCartItem(userId, productId, quantity) {
     return prisma.$transaction(async (tx) => {
         if (!await findCheckoutBuyer(tx, userId)) throw new Error("Buyer is not active");
         if (quantity === 0) return tx.cartItem.deleteMany({ where: { userId, productId } });
-        const product = await tx.product.findFirst({ where: { id: productId, isPublished: true, pricingMode: "FIXED", stockQuantity: { gte: quantity }, artisan: { verificationStatus: "APPROVED", user: { isActive: true } } }, select: { id: true } });
+        const reduced = await tx.cartItem.updateMany({ where: { userId, productId, quantity: { gt: quantity } }, data: { quantity } });
+        if (reduced.count) return tx.cartItem.findUniqueOrThrow({ where: { userId_productId: { userId, productId } } });
+        const product = await tx.product.findFirst({ where: { id: productId, isPublished: true, pricingMode: "FIXED", stockQuantity: { gte: quantity }, artisan: tradingWorkshop }, select: { id: true } });
         if (!product) throw new Error("Product is unavailable or has insufficient stock");
         return tx.cartItem.upsert({ where: { userId_productId: { userId, productId } }, create: { userId, productId, quantity }, update: { quantity } });
     });
@@ -62,12 +66,30 @@ export function checkoutOrder(userId, details) {
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
-export function listBuyerCart(userId) {
-        return prisma.cartItem.findMany({ where: { userId, user: { isActive: true, role: "BUYER" } }, select: { id: true, quantity: true, product: { select: { id: true, name: true, slug: true, price: true, pricingMode: true, stockQuantity: true, isPublished: true } } }, orderBy: { createdAt: "asc" } });
+export async function listBuyerCart(userId) {
+        const items = await prisma.cartItem.findMany({
+            where: { userId, user: { isActive: true, role: "BUYER" } },
+            select: { id: true, quantity: true, product: { select: {
+                id: true, name: true, slug: true, price: true, pricingMode: true, saleUnit: true, stockQuantity: true, isPublished: true,
+                artisan: { select: { verificationStatus: true, isSuspended: true, user: { select: { isActive: true, role: true } } } },
+            } } },
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        });
+        return items.map(({ product: { artisan, ...product }, ...item }) => ({
+            ...item,
+            product: { ...product, isAvailable: product.isPublished && product.pricingMode === "FIXED" && product.price !== null && artisan.verificationStatus === "APPROVED" && !artisan.isSuspended && artisan.user.isActive && artisan.user.role === "ARTISAN" },
+        }));
 }
 
 export function listBuyerOrders(userId, { skip = 0, take = 24 } = {}) {
-        return prisma.retailOrder.findMany({ where: { buyerId: userId, buyer: { isActive: true, role: "BUYER" } }, include: { items: true }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip, take });
+        return prisma.retailOrder.findMany({
+            where: { buyerId: userId, buyer: { isActive: true, role: "BUYER" } },
+            include: {
+                items: { include: { product: { select: { name: true } }, artisan: { select: { workshopName: true } } } },
+                reviews: { select: { targetType: true, productId: true, artisanId: true } },
+            },
+            orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip, take,
+        });
 }
 export function findBuyerOrder(userId, id) {
         return prisma.retailOrder.findFirst({ where: { id, buyerId: userId, buyer: { isActive: true, role: "BUYER" } }, include: { items: true } });
@@ -80,7 +102,7 @@ export function listAdminOrders({ skip, take, status }) {
 }
 export function transitionOrder(actor, orderId, status, paymentCollected) {
         return prisma.$transaction(async (tx) => {
-                await tx.$queryRaw`SELECT id FROM retail_orders WHERE id = ${orderId}::uuid FOR UPDATE`;
+                await lockRetailOrder(tx, orderId);
                 const order = await tx.retailOrder.findUnique({ where: { id: orderId }, include: { items: { orderBy: { productId: "asc" }, select: { productId: true, artisanId: true, quantity: true } } } });
                 if (!order) return null;
                 if (actor.role === "BUYER") {
@@ -93,7 +115,13 @@ export function transitionOrder(actor, orderId, status, paymentCollected) {
                 const previous = { CONFIRMED: "PENDING", SHIPPING: "CONFIRMED", DELIVERED: "SHIPPING" };
                 if (status === "CANCELLED") {
                         if (!["PENDING", "CONFIRMED"].includes(order.status) || order.paymentStatus !== "UNPAID") throw new Error("Invalid order transition");
-                        for (const item of order.items) await tx.product.update({ where: { id: item.productId }, data: { stockQuantity: { increment: item.quantity } } });
+                        for (const item of order.items) {
+                                const restored = await tx.product.updateMany({
+                                        where: { id: item.productId, stockQuantity: { lte: 2147483647 - item.quantity } },
+                                        data: { stockQuantity: { increment: item.quantity } },
+                                });
+                                if (!restored.count) throw new Error("Stock limit exceeded on cancellation");
+                        }
                 } else if (previous[status] !== order.status) throw new Error("Invalid order transition");
                 const collectingCod = status === "DELIVERED" && order.paymentMethod === "COD" && order.paymentStatus === "UNPAID";
                 if (collectingCod !== paymentCollected) throw new Error("Invalid payment confirmation");

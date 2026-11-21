@@ -1,37 +1,129 @@
 import { asset, icon } from "../components/ui.js";
-import { artisans, batches, products } from "../data/demo-data.js";
+import { request } from "../api/http.js";
+import { homeMapId, newsArticlePath, sitePaths } from "../site-paths.js";
+import { referenceProductCard } from "../components/reference-product-card.js";
 
 export function renderHome(container) {
   container.innerHTML = `
-    <div class="issue-line section-shell">
-      <span>SỔ TAY LÀNG LỤA <span aria-hidden="true">/</span> TẬP 01</span>
-      <span class="issue-place">NHA XÁ · NINH BÌNH</span>
-      <span class="demo-label">BẢN DEMO</span>
-    </div>
-    <div class="hero section-shell">
-      <div class="hero-copy">
-        <p class="eyebrow"><span></span> Ghi chép ven sông Hồng</p>
-        <h1 id="hero-title">Nha Xá,<br><em>sắc lụa bên sông.</em></h1>
-        <p class="hero-intro">Theo một tấm lụa qua bàn tay người thợ, từ khung cửi đến mẻ nhuộm củ nâu, lá bàng.</p>
+    <div class="hero">
+      <div class="hero-copy section-shell">
+        <p class="eyebrow"><span></span> Sổ tay làng nghề · Ninh Bình</p>
+        <h1 id="hero-title">Lụa Nha Xá <em>bên sông Hồng</em></h1>
+        <p class="hero-intro">Xem những mẫu lụa của làng, tìm xưởng để ghé thăm và theo dõi từng lô từ khung cửi đến thành phẩm.</p>
         <div class="hero-actions">
-          <a class="button button-primary" href="#trien-lam">Mở nhật ký lô ${icon("arrow")}</a>
-          <a class="button button-outline" href="#san-pham">Xem danh mục</a>
+          <a class="button button-primary" href="${sitePaths.catalog}">Xem mẫu lụa ${icon("arrow")}</a>
+          <a class="button button-outline" href="${sitePaths.journal}">Tra nhật ký lô</a>
         </div>
-        <p class="hero-swatches">
-          <span class="swatches" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-          <span>Sắc nâu, chàm và tơ mộc</span>
-        </p>
       </div>
       <figure class="hero-photo">
-        <img src="${asset("hero-nha-xa.webp")}" srcset="${asset("hero-nha-xa-small.webp")} 640w, ${asset("hero-nha-xa.webp")} 1280w"
-          sizes="(max-width: 760px) calc(100vw - 52px), (max-width: 1340px) 48vw, 650px"
-          width="1280" height="960" alt="Minh họa người thợ hong tấm lụa nâu đồng trong xưởng nhuộm" fetchpriority="high">
-        <figcaption><span>ẢNH 01 · HONG LỤA SAU NHUỘM</span><span>MINH HỌA</span></figcaption>
+        <img src="${asset("nha-xa-weaver.webp")}" srcset="${asset("nha-xa-weaver-small.webp")} 720w, ${asset("nha-xa-weaver.webp")} 1600w"
+          sizes="100vw" width="1600" height="900" alt="Người thợ nâng mép tấm lụa đỏ bên khung cửi gỗ" fetchpriority="high">
+        <figcaption>Ảnh minh họa nghề dệt lụa</figcaption>
       </figure>
     </div>
     <nav class="hero-index section-shell" aria-label="Mục lục sổ tay">
-      <a href="#trien-lam"><span class="index-number">01</span><span><strong>Nhật ký dệt và nhuộm</strong><small>${batches.length} lô minh họa</small></span>${icon("upRight")}</a>
-      <a href="#nghe-nhan"><span class="index-number">02</span><span><strong>Người giữ nghề</strong><small>${artisans.length} hồ sơ xưởng</small></span>${icon("upRight")}</a>
-      <a href="#san-pham"><span class="index-number">03</span><span><strong>Danh mục lụa</strong><small>${products.length} mẫu lụa và phụ kiện</small></span>${icon("upRight")}</a>
-    </nav>`;
+      <a href="${sitePaths.artisans}"><span class="hero-index-icon">${icon("thread")}</span><strong>Hồ sơ xưởng</strong>${icon("upRight")}</a>
+      <a href="#${homeMapId}"><span class="hero-index-icon">${icon("pin")}</span><strong>Bản đồ làng nghề</strong>${icon("arrow")}</a>
+      <a href="${sitePaths.news}"><span class="hero-index-icon">${icon("grid")}</span><strong>Tin cộng đồng</strong>${icon("upRight")}</a>
+    </nav>
+
+    <section class="home-featured section-shell" aria-labelledby="home-silk-title" hidden>
+      <div class="section-heading">
+        <div><h2 id="home-silk-title">Mẫu lụa từ các xưởng</h2><p>Có vải dệt, khăn và áo dài từ các cơ sở Nha Xá.</p></div>
+        <a class="text-link" href="${sitePaths.catalog}">Xem tất cả mẫu lụa ${icon("arrow")}</a>
+      </div>
+      <div class="reference-grid"></div>
+    </section>
+
+    <section class="home-story" aria-labelledby="home-story-title">
+      <div class="home-story-grid section-shell">
+        <figure>
+          <img src="${asset("weaving-detail.webp")}" width="414" height="414" loading="lazy" decoding="async" alt="Con thoi gỗ trên khung cửi với những sợi lụa màu nâu đỏ">
+          <figcaption>Minh họa khung cửi và con thoi</figcaption>
+        </figure>
+        <div class="home-story-copy">
+          <p class="eyebrow"><span></span> Nha Xá · Ninh Bình</p>
+          <h2 id="home-story-title">Làng lụa bên <em>sông Hồng.</em></h2>
+          <p>Nằm ở phường Duy Tân, Nha Xá lưu giữ nghề dệt lụa qua nhiều thế hệ. Vân dệt và những sắc nhuộm từ củ nâu, lá bàng tạo nên vẻ riêng của lụa làng.</p>
+          <a class="text-link" href="https://sodulich.ninhbinh.gov.vn/vi/du-lich-lang-nghe/nghe-det-lua-nha-xa-hon-lua-gan-nghin-nam-ben-bo-song-hong-2408.html">Đọc về nghề dệt Nha Xá ${icon("upRight")}</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="${homeMapId}" class="home-map section-shell" aria-labelledby="home-map-title">
+      <h2 id="home-map-title" class="page-title">Bản đồ làng nghề</h2>
+      <p role="status">Đang tải bản đồ khi bạn cuộn tới đây…</p>
+    </section>
+
+    <div class="home-discover section-shell">
+      <section aria-labelledby="home-news-title">
+        <h2 id="home-news-title">Tin cộng đồng</h2>
+        <p data-news-intro>Lịch lễ hội, thông báo và tin tức của làng nghề.</p>
+        <ul class="home-news-titles" hidden></ul>
+        <a class="text-link" href="${sitePaths.news}">Xem bảng tin ${icon("arrow")}</a>
+      </section>
+      <section aria-labelledby="home-order-title">
+        <h2 id="home-order-title">Đặt lụa theo nhu cầu</h2>
+        <p>Gửi số lượng, quy cách và ngày cần hàng để nhận báo giá từ xưởng.</p>
+        <a class="text-link" href="${sitePaths.wholesale}">Mở trang đặt sỉ ${icon("arrow")}</a>
+      </section>
+    </div>`;
+
+  const mapSection = container.querySelector("#" + homeMapId);
+  loadHomeMap(mapSection);
+  if (location.hash === "#" + homeMapId) mapSection.scrollIntoView();
+
+  const featured = container.querySelector(".home-featured");
+  request("/artisans/reference/products").then(({ data }) => {
+    const workshops = new Set();
+    const highlights = data.filter(product => {
+      if (workshops.has(product.workshopName)) return false;
+      workshops.add(product.workshopName);
+      return true;
+    }).slice(0, 4);
+    if (!highlights.length) return;
+    featured.querySelector(".reference-grid").append(...highlights.map(referenceProductCard));
+    featured.hidden = false;
+  }).catch(() => { /* The full catalog handles loading errors and retries. */ });
+
+  request("/news?limit=3").then(({ data }) => {
+    if (!data.length) return;
+    const list = container.querySelector(".home-news-titles");
+    for (const { title, slug } of data) {
+      const item = document.createElement("li");
+      const link = document.createElement("a");
+      link.href = newsArticlePath(slug);
+      link.textContent = title;
+      item.append(link);
+      list.append(item);
+    }
+    list.hidden = false;
+    container.querySelector("[data-news-intro]").hidden = true;
+  }).catch(() => { /* The full news page handles loading errors. */ });
+}
+
+function loadHomeMap(section) {
+  async function start() {
+    try {
+      const { mountArtisanMap } = await import("./artisan-map.page.js");
+      mountArtisanMap(section, { embedded: true });
+    } catch {
+      section.querySelector("[role=status]").textContent = "Chưa tải được bản đồ.";
+      const link = document.createElement("a");
+      link.className = "text-link";
+      link.href = sitePaths.map;
+      link.textContent = "Mở trang bản đồ";
+      section.append(link);
+    }
+  }
+  if (!("IntersectionObserver" in window)) {
+    start();
+    return;
+  }
+  const observer = new IntersectionObserver(([entry]) => {
+    if (!entry.isIntersecting) return;
+    observer.disconnect();
+    start();
+  }, { rootMargin: "240px 0px" });
+  observer.observe(section);
 }

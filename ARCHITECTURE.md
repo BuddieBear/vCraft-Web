@@ -1,6 +1,6 @@
 # Kiến trúc vCraft
 
-vCraft gồm giao diện web trong `frontend/` và REST API trong `backend/`. Frontend hiện có [bản demo HTML, CSS và JavaScript](frontend/README.md) dùng dữ liệu mẫu. API danh mục dùng Express trên Node.js và Prisma để đọc PostgreSQL.
+vCraft dùng HTML, CSS và JavaScript module cho [giao diện](frontend/README.md). Express định tuyến trang và phục vụ REST API. Các nghiệp vụ lưu dữ liệu qua Prisma và PostgreSQL.
 
 ## Cấu trúc thư mục
 
@@ -64,9 +64,9 @@ Frontend → Route/Middleware → Handler → Service → Repository → Prisma 
 ```
 
 - Route gắn URL với middleware và handler. Middleware xác thực, kiểm tra quyền truy cập tuyến và kiểm tra đầu vào.
-- Handler lấy dữ liệu từ yêu cầu, gọi service và chuyển kết quả thành phản hồi HTTP; một số handler nằm trong route, riêng danh mục sản phẩm dùng controller.
+- Controller nhận dữ liệu đã kiểm tra, gọi service và trả HTTP response. Danh mục, đặt sỉ, bán lẻ và trang truy xuất dùng controller riêng. `site.routes.js` ánh xạ URL trang, còn `routes/index.js` định tuyến bên dưới `/api`.
 - Service xử lý quyền trên từng tài nguyên, kiểm tra trạng thái và điều phối các thao tác cần nằm trong cùng một giao dịch. Ví dụ, khi tạo đơn B2C, service điều phối việc tạo đơn và các dòng sản phẩm rồi cập nhật giỏ hàng trong cùng giao dịch.
-- Repository tập trung truy vấn và ghi dữ liệu. Các repository dùng Prisma Client chung từ `database/prisma.js`.
+- Repository tập trung truy vấn, ghi dữ liệu và giao dịch qua Prisma Client chung. Tìm không dấu và khóa bản ghi nằm trong `database/postgresql/`. Khi đổi hệ quản trị cần chuyển các truy vấn riêng này và lịch sử migration.
 - Repository danh mục dùng `select` để đọc các cột công khai và quan hệ cần thiết. HTTP và lệnh xuất JSON dùng chung presenter để chuẩn hóa giá và ngày giờ. Xem [thiết kế và cách kiểm tra Persistence Layer](docs/persistence-layer.md).
 - Prisma Client backend dùng `DATABASE_URL` của tài khoản ứng dụng. Prisma CLI và seed phát triển dùng `MIGRATION_DATABASE_URL` của tài khoản migration.
 

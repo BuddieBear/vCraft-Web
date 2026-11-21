@@ -1,10 +1,26 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../database/prisma.js";
+import { findMatchingProductIds } from "../database/postgresql/product-search.js";
 import { recordProductHidden } from "./audit-log.repository.js";
+import { demoWorkshopDomain } from "../data/demo-workshop.js";
+import { lockTradingArtisan } from "../database/postgresql/row-locks.js";
+import { tradingWorkshop } from "./artisans.repository.js";
 
 const publicProducts = {
     isPublished: true,
-    artisan: { verificationStatus: "APPROVED", user: { isActive: true } },
+    artisan: tradingWorkshop,
 };
+
+function publicProductFilter(storefront) {
+    if (!storefront) return publicProducts;
+    return {
+        ...publicProducts,
+        artisan: {
+            ...publicProducts.artisan,
+            user: { ...publicProducts.artisan.user, email: { not: { endsWith: demoWorkshopDomain }, mode: "insensitive" } },
+        },
+    };
+}
 export function listCategories() {
     return prisma.category.findMany({ select: { id: true, name: true, slug: true, description: true, thumbnailUrl: true }, orderBy: { name: "asc" } });
 }
@@ -25,27 +41,36 @@ const summaryFields = {
     artisan: { select: { id: true, workshopName: true } },
 };
 
-export function listPublicProducts({ skip, take, category, artisanId, q }) {
-    const where = { ...publicProducts };
+async function searchPublicProducts({ skip, take, category, artisanId, q, sort, storefront }) {
+    return prisma.$transaction(async tx => {
+        const matches = await findMatchingProductIds(tx, { skip, take, category, artisanId, q, sort, storefront });
+        if (!matches.length) return [];
+        const products = await tx.product.findMany({
+            where: { id: { in: matches.map(({ id }) => id) } },
+            select: summaryFields,
+        });
+        const byId = new Map(products.map(product => [product.id, product]));
+        return matches.map(({ id }) => byId.get(id));
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+}
+
+export function listPublicProducts({ skip, take, category, artisanId, q, sort, storefront }) {
+    if (q) return searchPublicProducts({ skip, take, category, artisanId, q, sort, storefront });
+    const where = { ...publicProductFilter(storefront) };
     if (category) where.category = { slug: category };
     if (artisanId) where.artisanId = artisanId;
-    if (q) {
-        const match = { contains: q.replace(/[\\%_]/g, "\\$&"), mode: "insensitive" };
-        where.OR = [{ name: match }, { rawMaterial: match }, { category: { name: match } }, { artisan: { workshopName: match } }];
-    }
-
     return prisma.product.findMany({
         where,
         select: summaryFields,
-        orderBy: { slug: "asc" },
+        orderBy: sort ? [{ price: { sort, nulls: "last" } }, { slug: "asc" }] : { slug: "asc" },
         skip,
         take,
     });
 }
 
-export function findPublicProductBySlug(slug) {
+export function findPublicProductBySlug(slug, { storefront = false } = {}) {
     return prisma.product.findUnique({
-        where: { slug, ...publicProducts },
+        where: { slug, ...publicProductFilter(storefront) },
         select: {
             ...summaryFields,
             description: true,
@@ -80,7 +105,7 @@ export function hideProductWithAudit({ productId, userId }) {
 
 export async function createOwnedProduct(userId, data) {
     return prisma.$transaction(async (tx) => {
-        const workshop = await tx.artisanProfile.findFirst({ where: { userId, verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } }, select: { id: true } });
+        const [workshop] = await lockTradingArtisan(tx, userId);
         if (!workshop) return null;
         return tx.product.create({ data: { ...data, artisanId: workshop.id } });
     });
@@ -90,7 +115,9 @@ export function listOwnedProducts(userId, { skip, take }) {
 }
 export async function replaceOwnedProduct(userId, id, { expectedStockQuantity, ...data }) {
     return prisma.$transaction(async (tx) => {
-        const own = { id, artisan: { userId, verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } } };
+        const [workshop] = await lockTradingArtisan(tx, userId);
+        if (!workshop) return null;
+        const own = { id, artisanId: workshop.id };
         const result = await tx.product.updateMany({ where: { ...own, stockQuantity: expectedStockQuantity }, data });
         if (result.count) return tx.product.findUnique({ where: { id } });
         if (await tx.product.findFirst({ where: own, select: { id: true } })) throw new Error("Stale product stock");

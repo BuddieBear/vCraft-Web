@@ -1,4 +1,6 @@
-import { findApprovedArtisan, listOpenQuotes, listArtisanAssignments, listBuyerQuotes, listAcceptedQuotes, findBuyerQuote as findBuyerQuoteRow, createQuote as createQuoteRecord, sendQuote as sendQuoteRecord, dispatchQuote as dispatchQuoteRecord, submitBid as submitBidRecord, acceptBids as acceptBidsRecord, assignBids as assignBidsRecord, advanceAssignment as advanceAssignmentRecord } from "../repositories/wholesale.repository.js";
+import { findApprovedArtisan, findArtisanQuote, listOpenQuotes, listArtisanAssignments, listBuyerQuotes, listAcceptedQuotes, findBuyerQuote as findBuyerQuoteRow, findBuyerJournal as findBuyerJournalRow, createQuote as createQuoteRecord, replaceDraftWorkshops, sendQuote as sendQuoteRecord, submitForDispatch, dispatchQuote as dispatchQuoteRecord, submitBid as submitBidRecord, acceptBids as acceptBidsRecord, assignBids as assignBidsRecord, advanceAssignment as advanceAssignmentRecord } from "../repositories/wholesale.repository.js";
+import { quoteBudgetMax, validPositiveAmount, vietnamToday } from "../../../frontend/src/data/input-values.js";
+import { biddingPagePath, quotePagePath } from "../../../frontend/src/site-paths.js";
 
 function id(value) {
     if (typeof value !== "string" || !value.trim()) throw new Error("Invalid identifier");
@@ -17,14 +19,8 @@ function positive(value) {
 
 function money(value, max) {
     const stringValue = String(value ?? "").trim();
-    if (!/^\d+(\.\d{1,2})?$/.test(stringValue)) throw new Error("Invalid amount");
-    const amount = Number(stringValue);
-    if (!Number.isFinite(amount) || amount <= 0 || amount > Number(max)) throw new Error("Invalid amount");
+    if (!validPositiveAmount(stringValue, max)) throw new Error("Invalid amount");
     return stringValue;
-}
-
-function vietnamToday() {
-    return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 }
 
 function deadlineDate(value) {
@@ -42,7 +38,15 @@ export async function listArtisanWork(userId, options, assignments = false) {
     id(userId);
     const artisan = await findApprovedArtisan(userId);
     if (!artisan) throw new Error("Artisan is not active");
-    return assignments ? listArtisanAssignments(artisan.id, options) : listOpenQuotes(artisan.id, { ...options, today: new Date(`${vietnamToday()}T00:00:00.000Z`) });
+    if (assignments) return listArtisanAssignments(artisan.id, options);
+    if (artisan.isSuspended && options.view !== "mine") return [];
+    return listOpenQuotes(artisan.id, { ...options, today: new Date(`${vietnamToday()}T00:00:00.000Z`) });
+}
+
+export async function getArtisanQuote(userId, quoteId) {
+    const artisan = await findApprovedArtisan(userId);
+    if (!artisan) throw new Error("Artisan is not active");
+    return findArtisanQuote(artisan.id, quoteId, new Date(`${vietnamToday()}T00:00:00.000Z`), artisan.isSuspended);
 }
 
 export function listQuotesForBuyer(userId, options) {
@@ -60,24 +64,44 @@ export async function findBuyerQuote({ userId, quoteId }) {
     return findBuyerQuoteRow(quoteId, userId);
 }
 
-export function createQuote({ userId, title, specifications, targetQuantity, deadline, targetArtisanId = null, maxBudget = null, preferredWeaveType = "LUA_VAN", attachmentUrls = [] }) {
+export function findBuyerJournal({ userId, quoteId }) {
+    return findBuyerJournalRow(id(quoteId), id(userId));
+}
+
+function validateWorkshops(artisanIds, minimum = 1) {
+    if (!Array.isArray(artisanIds) || artisanIds.length < minimum || artisanIds.length > 100 || new Set(artisanIds).size !== artisanIds.length) throw new Error("Invalid allocations");
+    artisanIds.forEach(id);
+}
+
+export function createQuote({ userId, title, specifications, targetQuantity, deadline, targetArtisanId = null, artisanIds = [], maxBudget = null, preferredWeaveType = "LUA_VAN", attachmentUrls = [] }) {
     id(userId);
-    const data = { userId, title: text(title, 255), specifications: text(specifications, 10000), targetQuantity: positive(targetQuantity), deadline: deadlineDate(deadline), targetArtisanId, maxBudget: maxBudget === null ? null : money(maxBudget, "999999999999.99"), preferredWeaveType, attachmentUrls };
+    const data = { userId, title: text(title, 255), specifications: text(specifications, 10000), targetQuantity: positive(targetQuantity), deadline: deadlineDate(deadline), targetArtisanId, maxBudget: maxBudget === null ? null : money(maxBudget, quoteBudgetMax), preferredWeaveType, attachmentUrls };
     if (targetArtisanId !== null) id(targetArtisanId);
+    validateWorkshops(artisanIds, 0);
+    if (targetArtisanId && artisanIds.length) throw new Error("Invalid allocations");
     if (!Array.isArray(attachmentUrls) || attachmentUrls.some((url) => typeof url !== "string" || url.length > 500)) throw new Error("Invalid attachments");
-    return createQuoteRecord(data);
+    return createQuoteRecord({ ...data, artisanIds });
+}
+
+export function updateQuoteWorkshops({ userId, quoteId, artisanIds }) {
+    validateWorkshops(artisanIds);
+    return replaceDraftWorkshops(id(userId), id(quoteId), artisanIds);
 }
 
 export function sendQuote({ userId, quoteId }) {
     id(userId); id(quoteId);
-    return sendQuoteRecord(userId, quoteId, deadlinePassed);
+    return sendQuoteRecord(userId, quoteId, deadlinePassed, biddingPagePath(quoteId));
+}
+
+export function requestDispatch({ userId, quoteId }) {
+    id(userId); id(quoteId);
+    return submitForDispatch(userId, quoteId, deadlinePassed);
 }
 
 export function dispatchQuote({ userId, quoteId, artisanIds }) {
     id(userId); id(quoteId);
-    if (!Array.isArray(artisanIds) || !artisanIds.length || new Set(artisanIds).size !== artisanIds.length) throw new Error("Invalid allocations");
-    artisanIds.forEach(id);
-    return dispatchQuoteRecord(userId, quoteId, artisanIds, deadlinePassed);
+    validateWorkshops(artisanIds);
+    return dispatchQuoteRecord(userId, quoteId, artisanIds, deadlinePassed, biddingPagePath(quoteId));
 }
 
 export function submitBid({ userId, quoteId, proposedPrice, proposedCompletionDays, note = null, sampleImages = [] }) {
@@ -85,25 +109,30 @@ export function submitBid({ userId, quoteId, proposedPrice, proposedCompletionDa
     const price = money(proposedPrice, "9999999999.99");
     if (!Array.isArray(sampleImages) || sampleImages.some((sample) => typeof sample !== "string" || sample.length > 500)) throw new Error("Invalid images");
     if (note != null && (typeof note !== "string" || note.length > 10000)) throw new Error("Invalid note");
-    return submitBidRecord({ userId, quoteId, price, proposedCompletionDays, note, sampleImages }, deadlinePassed);
+    return submitBidRecord({ userId, quoteId, price, proposedCompletionDays, note, sampleImages }, deadlinePassed, quotePagePath(quoteId));
 }
 
-export function acceptBids({ userId, quoteId, bidIds }) {
+export function acceptBids({ userId, quoteId, bidIds, allocations }) {
     id(userId); id(quoteId);
     if (!Array.isArray(bidIds) || !bidIds.length || new Set(bidIds).size !== bidIds.length) throw new Error("Invalid bids");
     bidIds.forEach(id);
-    return acceptBidsRecord(userId, quoteId, bidIds);
+    if (allocations !== undefined) validateAllocations(allocations);
+    return acceptBidsRecord(userId, quoteId, bidIds, deadlinePassed, biddingPagePath(quoteId), allocations);
+}
+
+function validateAllocations(allocations) {
+    if (!Array.isArray(allocations) || !allocations.length || new Set(allocations.map((item) => item.bidId)).size !== allocations.length) throw new Error("Invalid allocations");
+    allocations.forEach((item) => { id(item.bidId); positive(item.quantity); });
 }
 
 export function assignBids({ userId, quoteId, allocations }) {
     id(userId); id(quoteId);
-    if (!Array.isArray(allocations) || !allocations.length || new Set(allocations.map((item) => item.bidId)).size !== allocations.length) throw new Error("Invalid allocations");
-    allocations.forEach((item) => { id(item.bidId); positive(item.quantity); });
+    validateAllocations(allocations);
     return assignBidsRecord(userId, quoteId, allocations);
 }
 
 export function advanceAssignment({ userId, assignmentId, status }) {
     id(userId); id(assignmentId);
     if (!["IN_PRODUCTION", "READY_FOR_DELIVERY", "COMPLETED"].includes(status)) throw new Error("Invalid transition");
-    return advanceAssignmentRecord(userId, assignmentId, status);
+    return advanceAssignmentRecord(userId, assignmentId, status, quotePagePath);
 }

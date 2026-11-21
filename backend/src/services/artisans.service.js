@@ -5,8 +5,8 @@ export function listArtisans(options) {
     return listPublicArtisans(options);
 }
 
-export function getArtisan(id) {
-    return findPublicArtisan(id);
+export function getArtisan(id, storefront) {
+    return findPublicArtisan(id, storefront);
 }
 
 export async function getMyWorkshop(userId) {
