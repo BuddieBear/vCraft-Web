@@ -1,7 +1,7 @@
 import { icon } from "./components/ui.js";
 import { mountCart } from "./pages/cart.page.js";
 import { mountAccount } from "./pages/login.page.js";
-import { homeMapId, matchProductPage, pageSegment, quotePageRoot, sitePaths } from "./site-paths.js";
+import { homeMapId, matchProductPage, pageSegment, quoteJournalRoot, quotePageRoot, sitePaths } from "./site-paths.js";
 
 const pages = new Map([
   [sitePaths.home, { id: "trang-chu", titleId: "hero-title" }],
@@ -20,9 +20,10 @@ const pages = new Map([
 const requestedPath = location.pathname.toLowerCase().replace(/\/+$/, "");
 const productPage = matchProductPage(requestedPath);
 const quoteId = pageSegment(requestedPath, quotePageRoot);
+const journalQuoteId = pageSegment(requestedPath, quoteJournalRoot);
 const bidQuoteId = pageSegment(requestedPath, sitePaths.bidding);
 const articleSlug = pageSegment(requestedPath, sitePaths.news);
-const path = productPage ? sitePaths.catalog : quoteId ? sitePaths.wholesale : bidQuoteId ? sitePaths.bidding : articleSlug ? sitePaths.news
+const path = productPage ? sitePaths.catalog : quoteId ? sitePaths.wholesale : journalQuoteId ? sitePaths.journal : bidQuoteId ? sitePaths.bidding : articleSlug ? sitePaths.news
   : pages.has(requestedPath) ? requestedPath : sitePaths.home;
 const legacyPage = path === sitePaths.home
   ? [...pages].find(([, page]) => location.hash === "#" + page.id)
@@ -150,6 +151,10 @@ async function mountContent(section, account, cart) {
     case sitePaths.home:
       return (await import("./pages/home.page.js")).renderHome(section);
     case sitePaths.journal:
+      if (journalQuoteId) {
+        section.className = "section-shell wholesale";
+        return (await import("./pages/wholesale.page.js")).mountWholesale(section, account, { quoteId: journalQuoteId, journal: true });
+      }
       return (await import("./pages/exhibition.page.js")).mountExhibition(section);
     case sitePaths.artisans:
       return (await import("./pages/artisan-profile.page.js")).renderArtisans(section);

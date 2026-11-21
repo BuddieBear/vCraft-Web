@@ -109,10 +109,13 @@ export function mountAccount(dialog, trigger) {
       try {
         await request("/auth/" + action, { method: "POST", auth: true });
         setToken(null);
-        dialog.close();
       } catch (error) {
-        status.textContent = error.message;
+        if (signedIn()) {
+          status.textContent = error.message;
+          return;
+        }
       } finally { logoutButtons.forEach(control => { control.disabled = false; }); }
+      location.replace(sitePaths.home);
     }
   }
 

@@ -31,12 +31,12 @@ Các endpoint riêng yêu cầu `Authorization: Bearer <accessToken>`. Mỗi tok
 | GET, PATCH | `/artisans/me` | ARTISAN; xem và cập nhật hồ sơ của mình. |
 | POST, DELETE | `/artisans/me/certificates`, `/artisans/me/certificates/:id` | ARTISAN; thêm hoặc xóa chứng nhận. |
 | POST | `/media/images` | ARTISAN hoặc ADMIN; multipart `images`, tối đa 4 ảnh JPEG/PNG/WebP, mỗi ảnh tối đa 5 MB. Ảnh được xoay và chuyển WebP, cạnh tối đa 1600 pixel. |
-| GET | `/traceability/:code`, `/traceability/by-code/:code` | Công khai; timeline của lô được phép công bố. |
+| GET | `/traceability/:code`, `/traceability/by-code/:code` | Công khai; nhật ký lô độc lập được phép công bố. Lô gắn với đơn sỉ dùng API nhật ký của người mua. |
 | GET | `/traceability/public/recent` | Công khai; tối đa 24 lô gần đây và tên sản phẩm. |
 | GET | `/traceability/purchased/:code` | BUYER sở hữu yêu cầu sỉ liên kết; xem nhật ký lô của đơn kể cả khi sản phẩm đã ẩn. |
 | GET | `/traceability/:code/qr`, `/traceability/products/:slug` | Công khai; ảnh QR PNG và danh sách lô được công bố. |
 | GET, POST | `/traceability/mine`, `/traceability/batches` | ARTISAN; danh sách lô của mình (`productId`, `assignmentId`, `page`, `limit`) hoặc tạo lô cho sản phẩm của mình. |
-| POST, PUT | `/traceability/batches/:id/logs`, `/traceability/batches/:id/logs/:logId` | ARTISAN sở hữu; thêm công đoạn theo thứ tự hoặc sửa công đoạn của lô đang sản xuất. |
+| POST, PUT | `/traceability/batches/:id/logs`, `/traceability/batches/:id/logs/:logId` | ARTISAN sở hữu; thêm công đoạn theo thứ tự hoặc sửa công đoạn của lô đang sản xuất. Khi tạo, có thể gửi `loggedOn` theo `YYYY-MM-DD` đến ngày hiện tại theo giờ Việt Nam. |
 | POST | `/traceability/batches/:id/complete` | ARTISAN sở hữu; hoàn thành sau khi ghi đủ năm công đoạn. |
 | GET | `/news`, `/news/:slug` | Công khai; danh sách hỗ trợ `page`, `limit`, `category`. |
 | GET, POST | `/news/admin/list`, `/news` | ADMIN; danh sách quản trị và đăng tin. |
@@ -50,14 +50,16 @@ Các endpoint riêng yêu cầu `Authorization: Bearer <accessToken>`. Mỗi tok
 | GET | `/retail/sales`, `/retail/admin/orders` | ARTISAN xem đơn có sản phẩm của mình; ADMIN xem tất cả đơn. |
 | PATCH | `/retail/orders/:id/status` | ARTISAN phụ trách toàn bộ đơn hoặc ADMIN cập nhật trạng thái; BUYER có thể hủy đơn chưa thanh toán đang chờ. Khi giao COD, gửi `{ status: "DELIVERED", paymentCollected: true }` sau khi đã thu tiền. |
 | GET | `/wholesale/quotes`, `/wholesale/quotes/:id` | BUYER; chỉ yêu cầu của mình; danh sách hỗ trợ `page`, `limit`. |
-| POST | `/wholesale/quotes` | BUYER; `title`, `specifications`, `targetQuantity`, `deadline` dạng `YYYY-MM-DD`, tùy chọn `targetArtisanId`, `maxBudget`, `preferredWeaveType`, `attachmentUrls`. |
+| GET | `/wholesale/quotes/:id/journal` | BUYER sở hữu đơn đã chốt, đang sản xuất hoặc đã giao. Trả về các xưởng được giao và danh sách lô. |
+| POST | `/wholesale/quotes` | BUYER; `title`, `specifications`, `targetQuantity`, `deadline` dạng `YYYY-MM-DD`, tùy chọn `artisanIds` để chọn nhiều xưởng hoặc `targetArtisanId` để chọn một xưởng, cùng `maxBudget`, `preferredWeaveType`, `attachmentUrls`. |
 | POST | `/wholesale/quotes/:id/send` | BUYER sở hữu bản nháp; gửi thẳng tới xưởng đã chọn hoặc mở chào giá cho các xưởng đủ điều kiện. |
+| PATCH | `/wholesale/quotes/:id/workshops` | BUYER sở hữu bản nháp. Thay danh sách `artisanIds` trước khi gửi. |
 | POST | `/wholesale/quotes/:id/request-dispatch` | BUYER sở hữu bản nháp; chuyển sang `PENDING_DISPATCH` để Ban quản lý nhận điều phối. |
 | POST | `/wholesale/quotes/:id/dispatch` | ADMIN điều phối yêu cầu `PENDING_DISPATCH` tới danh sách `artisanIds` đủ điều kiện. |
 | GET | `/wholesale/open-quotes`, `/wholesale/assignments` | ARTISAN đã duyệt; hỗ trợ `page`, `limit`. Dùng `view=mine` ở `open-quotes` để xem yêu cầu đã chào giá, kể cả khi thầu đã đóng. |
 | GET | `/wholesale/open-quotes/:id` | ARTISAN đã duyệt và thuộc phạm vi yêu cầu đang mở hoặc đã gửi báo giá cho yêu cầu đó. Chỉ trả báo giá của xưởng đang đăng nhập. |
 | POST | `/wholesale/quotes/:id/bids` | ARTISAN; `proposedPrice`, `proposedCompletionDays`, tùy chọn `note`, `sampleImages`. |
-| POST | `/wholesale/quotes/:id/accept` | BUYER sở hữu yêu cầu; `bidIds`. |
+| POST | `/wholesale/quotes/:id/accept` | BUYER sở hữu yêu cầu; `bidIds`. Gửi thêm `allocations: [{ bidId, quantity }]` để giao ngay số lượng cho từng xưởng đã chốt. Tổng số lượng phải bằng số lượng yêu cầu. |
 | GET | `/wholesale/admin/quotes` | ADMIN; xem yêu cầu đã gửi, báo giá và phân công. Lọc `status`, mặc định `BUYER_ACCEPTED`; hỗ trợ `page`, `limit`. |
 | POST | `/wholesale/quotes/:id/assignments` | ADMIN; `allocations: [{ bidId, quantity }]`. |
 | PATCH | `/wholesale/assignments/:id` | ARTISAN phụ trách; `status`: `IN_PRODUCTION`, `READY_FOR_DELIVERY`, `COMPLETED` theo thứ tự. Để sẵn sàng giao, các lô phải hoàn thành và tổng số lượng phải bằng số lượng được phân công. |

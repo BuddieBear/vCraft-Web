@@ -6,12 +6,34 @@ export function findBuyerQuote(quoteId, buyerId) {
         where: { id: quoteId, buyerId, buyer: { isActive: true, role: "BUYER" } },
         include: {
             bids: { include: { artisan: { select: { workshopName: true } } } },
-            recipients: { select: { artisanId: true } },
+            targetArtisan: { select: { id: true, workshopName: true } },
+            recipients: { select: { artisanId: true, artisan: { select: { workshopName: true } } } },
             assignments: { include: {
                 artisan: { select: { workshopName: true } },
                 batches: { select: { id: true, batchCode: true, status: true, productId: true, product: { select: { name: true } } } },
             } },
             reviews: { select: { targetType: true, productId: true, artisanId: true } },
+        },
+    });
+}
+
+export function findBuyerJournal(quoteId, buyerId) {
+    return prisma.quotationRequest.findFirst({
+        where: { id: quoteId, buyerId, buyer: { isActive: true, role: "BUYER" }, status: { in: ["BUYER_ACCEPTED", "IN_PRODUCTION", "DELIVERED"] } },
+        select: {
+            id: true, title: true, status: true, targetQuantity: true, deadline: true,
+            assignments: {
+                orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+                select: {
+                    id: true, status: true, allocatedQuantity: true,
+                    artisan: { select: { workshopName: true } },
+                    batches: {
+                        where: { status: { in: ["IN_PROGRESS", "COMPLETED"] } },
+                        orderBy: [{ startedAt: "asc" }, { batchCode: "asc" }],
+                        select: { id: true, batchCode: true, status: true, totalQuantity: true },
+                    },
+                },
+            },
         },
     });
 }
@@ -89,11 +111,33 @@ export function listAcceptedQuotes({ skip, take, status = "BUYER_ACCEPTED" }) {
         }, include: { targetArtisan: { select: { workshopName: true, verificationStatus: true, isSuspended: true, user: { select: { isActive: true, role: true } } } }, bids: { select: { id: true, artisanId: true, proposedPrice: true, proposedCompletionDays: true, status: true, artisan } }, recipients: { select: { artisanId: true } }, assignments: { select: { id: true, bidId: true, artisanId: true, allocatedQuantity: true, status: true, artisan } } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip, take });
 }
 
+async function requireAvailableWorkshops(tx, artisanIds) {
+    if (artisanIds.length && await tx.artisanProfile.count({ where: { id: { in: artisanIds }, ...tradingWorkshop } }) !== artisanIds.length) throw new Error("Artisan is unavailable");
+}
+
 export function createQuote(data) {
     return prisma.$transaction(async (tx) => {
         if (!await activeUser(tx, data.userId, "BUYER")) throw new Error("Buyer is not active");
-        if (data.targetArtisanId && !await tx.artisanProfile.findFirst({ where: { id: data.targetArtisanId, ...tradingWorkshop }, select: { id: true } })) throw new Error("Artisan is unavailable");
-        return tx.quotationRequest.create({ data: { buyerId: data.userId, title: data.title, specifications: data.specifications, targetQuantity: data.targetQuantity, deadline: data.deadline, targetArtisanId: data.targetArtisanId, maxBudget: data.maxBudget, preferredWeaveType: data.preferredWeaveType, attachmentUrls: data.attachmentUrls } });
+        const selected = data.targetArtisanId ? [data.targetArtisanId] : data.artisanIds;
+        await requireAvailableWorkshops(tx, selected);
+        return tx.quotationRequest.create({ data: {
+            buyerId: data.userId, title: data.title, specifications: data.specifications, targetQuantity: data.targetQuantity,
+            deadline: data.deadline, targetArtisanId: data.targetArtisanId, maxBudget: data.maxBudget,
+            preferredWeaveType: data.preferredWeaveType, attachmentUrls: data.attachmentUrls,
+            ...(data.artisanIds.length && { recipients: { create: data.artisanIds.map(artisanId => ({ artisanId })) } }),
+        } });
+    });
+}
+
+export function replaceDraftWorkshops(userId, quoteId, artisanIds) {
+    return prisma.$transaction(async (tx) => {
+        if (!await activeUser(tx, userId, "BUYER")) throw new Error("Buyer is not active");
+        const quote = await lockQuote(tx, quoteId);
+        if (!quote || quote.buyerId !== userId || quote.status !== "DRAFT") throw new Error("Quote not found or invalid state");
+        await requireAvailableWorkshops(tx, artisanIds);
+        await tx.quoteRecipient.deleteMany({ where: { quotationRequestId: quoteId } });
+        await tx.quoteRecipient.createMany({ data: artisanIds.map(artisanId => ({ quotationRequestId: quoteId, artisanId })) });
+        return tx.quotationRequest.update({ where: { id: quoteId }, data: { targetArtisanId: null } });
     });
 }
 
@@ -103,6 +147,7 @@ export function submitForDispatch(userId, quoteId, deadlinePassed) {
         const quote = await lockQuote(tx, quoteId);
         if (!quote || quote.buyerId !== userId || quote.status !== "DRAFT") throw new Error("Quote not found or invalid state");
         if (deadlinePassed(quote.deadline)) throw new Error("Quote deadline passed");
+        if (await tx.quoteRecipient.count({ where: { quotationRequestId: quoteId } })) throw new Error("Quote not found or invalid state");
         return tx.quotationRequest.update({ where: { id: quoteId }, data: { status: "PENDING_DISPATCH" } });
     });
 }
@@ -113,7 +158,10 @@ export function sendQuote(userId, quoteId, deadlinePassed, linkUrl) {
         const quote = await lockQuote(tx, quoteId);
         if (!quote || quote.buyerId !== userId || quote.status !== "DRAFT") throw new Error("Quote not found or invalid state");
         if (deadlinePassed(quote.deadline)) throw new Error("Quote deadline passed");
-        const artisans = await tx.artisanProfile.findMany({ where: { ...(quote.targetArtisanId ? { id: quote.targetArtisanId } : {}), ...tradingWorkshop }, select: { userId: true } });
+        const recipients = await tx.quoteRecipient.findMany({ where: { quotationRequestId: quoteId }, select: { artisanId: true } });
+        const selected = quote.targetArtisanId ? [quote.targetArtisanId] : recipients.map(({ artisanId }) => artisanId);
+        const artisans = await tx.artisanProfile.findMany({ where: { ...(selected.length && { id: { in: selected } }), ...tradingWorkshop }, select: { userId: true } });
+        if (selected.length && artisans.length !== selected.length) throw new Error("Artisan is unavailable");
         if (!artisans.length) throw new Error("No eligible artisan");
         const result = await tx.quotationRequest.update({ where: { id: quoteId }, data: { status: "SENT_TO_ARTISANS" } });
         await tx.notification.createMany({ data: artisans.map(({ userId: recipient }) => ({ userId: recipient, title: "Yêu cầu báo giá mới", message: quote.title, type: "QUOTE_REQUEST", linkUrl })) });
@@ -155,7 +203,7 @@ export function submitBid(data, deadlinePassed, linkUrl) {
     });
 }
 
-export function acceptBids(userId, quoteId, bidIds, deadlinePassed, linkUrl) {
+export function acceptBids(userId, quoteId, bidIds, deadlinePassed, linkUrl, allocations) {
     return prisma.$transaction(async (tx) => {
         if (!await activeUser(tx, userId, "BUYER")) throw new Error("Buyer is not active");
         const quote = await lockQuote(tx, quoteId);
@@ -167,9 +215,20 @@ export function acceptBids(userId, quoteId, bidIds, deadlinePassed, linkUrl) {
         await tx.bid.updateMany({ where: { quotationRequestId: quoteId, status: "SUBMITTED", id: { notIn: bidIds } }, data: { status: "REJECTED" } });
         await tx.bid.updateMany({ where: { id: { in: bidIds }, quotationRequestId: quoteId, status: "SUBMITTED" }, data: { status: "ACCEPTED" } });
         const result = await tx.quotationRequest.update({ where: { id: quoteId }, data: { status: "BUYER_ACCEPTED" } });
+        if (allocations) await createAssignments(tx, quote, bids, allocations);
         await tx.notification.createMany({ data: bids.map((bid) => ({ userId: bid.artisan.userId, title: "Báo giá được chấp nhận", message: quote.title, type: "BID_ACCEPTED", linkUrl })) });
         return result;
     });
+}
+
+async function createAssignments(tx, quote, bids, allocations) {
+    const quantities = new Map(allocations.map(({ bidId, quantity }) => [bidId, quantity]));
+    if (bids.length !== quantities.size || allocations.reduce((sum, item) => sum + item.quantity, 0) !== quote.targetQuantity || bids.some(({ id }) => !quantities.has(id))) throw new Error("Allocations must cover accepted bids and requested quantity");
+    const assignments = [];
+    for (const bid of bids) {
+        assignments.push(await tx.orderAssignment.create({ data: { quotationRequestId: quote.id, artisanId: bid.artisanId, bidId: bid.id, allocatedQuantity: quantities.get(bid.id), agreedPrice: bid.proposedPrice } }));
+    }
+    return assignments;
 }
 
 export function assignBids(userId, quoteId, allocations) {
@@ -181,14 +240,8 @@ export function assignBids(userId, quoteId, allocations) {
             where: { quotationRequestId: quoteId, status: "ACCEPTED" },
             include: { artisan: { select: { verificationStatus: true, user: { select: { isActive: true, role: true } } } } },
         });
-        if (bids.length !== allocations.length || allocations.reduce((sum, item) => sum + item.quantity, 0) !== quote.targetQuantity || bids.some((bid) => !allocations.some((item) => item.bidId === bid.id))) throw new Error("Allocations must cover accepted bids and requested quantity");
         if (bids.some(({ artisan }) => artisan.verificationStatus !== "APPROVED" || !artisan.user.isActive || artisan.user.role !== "ARTISAN")) throw new Error("Artisan is unavailable");
-        const result = [];
-        for (const bid of bids) {
-            const allocation = allocations.find((item) => item.bidId === bid.id);
-            result.push(await tx.orderAssignment.create({ data: { quotationRequestId: quoteId, artisanId: bid.artisanId, bidId: bid.id, allocatedQuantity: allocation.quantity, agreedPrice: bid.proposedPrice } }));
-        }
-        return result;
+        return createAssignments(tx, quote, bids, allocations);
     });
 }
 

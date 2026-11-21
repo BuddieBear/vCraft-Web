@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { fileURLToPath } from "node:url";
-import { productPageRoots, productTraceSegment, quotePageRoot, signInPath, sitePaths } from "../../../frontend/src/site-paths.js";
+import { productPageRoots, productTraceSegment, quoteJournalRoot, quotePageRoot, signInPath, sitePaths } from "../../../frontend/src/site-paths.js";
 import { byId } from "./schemas.js";
 import { getCatalogProduct } from "../services/products.service.js";
 import { findReferenceProduct } from "../data/workshop-references.js";
@@ -33,7 +33,7 @@ router.get("/login.html", (request, response) => {
 router.get(productPageRoots.retail + "/:slug", publicSlugPage(slug => getCatalogProduct(slug, { storefront: true }), { demoRedirect: true }));
 router.get(productPageRoots.reference + "/:slug", publicSlugPage(findReferenceProduct));
 router.get(sitePaths.news + "/:slug", publicSlugPage(getNews));
-router.get([quotePageRoot + "/:id", sitePaths.bidding + "/:id"], (request, response) => {
+router.get([quotePageRoot + "/:id", quoteJournalRoot + "/:id", sitePaths.bidding + "/:id"], (request, response) => {
     if (!byId.safeParse(request.params).success) return sendNotFound(response);
     // The document contains public markup. The API checks access before sending quote data.
     return sendIndex(request, response);

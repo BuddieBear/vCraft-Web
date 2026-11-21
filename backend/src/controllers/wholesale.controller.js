@@ -1,5 +1,5 @@
 import { ApiError } from "../middlewares/api-error.js";
-import { createQuote, sendQuote, requestDispatch, dispatchQuote, submitBid, acceptBids, assignBids, advanceAssignment, findBuyerQuote, getArtisanQuote, listArtisanWork, listQuotesForBuyer, listQuotesForAllocation } from "../services/wholesale.service.js";
+import { createQuote, updateQuoteWorkshops, sendQuote, requestDispatch, dispatchQuote, submitBid, acceptBids, assignBids, advanceAssignment, findBuyerQuote, findBuyerJournal, getArtisanQuote, listArtisanWork, listQuotesForBuyer, listQuotesForAllocation } from "../services/wholesale.service.js";
 import { listPage } from "../routes/schemas.js";
 
 export async function buyerQuotes(req, res) {
@@ -18,6 +18,17 @@ export async function buyerQuote(req, res) {
     const quote = await findBuyerQuote({ userId: req.user.id, quoteId: req.validatedParams.id });
     if (!quote) throw new ApiError(404, "NOT_FOUND", "Không tìm thấy yêu cầu.");
     res.set("Cache-Control", "private, no-store").json({ data: quote });
+}
+
+export async function buyerJournal(req, res) {
+    const journal = await findBuyerJournal({ userId: req.user.id, quoteId: req.validatedParams.id });
+    if (!journal) throw new ApiError(404, "NOT_FOUND", "Nhật ký chưa mở hoặc không thuộc đơn đặt sỉ của bạn.");
+    res.set("Cache-Control", "private, no-store").json({ data: journal });
+}
+
+export async function updateDraftWorkshops(req, res) {
+    await updateQuoteWorkshops({ ...req.validatedBody, userId: req.user.id, quoteId: req.validatedParams.id });
+    res.sendStatus(204);
 }
 
 export async function sendDraft(req, res) {

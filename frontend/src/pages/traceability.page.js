@@ -1,6 +1,5 @@
 import { mediaUrl } from "../api/http.js";
 import { icon } from "../components/ui.js";
-import { renderProductionGuide } from "../components/production-guide.js";
 
 const date = new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium", timeZone: "Asia/Ho_Chi_Minh" });
 
@@ -24,10 +23,6 @@ export function renderTimeline(target, batch, accordion) {
     pending.textContent = "Lô chưa có công đoạn nào được ghi nhận.";
     target.append(pending);
   }
-  const cover = batch.product.mediaUrls?.map(mediaUrl).find(Boolean);
-  target.insertAdjacentHTML("beforeend", renderProductionGuide(batch.product, {
-    cover, heading: "h3", headingId: accordion + "-production-guide",
-  }));
 }
 
 function stageList(logs, accordion) {

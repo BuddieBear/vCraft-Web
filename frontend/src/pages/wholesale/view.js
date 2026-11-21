@@ -7,6 +7,24 @@ export const labels = {
   READY_FOR_DELIVERY: "Sẵn sàng giao", COMPLETED: "Hoàn thành", DELIVERED: "Đã giao", CANCELLED: "Đã hủy",
   SUBMITTED: "Đã gửi", ACCEPTED: "Đã chọn", REJECTED: "Không được chọn",
 };
+const quoteSteps = ["DRAFT", "SENT_TO_ARTISANS", "ARTISANS_BIDDING", "BUYER_ACCEPTED", "IN_PRODUCTION", "DELIVERED"];
+export const hasQuoteJournal = status => quoteSteps.indexOf(status) >= quoteSteps.indexOf("BUYER_ACCEPTED");
+
+export function quoteProgress(status) {
+  const current = quoteSteps.indexOf(status === "PENDING_DISPATCH" ? "DRAFT" : status);
+  const list = document.createElement("ol");
+  list.className = "quote-progress";
+  list.setAttribute("aria-label", "Tiến độ đặt sỉ");
+  for (const [index, step] of quoteSteps.entries()) {
+    const item = document.createElement("li");
+    item.textContent = step === "SENT_TO_ARTISANS" ? "Đã gửi tới xưởng" : labels[step];
+    if (index < current) item.dataset.completed = "";
+    if (index === current) item.setAttribute("aria-current", "step");
+    list.append(item);
+  }
+  return list;
+}
+
 export const displayDate = new Intl.DateTimeFormat("vi-VN", { timeZone: "UTC", dateStyle: "medium" });
 export const get = async (path, signal) => (await request(path, { auth: true, signal })).data;
 export const write = (path, body, method = "POST") => request(path, { method, body, auth: true });

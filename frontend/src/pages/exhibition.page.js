@@ -1,5 +1,6 @@
 import { request } from "../api/http.js";
 import { batchQr } from "../components/batch-qr.js";
+import { sitePaths } from "../site-paths.js";
 
 export function mountExhibition(container) {
   container.innerHTML = `
@@ -7,6 +8,7 @@ export function mountExhibition(container) {
       <div class="exhibition-copy">
         <h1 id="exhibition-title" class="page-title">Nhật ký lô</h1>
         <p>Chọn lô rồi quét mã QR hoặc mở trực tiếp để xem ảnh và mô tả từng công đoạn.</p>
+        <a class="text-link" href="${sitePaths.wholesale}">Theo dõi nhật ký đơn đặt sỉ của bạn</a>
       </div>
       <div class="exhibition-controls">
         <label class="batch-field">Lô sản xuất <select id="batch-select" disabled><option value="" disabled selected>Chọn lô sản xuất</option></select></label>

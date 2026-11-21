@@ -1,4 +1,4 @@
-import { findApprovedArtisan, findArtisanQuote, listOpenQuotes, listArtisanAssignments, listBuyerQuotes, listAcceptedQuotes, findBuyerQuote as findBuyerQuoteRow, createQuote as createQuoteRecord, sendQuote as sendQuoteRecord, submitForDispatch, dispatchQuote as dispatchQuoteRecord, submitBid as submitBidRecord, acceptBids as acceptBidsRecord, assignBids as assignBidsRecord, advanceAssignment as advanceAssignmentRecord } from "../repositories/wholesale.repository.js";
+import { findApprovedArtisan, findArtisanQuote, listOpenQuotes, listArtisanAssignments, listBuyerQuotes, listAcceptedQuotes, findBuyerQuote as findBuyerQuoteRow, findBuyerJournal as findBuyerJournalRow, createQuote as createQuoteRecord, replaceDraftWorkshops, sendQuote as sendQuoteRecord, submitForDispatch, dispatchQuote as dispatchQuoteRecord, submitBid as submitBidRecord, acceptBids as acceptBidsRecord, assignBids as assignBidsRecord, advanceAssignment as advanceAssignmentRecord } from "../repositories/wholesale.repository.js";
 import { quoteBudgetMax, validPositiveAmount, vietnamToday } from "../../../frontend/src/data/input-values.js";
 import { biddingPagePath, quotePagePath } from "../../../frontend/src/site-paths.js";
 
@@ -64,12 +64,28 @@ export async function findBuyerQuote({ userId, quoteId }) {
     return findBuyerQuoteRow(quoteId, userId);
 }
 
-export function createQuote({ userId, title, specifications, targetQuantity, deadline, targetArtisanId = null, maxBudget = null, preferredWeaveType = "LUA_VAN", attachmentUrls = [] }) {
+export function findBuyerJournal({ userId, quoteId }) {
+    return findBuyerJournalRow(id(quoteId), id(userId));
+}
+
+function validateWorkshops(artisanIds, minimum = 1) {
+    if (!Array.isArray(artisanIds) || artisanIds.length < minimum || artisanIds.length > 100 || new Set(artisanIds).size !== artisanIds.length) throw new Error("Invalid allocations");
+    artisanIds.forEach(id);
+}
+
+export function createQuote({ userId, title, specifications, targetQuantity, deadline, targetArtisanId = null, artisanIds = [], maxBudget = null, preferredWeaveType = "LUA_VAN", attachmentUrls = [] }) {
     id(userId);
     const data = { userId, title: text(title, 255), specifications: text(specifications, 10000), targetQuantity: positive(targetQuantity), deadline: deadlineDate(deadline), targetArtisanId, maxBudget: maxBudget === null ? null : money(maxBudget, quoteBudgetMax), preferredWeaveType, attachmentUrls };
     if (targetArtisanId !== null) id(targetArtisanId);
+    validateWorkshops(artisanIds, 0);
+    if (targetArtisanId && artisanIds.length) throw new Error("Invalid allocations");
     if (!Array.isArray(attachmentUrls) || attachmentUrls.some((url) => typeof url !== "string" || url.length > 500)) throw new Error("Invalid attachments");
-    return createQuoteRecord(data);
+    return createQuoteRecord({ ...data, artisanIds });
+}
+
+export function updateQuoteWorkshops({ userId, quoteId, artisanIds }) {
+    validateWorkshops(artisanIds);
+    return replaceDraftWorkshops(id(userId), id(quoteId), artisanIds);
 }
 
 export function sendQuote({ userId, quoteId }) {
@@ -84,8 +100,7 @@ export function requestDispatch({ userId, quoteId }) {
 
 export function dispatchQuote({ userId, quoteId, artisanIds }) {
     id(userId); id(quoteId);
-    if (!Array.isArray(artisanIds) || !artisanIds.length || new Set(artisanIds).size !== artisanIds.length) throw new Error("Invalid allocations");
-    artisanIds.forEach(id);
+    validateWorkshops(artisanIds);
     return dispatchQuoteRecord(userId, quoteId, artisanIds, deadlinePassed, biddingPagePath(quoteId));
 }
 
@@ -97,17 +112,22 @@ export function submitBid({ userId, quoteId, proposedPrice, proposedCompletionDa
     return submitBidRecord({ userId, quoteId, price, proposedCompletionDays, note, sampleImages }, deadlinePassed, quotePagePath(quoteId));
 }
 
-export function acceptBids({ userId, quoteId, bidIds }) {
+export function acceptBids({ userId, quoteId, bidIds, allocations }) {
     id(userId); id(quoteId);
     if (!Array.isArray(bidIds) || !bidIds.length || new Set(bidIds).size !== bidIds.length) throw new Error("Invalid bids");
     bidIds.forEach(id);
-    return acceptBidsRecord(userId, quoteId, bidIds, deadlinePassed, biddingPagePath(quoteId));
+    if (allocations !== undefined) validateAllocations(allocations);
+    return acceptBidsRecord(userId, quoteId, bidIds, deadlinePassed, biddingPagePath(quoteId), allocations);
+}
+
+function validateAllocations(allocations) {
+    if (!Array.isArray(allocations) || !allocations.length || new Set(allocations.map((item) => item.bidId)).size !== allocations.length) throw new Error("Invalid allocations");
+    allocations.forEach((item) => { id(item.bidId); positive(item.quantity); });
 }
 
 export function assignBids({ userId, quoteId, allocations }) {
     id(userId); id(quoteId);
-    if (!Array.isArray(allocations) || !allocations.length || new Set(allocations.map((item) => item.bidId)).size !== allocations.length) throw new Error("Invalid allocations");
-    allocations.forEach((item) => { id(item.bidId); positive(item.quantity); });
+    validateAllocations(allocations);
     return assignBidsRecord(userId, quoteId, allocations);
 }
 

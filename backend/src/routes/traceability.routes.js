@@ -31,13 +31,13 @@ router.get("/public/recent", async (_req, res) => res.json({ data: await listRec
 router.get("/purchased/:code", authenticate, authorize("BUYER"), validate({ params: codeParams }), async (req, res) => {
     const batch = await findBuyerTimelineByBatchCode(req.validatedParams.code, req.user.id);
     if (!batch) throw new ApiError(404, "NOT_FOUND", "Không tìm thấy lô trong đơn của bạn.");
-    res.json({ data: batch });
+    res.set("Cache-Control", "private, no-store").json({ data: batch });
 });
 router.get("/products/:slug", validate({ params: productParams }), async (req, res) => res.json({ data: await getProductBatches(req.validatedParams.slug) }));
 router.get("/product-guide/reference/:slug/qr", validate({ params: productParams }), productQr(true));
 router.get("/product-guide/:slug/qr", validate({ params: productParams }), productQr(false));
 router.post("/batches", ...own, validate({ body: z.object({ productId: uuid, orderAssignmentId: uuid.nullable().optional(), batchCode: z.string().min(1).max(50).regex(/^[a-zA-Z0-9_-]+$/).refine((value) => value.toLowerCase() !== "mine"), totalQuantity: z.number().int().positive().max(2147483647) }).strict() }), async (req, res) => res.status(201).json({ data: await createBatch(req.user.id, req.validatedBody) }));
-router.post("/batches/:id/logs", ...own, validate({ params: byId, body: z.object({ stage: z.enum(["UOM_TO", "MAC_CUI", "DET_LUA", "NHUOM_MAU", "CAN_LANG"]), stageTitle: z.string().trim().min(1).max(150), description: z.string().trim().min(1).max(10000), evidenceImageUrls: urls.optional() }).strict() }), async (req, res) => res.status(201).json({ data: await createBatchLog(req.user.id, req.validatedParams.id, req.validatedBody) }));
+router.post("/batches/:id/logs", ...own, validate({ params: byId, body: z.object({ stage: z.enum(["UOM_TO", "MAC_CUI", "DET_LUA", "NHUOM_MAU", "CAN_LANG"]), stageTitle: z.string().trim().min(1).max(150), description: z.string().trim().min(1).max(10000), loggedOn: z.iso.date().optional(), evidenceImageUrls: urls.optional() }).strict() }), async (req, res) => res.status(201).json({ data: await createBatchLog(req.user.id, req.validatedParams.id, req.validatedBody) }));
 router.put("/batches/:id/logs/:logId", ...own, validate({ params: z.object({ id: uuid, logId: uuid }), body: z.object({ stageTitle: z.string().trim().min(1).max(150), description: z.string().trim().min(1).max(10000), evidenceImageUrls: urls }).strict() }), async (req, res) => res.json({ data: await updateBatchLog(req.user.id, req.validatedParams.id, req.validatedParams.logId, req.validatedBody) }));
 router.post("/batches/:id/complete", ...own, validate({ params: byId }), async (req, res) => res.json({ data: await finishBatch(req.user.id, req.validatedParams.id) }));
 router.get("/:code/qr", validate({ params: codeParams }), async (req, res) => { if (!await getPublicTimeline(req.validatedParams.code)) throw new ApiError(404, "NOT_FOUND", "Không tìm thấy lô sản phẩm."); res.type("png").send(await QRCode.toBuffer(batchLandingUrl(req.validatedParams.code), { type: "png", width: 320, margin: 2 })); });

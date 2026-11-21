@@ -2,6 +2,7 @@ import { prisma } from "../database/prisma.js";
 import { lockAssignment, lockProductBatch, lockTradingArtisan } from "../database/postgresql/row-locks.js";
 
 const publicBatch = {
+    orderAssignmentId: null,
     status: { in: ["IN_PROGRESS", "COMPLETED"] },
     product: { isPublished: true, artisan: { verificationStatus: "APPROVED", user: { isActive: true } } },
 };
@@ -40,7 +41,7 @@ export function findBuyerTimelineByBatchCode(batchCode, buyerId) {
         where: {
             batchCode,
             status: { in: ["IN_PROGRESS", "COMPLETED"] },
-            orderAssignment: { quotationRequest: { buyerId } },
+            orderAssignment: { quotationRequest: { buyerId, status: { in: ["BUYER_ACCEPTED", "IN_PRODUCTION", "DELIVERED"] } } },
         },
         select: {
             ...timelineFields,
@@ -52,17 +53,21 @@ export function findBuyerTimelineByBatchCode(batchCode, buyerId) {
 export function listPublicProductBatches(slug) {
     return prisma.productBatch.findMany({ where: { ...publicBatch, product: { ...publicBatch.product, slug } }, select: { batchCode: true, status: true, startedAt: true, completedAt: true }, orderBy: [{ startedAt: "desc" }, { batchCode: "asc" }], take: 100 });
 }
-export function createOwnedBatch(userId, data) {
+export function createOwnedBatch(userId, data, journalUrl) {
     return prisma.$transaction(async (tx) => {
         if (!data.orderAssignmentId && !(await lockTradingArtisan(tx, userId)).length) return null;
         const product = await tx.product.findFirst({ where: { id: data.productId, artisan: { userId, verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } } }, select: { artisanId: true } });
         if (!product) return null;
         if (data.orderAssignmentId) {
             await lockAssignment(tx, data.orderAssignmentId);
-            const assignment = await tx.orderAssignment.findFirst({ where: { id: data.orderAssignmentId, artisanId: product.artisanId, status: { in: ["ASSIGNED", "IN_PRODUCTION"] } }, select: { id: true, allocatedQuantity: true } });
+            const assignment = await tx.orderAssignment.findFirst({
+                where: { id: data.orderAssignmentId, artisanId: product.artisanId, status: "IN_PRODUCTION" },
+                select: { id: true, allocatedQuantity: true, quotationRequestId: true },
+            });
             if (!assignment) return null;
             const existing = await tx.productBatch.aggregate({ where: { orderAssignmentId: assignment.id, status: { not: "CANCELLED" } }, _sum: { totalQuantity: true } });
             if ((existing._sum.totalQuantity ?? 0) + data.totalQuantity > assignment.allocatedQuantity) throw new Error("Batch exceeds allocated quantity");
+            return tx.productBatch.create({ data: { ...data, qrCodeUrl: journalUrl(assignment.quotationRequestId) } });
         }
         return tx.productBatch.create({ data });
     });

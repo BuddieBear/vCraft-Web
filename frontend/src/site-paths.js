@@ -17,9 +17,14 @@ export const signInPath = "/dang-nhap";
 export const homeMapId = "ban-do-lang-nghe";
 export const productPageRoots = Object.freeze({ retail: "/san-pham", reference: "/mau-lua" });
 export const quotePageRoot = sitePaths.wholesale + "/yeu-cau";
+export const quoteJournalRoot = sitePaths.journal + "/don-si";
 
 export function quotePagePath(id) {
   return quotePageRoot + "/" + encodeURIComponent(id);
+}
+
+export function quoteJournalPath(id) {
+  return quoteJournalRoot + "/" + encodeURIComponent(id);
 }
 
 export function biddingPagePath(id) {

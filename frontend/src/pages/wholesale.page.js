@@ -1,14 +1,14 @@
 import { bindFormErrors, clearFormErrors, showFormErrors } from "../components/form-errors.js";
 import { mountPageList, paragraph } from "./wholesale/view.js";
-import { sitePaths } from "../site-paths.js";
+import { quotePagePath, sitePaths } from "../site-paths.js";
 
-export function mountWholesale(container, account, { quoteId, query, bidding = false, bidQuoteId, workshop = false }) {
+export function mountWholesale(container, account, { quoteId, query, bidding = false, bidQuoteId, workshop = false, journal = false }) {
   const title = workshop ? "Xưởng của tôi" : bidQuoteId ? "Chi tiết yêu cầu chào giá"
-    : bidding ? "Đấu thầu đặt sỉ" : quoteId ? "Chi tiết yêu cầu đặt sỉ" : "Đặt hàng sỉ";
+    : bidding ? "Đấu thầu đặt sỉ" : journal ? "Nhật ký đơn đặt sỉ" : quoteId ? "Chi tiết yêu cầu đặt sỉ" : "Đặt hàng sỉ";
   container.innerHTML = `
-    ${quoteId ? `<a class="text-link product-back" href="${sitePaths.wholesale}">Tất cả yêu cầu</a>` : ""}
+    ${quoteId ? `<a class="text-link product-back" href="${journal ? quotePagePath(quoteId) : sitePaths.wholesale}">${journal ? "Về chi tiết yêu cầu" : "Tất cả yêu cầu"}</a>` : ""}
     ${bidQuoteId ? `<a class="text-link product-back" href="${sitePaths.bidding}">Về bảng đấu thầu</a>` : ""}
-    <div class="section-heading"><h1 id="${workshop ? "workshop-title" : "wholesale-title"}" class="page-title">${title}</h1>
+    <div class="section-heading"><h1 id="${workshop ? "workshop-title" : journal ? "exhibition-title" : "wholesale-title"}" class="page-title">${title}</h1>
       ${workshop || bidding ? `<a class="text-link" href="${sitePaths.catalog}?mua=1">Xem sản phẩm các xưởng</a>` : ""}</div>
     <div class="trade-toolbar">
       <button class="button button-outline" type="button" data-refresh>Tải lại</button>
@@ -132,9 +132,13 @@ export function mountWholesale(container, account, { quoteId, query, bidding = f
         return;
       }
       if (profile.role === "BUYER") {
-        const { buyerView, buyerQuoteView } = await import("./wholesale/buyer.js");
-        if (signal.aborted) return;
-        await (quoteId ? buyerQuoteView(root, tools) : buyerView(root, tools));
+        if (journal) {
+          const { buyerJournalView } = await import("./wholesale/journal.js");
+          if (!signal.aborted) await buyerJournalView(root, tools);
+        } else {
+          const { buyerView, buyerQuoteView } = await import("./wholesale/buyer.js");
+          if (!signal.aborted) await (quoteId ? buyerQuoteView(root, tools) : buyerView(root, tools));
+        }
       } else if (profile.role === "ARTISAN") {
         if (workshop) {
           const { workshopView } = await import("./my-workshop.page.js");
@@ -177,7 +181,7 @@ export function mountWholesale(container, account, { quoteId, query, bidding = f
   refresh.addEventListener("click", () => {
     if (busy || loading) return;
     const reloadLists = visibleView?.reloadLists;
-    if (!reloadLists?.length) {
+    if (quoteId || !reloadLists?.length) {
       load();
       return;
     }

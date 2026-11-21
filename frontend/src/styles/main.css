@@ -347,7 +347,7 @@ h2 { margin-top: 7px; font-size: clamp(2.1rem, 3.65vw, 3.48rem); line-height: 1.
 .stage-number { color: var(--rust); font-variant-numeric: tabular-nums; font-size: .73rem; }
 .stage-overview { display: grid; gap: 4px; }
 .stage-overview small { color: var(--soft-ink); font-weight: 400; line-height: 1.45; }
-.stage-list details p { padding: 0 20px 12px 29px; color: var(--soft-ink); font-size: .91rem; line-height: 1.55; }
+.stage-list details p { padding: 0 20px 12px 29px; color: var(--soft-ink); font-size: .91rem; line-height: 1.55; white-space: pre-wrap; }
 
 .artisan-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 13px; }
 .artisan-card { position: relative; display: grid; grid-template-columns: 77px minmax(0, 1fr); align-content: start; gap: 13px; min-width: 0; padding: 14px; border: 1px solid var(--line); background: var(--white); }
@@ -473,6 +473,15 @@ h2 { margin-top: 7px; font-size: clamp(2.1rem, 3.65vw, 3.48rem); line-height: 1.
 .news-article .news-body { line-height: 1.7; }
 .notification-link { display: flex; width: fit-content; margin-block: 8px; }
 .quote-detail { grid-column: 1 / -1; width: min(100%, 900px); }
+.quote-notes { white-space: pre-wrap; }
+.quote-progress { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 108px), 1fr)); gap: 8px; margin: 16px 0; padding: 0; list-style: none; }
+.quote-progress li { border-top: 2px solid var(--line); color: var(--soft-ink); padding: 8px 4px; font-size: .82rem; line-height: 1.35; }
+.quote-progress li[data-completed] { border-color: var(--gold); }
+.quote-progress li[aria-current="step"] { border-color: var(--rust); color: var(--indigo); font-weight: 700; }
+.quote-workshops { min-width: 0; padding: 8px 12px 12px; border: 1px solid var(--line); }
+.quote-workshops .trade-choice { min-height: 36px; }
+.quote-selected-workshops { display: grid; gap: 4px; margin-block: 0 8px; padding-inline-start: 18px; }
+.quote-selected-workshops button { margin-inline-start: 10px; }
 .quote-links { display: grid; gap: 10px; margin: 14px 0 0; padding: 0; list-style: none; }
 .quote-links li { padding-block: 9px; border-top: 1px solid var(--line); }
 .quote-links li p { margin: 2px 0 0; color: var(--soft-ink); font-size: .85rem; }

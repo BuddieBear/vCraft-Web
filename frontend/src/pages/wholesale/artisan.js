@@ -2,6 +2,7 @@ import { formatPrice } from "../../components/ui.js";
 import { batchQr } from "../../components/batch-qr.js";
 import { mediaUrl } from "../../api/http.js";
 import { weaveTypes } from "../../data/weave-types.js";
+import { vietnamToday } from "../../data/input-values.js";
 import { biddingPagePath, sitePaths } from "../../site-paths.js";
 import { card, displayDate, get, labels, listSection, paragraph, write } from "./view.js";
 
@@ -50,7 +51,9 @@ export async function artisanBidView(root, { bidQuoteId, form, signal }) {
   const quote = await get("/wholesale/open-quotes/" + encodeURIComponent(bidQuoteId), signal);
   const panel = card(root, quote.title, `${labels[quote.status]} · ${quote.targetQuantity.toLocaleString("vi-VN")} sản phẩm`);
   panel.classList.add("quote-detail");
-  panel.append(paragraph(quote.specifications), paragraph("Ngày cần hàng · " + displayDate.format(new Date(quote.deadline))));
+  const notes = paragraph(quote.specifications);
+  notes.className = "quote-notes";
+  panel.append(notes, paragraph("Ngày cần hàng · " + displayDate.format(new Date(quote.deadline))));
   if (weaveTypes[quote.preferredWeaveType]) panel.append(paragraph("Loại lụa · " + weaveTypes[quote.preferredWeaveType]));
   if (quote.maxBudget !== null) panel.append(paragraph("Ngân sách tối đa · " + formatPrice(quote.maxBudget)));
   for (const [index, url] of quote.attachmentUrls.entries()) {
@@ -97,11 +100,11 @@ function renderAssignment(root, assignment, tools, pageSignal) {
   panel.append(paragraph(`Đã hoàn thành ${completed}/${assignment.allocatedQuantity} sản phẩm.`));
   const next = { ASSIGNED: "IN_PRODUCTION", IN_PRODUCTION: "READY_FOR_DELIVERY", READY_FOR_DELIVERY: "COMPLETED" }[assignment.status];
   if (next && (next !== "READY_FOR_DELIVERY" || canShip)) {
-    panel.append(button(next === "COMPLETED" ? "Xác nhận đã giao" : labels[next],
+    panel.append(button(next === "COMPLETED" ? "Xác nhận đã giao" : next === "IN_PRODUCTION" ? "Bắt đầu sản xuất" : labels[next],
       () => write("/wholesale/assignments/" + assignment.id, { status: next }, "PATCH")));
   }
   if (next === "READY_FOR_DELIVERY" && !canShip) panel.append(paragraph("Hoàn thành đủ số lượng theo lô để sẵn sàng giao."));
-  if (["ASSIGNED", "IN_PRODUCTION"].includes(assignment.status) && remaining > 0) {
+  if (assignment.status === "IN_PRODUCTION" && remaining > 0) {
     expand(panel, {
       key: "create-" + assignment.id, label: "Tạo lô sản xuất",
       mount: (details) => mountBatchForm(details, assignment.id, remaining, tools, pageSignal),
@@ -172,7 +175,7 @@ export function renderBatch(target, batch, { button, form }) {
   block.className = "trade-batch";
   const step = batch._count.logs;
   block.append(paragraph(`Lô ${batch.batchCode} · ${batch.totalQuantity} sản phẩm · ${step}/${stages.length} công đoạn`));
-  if (batch.product.isPublished && ["IN_PROGRESS", "COMPLETED"].includes(batch.status)) {
+  if (!batch.orderAssignmentId && batch.product.isPublished && ["IN_PROGRESS", "COMPLETED"].includes(batch.status)) {
     block.append(batchQr(batch.batchCode));
     const link = document.createElement("a");
     link.className = "text-link";
@@ -184,28 +187,36 @@ export function renderBatch(target, batch, { button, form }) {
     const path = "/traceability/batches/" + batch.id;
     const stage = stages[step];
     if (stage) {
-      let uploadedFile;
+      let uploadedFiles = [];
       let imageUrls = [];
       const log = form(`
-        <label>Mô tả công đoạn<textarea name="description" required maxlength="10000"></textarea></label>
-        <label>Ảnh minh chứng (tùy chọn)<input name="evidence" type="file" accept="image/jpeg,image/png,image/webp"></label>`,
+        <label>Ngày công đoạn<input name="loggedOn" type="date" required></label>
+        <label>Tên công đoạn<input name="stageTitle" maxlength="150" required></label>
+        <label>Ghi chú công đoạn<textarea name="description" required maxlength="10000"></textarea></label>
+        <label>Ảnh minh chứng (tối đa 4 ảnh)<input name="evidence" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>`,
       "Ghi công đoạn " + stage[1], async values => {
         const description = values.get("description").trim();
+        const stageTitle = values.get("stageTitle").trim();
         if (!description) throw new Error("Nhập mô tả công đoạn trước khi lưu.");
-        const file = log.elements.namedItem("evidence").files[0];
-        if (file && file !== uploadedFile) {
-          if (file.type && !["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+        if (!stageTitle) throw new Error("Nhập tên công đoạn trước khi lưu.");
+        const files = [...log.elements.namedItem("evidence").files];
+        if (files.length > 4) throw new Error("Chọn tối đa 4 ảnh mỗi công đoạn.");
+        if (files.length && (files.length !== uploadedFiles.length || files.some((file, index) => file !== uploadedFiles[index]))) {
+          if (files.some(file => file.type && !["image/jpeg", "image/png", "image/webp"].includes(file.type))) {
             throw new Error("Chọn ảnh định dạng JPEG, PNG hoặc WebP.");
           }
-          if (file.size > 5 * 1024 * 1024) throw new Error("Ảnh minh chứng tối đa 5 MB.");
+          if (files.some(file => !file.size || file.size > 5 * 1024 * 1024)) throw new Error("Mỗi ảnh minh chứng phải có dung lượng từ trên 0 đến 5 MB.");
           const body = new FormData();
-          body.append("images", file);
+          for (const file of files) body.append("images", file);
           const { data } = await write("/media/images", body);
           imageUrls = data.urls;
-          uploadedFile = file;
+          uploadedFiles = files;
         }
-        await write(path + "/logs", { stage: stage[0], stageTitle: stage[1], description, evidenceImageUrls: file ? imageUrls : [] });
+        await write(path + "/logs", { stage: stage[0], stageTitle, description, loggedOn: values.get("loggedOn"), evidenceImageUrls: files.length ? imageUrls : [] });
       });
+      log.elements.namedItem("stageTitle").value = stage[1];
+      const loggedOn = log.elements.namedItem("loggedOn");
+      loggedOn.max = loggedOn.value = vietnamToday();
       block.append(log);
     } else block.append(button("Hoàn thành lô", () => write(path + "/complete")));
   }
