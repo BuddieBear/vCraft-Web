@@ -6,7 +6,7 @@ import sharp from "sharp";
 import { app } from "../../src/app.js";
 import { prisma } from "../../src/database/prisma.js";
 import { quoteBudgetError, vietnamToday } from "../../../frontend/src/data/input-values.js";
-import { biddingPagePath, newsArticlePath, quoteJournalPath, quotePagePath, sitePaths } from "../../../frontend/src/site-paths.js";
+import { biddingPagePath, newsArticlePath, quoteJournalPath, quotePagePath, referenceWorkshopPath, sitePaths } from "../../../frontend/src/site-paths.js";
 import { assertIsolatedTestDatabase } from "../test-env.js";
 
 test("artisan, production, administration, media and retail APIs", async () => {
@@ -59,6 +59,13 @@ test("artisan, production, administration, media and retail APIs", async () => {
         assert.equal(sample.json.data.workshopSlug, "nhaxasilk");
         assert.equal((await fetch(base + "/mau-lua/lua-hoa-sen-shd21")).status, 200);
         assert.equal((await fetch(base + "/mau-lua/mau-khong-ton-tai")).status, 404);
+        const references = (await request("/artisans/reference")).json.data;
+        for (const workshop of references) {
+            assert.equal((await fetch(base + referenceWorkshopPath(workshop.slug))).status, 200);
+            assert.ok(workshop.location.source);
+        }
+        assert.equal((await fetch(base + referenceWorkshopPath("khong-ton-tai"))).status, 404);
+        assert.equal(references.find(workshop => workshop.slug === "son-thuy-silk").location.areaPoint, true);
         const admin = await login("admin@nhaxa.example");
         const product = await prisma.product.findUniqueOrThrow({ where: { slug: "hong-dat" }, include: { artisan: { include: { user: true } } } });
         const storefrontSample = await request("/products/by-slug/hong-dat?storefront=true");
@@ -106,6 +113,25 @@ test("artisan, production, administration, media and retail APIs", async () => {
         assert.equal(newArtisan.status, 201);
         const other = await login("feature-artisan@example.test", "Strong-test-password");
         const workshopId = newArtisan.json.data.artisanProfile.id;
+        const proofPath = "/admin/artisans/" + workshopId;
+        assert.equal(newArtisan.json.data.artisanProfile.isOpenForVisitors, false);
+        assert.equal((await request("/artisans/" + workshopId)).status, 404);
+        assert.equal((await request(proofPath)).status, 401);
+        assert.equal((await request(proofPath, { token: other })).status, 403);
+        assert.equal((await request("/artisans/me", { method: "PATCH", token: other, body: {
+            experienceYears: 10, familyHistory: "Workshop history", galleryImages: [uploaded], openingHours: "",
+        } })).status, 200);
+        assert.equal((await request("/artisans/me/certificates", { method: "POST", token: other, body: {
+            title: "Pending workshop certificate", issuedYear: 2025, issuingAuthority: "Test", certificateImageUrl: uploaded,
+        } })).status, 201);
+        const proof = await request(proofPath, { token: admin });
+        assert.equal(proof.status, 200);
+        assert.match(proof.headers.get("cache-control"), /no-store/);
+        assert.equal(proof.json.data.verificationStatus, "PENDING");
+        assert.equal(proof.json.data.familyHistory, "Workshop history");
+        assert.equal(proof.json.data.galleryImages[0], uploaded);
+        assert.equal(proof.json.data.certificates[0].title, "Pending workshop certificate");
+        assert.equal(proof.json.data.user.passwordHash, undefined);
         const suspensionPath = `/admin/artisans/${workshopId}/suspension`;
         const suspension = (isSuspended, token = admin) => request(suspensionPath, { method: "PATCH", token, body: { isSuspended } });
         assert.equal((await suspension(true)).status, 409);
@@ -195,6 +221,14 @@ test("artisan, production, administration, media and retail APIs", async () => {
         assert.ok((await request("/wholesale/open-quotes?view=mine", { token: other })).json.data.some(item => item.id === publicId));
         assert.ok(!(await request("/wholesale/open-quotes", { token: artisan })).json.data.some(item => item.id === publicId));
         const created = await request("/products", { method: "POST", token: other, body: newProduct });
+        const productTrace = base + "/trace/product/" + newProduct.slug;
+        const productQr = base + "/api/traceability/product-guide/" + newProduct.slug + "/qr";
+        const traceWithoutBatch = await fetch(productTrace);
+        assert.equal(traceWithoutBatch.status, 200);
+        assert.match(await traceWithoutBatch.text(), /chưa công bố lô sản xuất/);
+        const qr = await fetch(productQr);
+        assert.equal(qr.status, 200);
+        assert.equal(qr.headers.get("content-type"), "image/png");
         assert.equal(created.status, 201);
         assert.equal((await request("/products/by-slug/feature-test-silk?storefront=true")).status, 200);
         assert.equal((await fetch(base + "/san-pham/feature-test-silk")).status, 200);
@@ -224,6 +258,7 @@ test("artisan, production, administration, media and retail APIs", async () => {
         }
         assert.equal((await request(`/traceability/batches/${batch.json.data.id}/complete`, { method: "POST", token: other })).status, 200);
         assert.equal((await request("/traceability/FEATURE-001")).json.data.logs.length, 5);
+        assert.match(await (await fetch(productTrace)).text(), /href="\/trace\/FEATURE-001"/);
         assert.equal((await request("/traceability/by-code/FEATURE-001")).json.data.logs.length, 5);
         assert.equal((await fetch(base + "/api/traceability/FEATURE-001/qr")).headers.get("content-type"), "image/png");
         const landing = await fetch(base + "/trace/FEATURE-001");
@@ -233,6 +268,41 @@ test("artisan, production, administration, media and retail APIs", async () => {
         const landingHtml = await landing.text();
         assert.match(landingHtml, /A &lt; B &amp; C/);
         assert.ok(landingHtml.includes(uploaded));
+        const stagesForProduct = ["Cắt vải", "May viền"];
+        const editProduct = body => request("/products/" + created.json.data.id, { method: "PUT", token: other, body: { ...replacement, ...body } });
+        assert.equal((await editProduct({ productionSteps: ["May viền", "  MAY   VIỀN  "] })).status, 400);
+        assert.equal((await editProduct({ productionSteps: stagesForProduct })).status, 200);
+        const newBatch = await request("/traceability/batches", { method: "POST", token: other, body: {
+            productId: created.json.data.id, batchCode: "FEATURE-CUSTOM", totalQuantity: 2,
+        } });
+        assert.equal(newBatch.status, 201);
+        assert.deepEqual(newBatch.json.data.productionSteps, stagesForProduct);
+        assert.equal((await editProduct({ productionSteps: ["Chuẩn bị", "May", "Đóng gói"] })).status, 200);
+        const customPath = "/traceability/batches/" + newBatch.json.data.id;
+        const recordStep = (stepOrder, stageTitle) => request(customPath + "/logs", { method: "POST", token: other, body: {
+            stepOrder, stageTitle, description: "Ghi chú", loggedOn: "2025-11-21",
+        } });
+        assert.equal((await recordStep(2, "May viền")).status, 409);
+        const initial = await Promise.all([recordStep(1, "Cắt vải"), recordStep(1, "Cắt vải")]);
+        assert.deepEqual(initial.map(result => result.status).sort(), [201, 409]);
+        const firstLog = initial.find(result => result.status === 201).json.data;
+        const editLog = (token, loggedOn) => request(customPath + "/logs/" + firstLog.id, { method: "PUT", token, body: {
+            stageTitle: "Cắt theo rập", description: "Đã kiểm tra kích thước", loggedOn, evidenceImageUrls: [uploaded],
+        } });
+        assert.equal((await editLog(artisan, "2025-11-20")).status, 404);
+        assert.equal((await editLog(other, "2099-11-20")).status, 400);
+        assert.equal((await editLog(other, "2025-11-20")).status, 200);
+        assert.equal((await request(customPath + "/complete", { method: "POST", token: other })).status, 409);
+        assert.equal((await recordStep(2, "May viền")).status, 201);
+        assert.equal((await request(customPath + "/complete", { method: "POST", token: other })).status, 200);
+        assert.equal((await editLog(other, "2025-11-20")).status, 404);
+        const timeline = (await request("/traceability/FEATURE-CUSTOM")).json.data;
+        assert.deepEqual(timeline.productionSteps, stagesForProduct);
+        assert.deepEqual(timeline.logs.map(log => log.stageTitle), ["Cắt theo rập", "May viền"]);
+        assert.equal(vietnamToday(new Date(timeline.logs[0].loggedAt)), "2025-11-20");
+        assert.deepEqual(timeline.logs[0].evidenceImageUrls, [uploaded]);
+        // Later wholesale checks exercise the original five-step API.
+        assert.equal((await editProduct({ productionSteps: ["Ươm tơ", "Mắc cửi", "Dệt lụa", "Nhuộm màu", "Cán láng"] })).status, 200);
         const outsider = await login("nep-van@nhaxa.example");
         const selectedQuote = await request("/wholesale/quotes", {
             method: "POST", token: buyer,
@@ -390,10 +460,60 @@ test("artisan, production, administration, media and retail APIs", async () => {
         assert.equal((await request(`/retail/orders/${mixed.json.data.id}/status`, { method: "PATCH", token: admin, body: { status: "CANCELLED" } })).status, 200);
         assert.equal((await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stockQuantity, firstStock);
         assert.equal((await request(`/retail/orders/${mixed.json.data.id}/status`, { method: "PATCH", token: admin, body: { status: "CANCELLED" } })).status, 409);
+        assert.equal((await request(`/retail/cart/${product.id}`, { method: "PUT", token: buyer, body: { quantity: 1 } })).status, 200);
+        assert.equal((await putCart(2)).status, 200);
+        const split = await request("/retail/checkout", { method: "POST", token: buyer, body: {
+            recipientName: "Recipient", recipientPhone: "0901234567", shippingAddress: "Test",
+        } });
+        assert.equal(split.status, 201);
+        const splitPath = "/retail/orders/" + split.json.data.id;
+        const sales = await request("/retail/sales?status=PENDING&limit=1", { token: other });
+        assert.equal(sales.status, 200);
+        assert.equal(sales.json.data[0].recipientName, "Recipient");
+        assert.deepEqual(sales.json.data[0].items.map(line => line.productId), [created.json.data.id]);
+        assert.equal(sales.json.data[0].totalAmount, "40");
+        assert.equal(sales.json.pagination.hasNext, false);
+        const advancePart = (token, artisanId, status, paymentCollected) => request(splitPath + "/workshops/" + artisanId + "/status", {
+            method: "PATCH", token, body: { status, paymentCollected },
+        });
+        assert.equal((await advancePart(other, product.artisanId, "CONFIRMED")).status, 404);
+        assert.equal((await advancePart(buyer, workshopId, "CONFIRMED")).status, 403);
+        assert.equal((await advancePart(other, workshopId, "SHIPPING")).status, 409);
+        assert.equal((await advancePart(other, workshopId, "CONFIRMED")).status, 200);
+        assert.equal((await advancePart(other, workshopId, "SHIPPING")).status, 200);
+        assert.equal((await advancePart(other, workshopId, "DELIVERED")).status, 409);
+        assert.equal((await advancePart(other, workshopId, "DELIVERED", true)).status, 200);
+        const partial = (await request(splitPath, { token: buyer })).json.data;
+        assert.equal(partial.status, "PENDING");
+        assert.equal(partial.paymentStatus, "UNPAID");
+        assert.equal(partial.fulfillments.find(part => part.artisanId === workshopId).status, "DELIVERED");
+        assert.equal((await request(splitPath + "/status", { method: "PATCH", token: admin, body: { status: "CANCELLED" } })).status, 409);
+        for (const status of ["CONFIRMED", "SHIPPING", "DELIVERED"]) {
+            assert.equal((await advancePart(artisan, product.artisanId, status, status === "DELIVERED")).status, 200);
+        }
+        const completed = (await request(splitPath, { token: buyer })).json.data;
+        assert.equal(completed.status, "DELIVERED");
+        assert.equal(completed.paymentStatus, "PAID");
+
+        for (const [targetType, rating] of [["ARTISAN", 3], ["PRODUCT", 5]]) {
+            const review = await request("/reviews", { method: "POST", token: buyer, body: {
+                targetType, rating, comment: "Split order review", artisanId: workshopId,
+                retailOrderId: completed.id, ...(targetType === "PRODUCT" && { productId: created.json.data.id }),
+            } });
+            assert.equal(review.status, 201);
+        }
+        const productReviews = await request("/reviews/products/" + newProduct.slug);
+        assert.deepEqual(productReviews.json.summary, { averageRating: 5, totalReviews: 1 });
+        const workshopReviews = await request("/reviews/artisans/" + workshopId + "?limit=1");
+        assert.deepEqual(workshopReviews.json.summary, { averageRating: 4, totalReviews: 2 });
+        assert.equal(workshopReviews.json.pagination.hasNext, true);
+        assert.equal((await request("/reviews/artisans/" + workshopId + "?limit=1&page=2")).json.pagination.hasNext, false);
         assert.equal((await request(`/products/${created.json.data.id}`, { method: "DELETE", token: other })).status, 204);
         assert.equal((await request("/products/feature-test-silk")).status, 404);
         assert.equal((await fetch(base + "/san-pham/feature-test-silk")).status, 404);
         assert.equal((await fetch(base + "/trace/FEATURE-001")).status, 404);
+        assert.equal((await fetch(productTrace)).status, 404);
+        assert.equal((await fetch(productQr)).status, 404);
         const secondSession = await login("buyer@nhaxa.example");
         assert.equal((await request("/auth/logout-all", { method: "POST", token: buyer })).status, 200);
         assert.equal((await request(privateQuote, { token: buyer })).status, 401);

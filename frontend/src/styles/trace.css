@@ -144,3 +144,6 @@
   .trace-timeline { animation: detail-enter 380ms 70ms ease-out both; }
   .trace-stage[open] .trace-stage-body { animation: detail-enter 240ms ease-out both; }
 }
+.trace-product-batches { list-style: none; margin: 16px 0 0; padding: 0; }
+.trace-product-batches li { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 10px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.trace-product-batches li > span { color: var(--soft-ink); }

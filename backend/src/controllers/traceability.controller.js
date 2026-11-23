@@ -1,4 +1,4 @@
-import { getPublicProductionProduct, getPublicTimeline } from "../services/traceability.service.js";
+import { getProductBatches, getPublicProductionProduct, getPublicTimeline } from "../services/traceability.service.js";
 import { renderProductProductionPage, renderTraceabilityPage } from "../presenters/traceability.presenter.js";
 import { ApiError } from "../middlewares/api-error.js";
 
@@ -14,7 +14,8 @@ export function productionPage(reference) {
         const { slug } = request.params;
         const product = slug.length <= 280 ? await getPublicProductionProduct(slug, reference) : null;
         if (!product) return response.status(404).type("text").send("Không tìm thấy hướng dẫn sản xuất.");
-        return sendTracePage(response, renderProductProductionPage(product, reference));
+        const batches = reference ? [] : await getProductBatches(slug);
+        return sendTracePage(response, renderProductProductionPage(product, reference, batches));
     };
 }
 

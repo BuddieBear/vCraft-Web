@@ -1,6 +1,6 @@
 import { request } from "../api/http.js";
 import { icon } from "../components/ui.js";
-import { sitePaths } from "../site-paths.js";
+import { referenceWorkshopPath, sitePaths } from "../site-paths.js";
 
 const village = [20.66024, 106.02325]; // OpenStreetMap node 9959123317.
 const villageBounds = [[20.6594, 106.0145], [20.6694, 106.030]];
@@ -95,7 +95,7 @@ function workshopInfo(workshop, tag, headingTag = "h3") {
   const heading = document.createElement(headingTag);
   heading.textContent = workshop.workshopName;
   card.append(heading);
-  for (const text of [workshop.address, workshop.hours]) {
+  for (const text of [workshop.address, workshop.hours, workshop.areaPoint && "Ghim khu vực · liên hệ để xác nhận điểm đến"]) {
     if (!text) continue;
     const paragraph = document.createElement("p");
     paragraph.textContent = text;
@@ -234,6 +234,7 @@ export function mountArtisanMap(section, { embedded = false } = {}) {
         <div class="artisan-map" role="region" aria-label="Bản đồ tương tác, mở đầu tại Nha Xá"></div>
         <ul class="map-legend" aria-label="Ký hiệu bản đồ" hidden>
           <li><span class="map-legend-workshop"></span>Xưởng lụa</li>
+          <li><span class="map-legend-area"></span>Ghim khu vực</li>
           <li><span class="map-legend-landmark"></span>Địa danh</li>
           <li><span class="map-legend-building"></span>Công trình khi phóng to</li>
         </ul>
@@ -309,7 +310,7 @@ export function mountArtisanMap(section, { embedded = false } = {}) {
         popup.className = "map-popup";
         const label = entries.map(({ workshop }) => workshop.workshopName).join(", ");
         const markerIcon = L.divIcon({
-          className: "workshop-pin",
+          className: entries.every(({ workshop }) => workshop.areaPoint) ? "workshop-pin is-area" : "workshop-pin",
           html: entries.length > 1 ? `<span>${entries.length}</span>` : "",
           iconSize: [36, 36],
           iconAnchor: [18, 34],
@@ -342,7 +343,7 @@ export function mountArtisanMap(section, { embedded = false } = {}) {
 
   function refreshDirectory() {
     const { count, pinned } = renderWorkshops();
-    workshopStatus.textContent = count ? `${pinned}/${count} cơ sở có tọa độ công khai`
+    workshopStatus.textContent = count ? `${pinned}/${count} cơ sở có ghim trên bản đồ`
       : visitsOnly.checked ? "Chưa có xưởng xác nhận đón khách." : "Chưa có cơ sở công khai.";
     if (incomplete) workshopStatus.textContent += " Chưa tải được đầy đủ danh sách.";
     workshopRetry.hidden = !incomplete;
@@ -401,8 +402,8 @@ export function mountArtisanMap(section, { embedded = false } = {}) {
       ...workshop.location,
       workshopName: workshop.name,
       hours: workshop.location?.workingHours ? "Giờ làm việc · " + workshop.location.workingHours : "Giờ tham quan chưa công bố",
-      action: "Xem mẫu của cơ sở",
-      href: sitePaths.catalog + "?" + new URLSearchParams({ "co-so": workshop.slug }),
+      action: "Xem showroom",
+      href: referenceWorkshopPath(workshop.slug),
     }));
     incomplete = accounts.status === "rejected" || catalog.status === "rejected";
     visitsOnly.disabled = accounts.status !== "fulfilled";

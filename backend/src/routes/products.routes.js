@@ -8,6 +8,7 @@ import { validate } from "../middlewares/validate-request.js";
 import { ApiError } from "../middlewares/api-error.js";
 import { byId, uuid, urls, listPage, pageQuery, money } from "./schemas.js";
 import { getMyProducts, createProduct, replaceProduct, hideCatalogProduct } from "../services/products.service.js";
+import { maxProductionSteps, productionStepKey } from "../../../frontend/src/data/production-steps.js";
 
 const router = Router();
 const stockQuantity = z.number().int().min(0).max(2147483647);
@@ -20,8 +21,11 @@ function validatePricing(v, ctx) {
     } catch { /* The field error below also covers unparsable amounts. */ }
     ctx.addIssue({ code: "custom", path: ["price"], message: "Invalid pricing" });
 }
-const productBody = productFields.superRefine(validatePricing);
-const replaceBody = productFields.extend({ expectedStockQuantity: stockQuantity }).superRefine(validatePricing);
+const productionSteps = z.array(z.string().trim().min(1).max(150)).min(1).max(maxProductionSteps)
+    .refine(steps => new Set(steps.map(productionStepKey)).size === steps.length, "Tên các công đoạn phải khác nhau.");
+const editableProduct = productFields.extend({ productionSteps: productionSteps.optional() });
+const productBody = editableProduct.superRefine(validatePricing);
+const replaceBody = editableProduct.extend({ expectedStockQuantity: stockQuantity }).superRefine(validatePricing);
 const own = [authenticate, authorize("ARTISAN")];
 router.get("/mine", ...own, validate({ query: pageQuery }), async (req, res) => res.json(await listPage(req.validatedQuery, (options) => getMyProducts(req.user.id, options))));
 router.post("/", ...own, validate({ body: productBody }), async (req, res) => res.status(201).json({ data: await createProduct(req.user.id, req.validatedBody) }));

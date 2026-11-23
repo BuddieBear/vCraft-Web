@@ -67,6 +67,7 @@ enum SilkProductionStage {
   DET_LUA
   NHUOM_MAU
   CAN_LANG
+  CUSTOM
 
   @@map("silk_production_stage")
 }
@@ -253,6 +254,7 @@ model ArtisanProfile {
   certificates          ArtisanCertificate[]
   products              Product[]
   retailOrderItems      RetailOrderItem[]
+  retailFulfillments    RetailFulfillment[]
   bids                  Bid[]
   orderAssignments      OrderAssignment[]
   reviews               Review[]
@@ -302,6 +304,7 @@ model Product {
   rawMaterial    String        @default("Tơ tằm") @map("raw_material") @db.VarChar(150)
   description    String?       @db.Text
   culturalStory  String?       @map("cultural_story") @db.Text
+  productionSteps String[]     @default([]) @map("production_steps")
   price          Decimal?     @db.Decimal(12, 2)
   pricingMode    PricingMode   @default(FIXED) @map("pricing_mode")
   saleUnit       SaleUnit      @default(PIECE) @map("sale_unit")
@@ -337,6 +340,7 @@ model ProductBatch {
   startedAt         DateTime    @default(dbgenerated("CURRENT_DATE")) @map("started_at") @db.Date
   completedAt       DateTime?   @map("completed_at") @db.Date
   totalQuantity     Int         @map("total_quantity")
+  productionSteps   String[]    @default([]) @map("production_steps")
   status            BatchStatus @default(IN_PROGRESS)
   createdAt         DateTime    @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt         DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
@@ -364,8 +368,7 @@ model BatchLog {
 
   batch ProductBatch @relation(fields: [batchId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@unique([batchId, stage], map: "uq_batch_stage")
-  @@index([batchId, stepOrder], map: "idx_batch_logs_order")
+  @@unique([batchId, stepOrder], map: "uq_batch_log_step_order")
   @@map("batch_logs")
 }
 
@@ -402,12 +405,27 @@ model RetailOrder {
 
   buyer   User              @relation(fields: [buyerId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   items   RetailOrderItem[]
+  fulfillments RetailFulfillment[]
   reviews Review[]
 
   @@index([buyerId], map: "idx_retail_orders_buyer")
   @@index([createdAt(sort: Desc)], map: "idx_retail_orders_created")
   @@index([status], map: "idx_retail_orders_status")
   @@map("retail_orders")
+}
+
+model RetailFulfillment {
+  orderId       String            @map("order_id") @db.Uuid
+  artisanId     String            @map("artisan_id") @db.Uuid
+  status        RetailOrderStatus @default(PENDING)
+  paymentStatus PaymentStatus     @default(UNPAID) @map("payment_status")
+
+  order   RetailOrder    @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  artisan ArtisanProfile @relation(fields: [artisanId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@id([orderId, artisanId])
+  @@index([artisanId, status], map: "idx_retail_fulfillments_artisan_status")
+  @@map("retail_fulfillments")
 }
 
 model RetailOrderItem {

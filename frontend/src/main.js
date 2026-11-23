@@ -1,7 +1,7 @@
 import { icon } from "./components/ui.js";
 import { mountCart } from "./pages/cart.page.js";
 import { mountAccount } from "./pages/login.page.js";
-import { homeMapId, matchProductPage, pageSegment, quoteJournalRoot, quotePageRoot, sitePaths } from "./site-paths.js";
+import { homeMapId, matchProductPage, pageSegment, quoteJournalRoot, quotePageRoot, referenceWorkshopRoot, sitePaths } from "./site-paths.js";
 
 const pages = new Map([
   [sitePaths.home, { id: "trang-chu", titleId: "hero-title" }],
@@ -23,8 +23,9 @@ const quoteId = pageSegment(requestedPath, quotePageRoot);
 const journalQuoteId = pageSegment(requestedPath, quoteJournalRoot);
 const bidQuoteId = pageSegment(requestedPath, sitePaths.bidding);
 const articleSlug = pageSegment(requestedPath, sitePaths.news);
+const referenceWorkshopSlug = pageSegment(requestedPath, referenceWorkshopRoot);
 const path = productPage ? sitePaths.catalog : quoteId ? sitePaths.wholesale : journalQuoteId ? sitePaths.journal : bidQuoteId ? sitePaths.bidding : articleSlug ? sitePaths.news
-  : pages.has(requestedPath) ? requestedPath : sitePaths.home;
+  : referenceWorkshopSlug ? sitePaths.artisans : pages.has(requestedPath) ? requestedPath : sitePaths.home;
 const legacyPage = path === sitePaths.home
   ? [...pages].find(([, page]) => location.hash === "#" + page.id)
   : null;
@@ -54,7 +55,7 @@ function renderPage() {
       </nav>
       <div class="header-actions">
         <button class="icon-button" type="button" id="search-button" aria-label="Tìm sản phẩm">${icon("search")}</button>
-        <button class="icon-button" type="button" id="account-button" aria-label="Đăng nhập">${icon("user")}</button>
+        <button class="icon-button" type="button" id="account-button" aria-label="Hồ sơ" aria-haspopup="dialog">${icon("user")}</button>
         <button class="icon-button cart-trigger" type="button" id="cart-button" aria-label="Mở giỏ hàng (0)">${icon("bag")}<span id="cart-count" aria-hidden="true">0</span></button>
       </div>
     </div>`;
@@ -104,7 +105,8 @@ function renderPage() {
   const tradeLink = header.querySelector("[data-trade]");
   function syncNavigation(profile) {
     const artisan = profile?.role === "ARTISAN";
-    retailLink.hidden = profile?.role !== "ADMIN";
+    retailLink.hidden = !artisan && profile?.role !== "ADMIN";
+    retailLink.textContent = artisan ? "Đơn bán của tôi" : "Đơn lẻ";
     tradeLink.href = artisan ? sitePaths.bidding : sitePaths.wholesale;
     tradeLink.textContent = artisan ? "Đấu thầu" : profile?.role === "ADMIN" ? "Điều phối đặt sỉ" : "Đặt sỉ";
     if (path === sitePaths.wholesale || path === sitePaths.bidding) tradeLink.setAttribute("aria-current", "page");
@@ -157,7 +159,7 @@ async function mountContent(section, account, cart) {
       }
       return (await import("./pages/exhibition.page.js")).mountExhibition(section);
     case sitePaths.artisans:
-      return (await import("./pages/artisan-profile.page.js")).renderArtisans(section);
+      return (await import("./pages/artisan-profile.page.js")).renderArtisans(section, referenceWorkshopSlug);
     case sitePaths.catalog:
       return mountCatalogPage(section);
     case sitePaths.wholesale:

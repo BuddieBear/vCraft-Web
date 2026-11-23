@@ -75,6 +75,7 @@ export function findPublicProductBySlug(slug, { storefront = false } = {}) {
             ...summaryFields,
             description: true,
             culturalStory: true,
+            productionSteps: true,
             weaveType: true,
             rawMaterial: true,
             createdAt: true,

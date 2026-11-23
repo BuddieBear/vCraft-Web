@@ -8,8 +8,8 @@ import { vietnamToday } from "../../../frontend/src/data/input-values.js";
 import { quoteJournalPath } from "../../../frontend/src/site-paths.js";
 
 export async function getPublicProductionProduct(slug, reference) {
-    if (!productProduction({ slug }, { reference }).length) return null;
     if (!reference) return findPublicProductBySlug(slug);
+    if (!productProduction({ slug }, { reference }).length) return null;
     const product = findReferenceProduct(slug);
     return product && { ...product, mediaUrls: [product.image], artisan: { workshopName: product.workshopName } };
 }
@@ -23,16 +23,17 @@ export async function createBatch(userId, data) {
     return result;
 }
 
-export async function createBatchLog(userId, batchId, { loggedOn, ...data }) {
-    const stages = ["UOM_TO", "MAC_CUI", "DET_LUA", "NHUOM_MAU", "CAN_LANG"];
-    let loggedAt;
-    if (loggedOn !== undefined) {
-        loggedAt = new Date(`${loggedOn}T00:00:00+07:00`);
-        if (!Number.isFinite(loggedAt.valueOf()) || loggedOn < "0001-01-01" || vietnamToday(loggedAt) !== loggedOn || loggedOn > vietnamToday()) {
-            throw new ApiError(400, "INVALID_LOG_DATE", "Chọn ngày công đoạn hợp lệ, tối đa đến hôm nay.");
-        }
+function logDate(loggedOn) {
+    if (loggedOn === undefined) return undefined;
+    const loggedAt = new Date(`${loggedOn}T00:00:00+07:00`);
+    if (!Number.isFinite(loggedAt.valueOf()) || loggedOn < "0001-01-01" || vietnamToday(loggedAt) !== loggedOn || loggedOn > vietnamToday()) {
+        throw new ApiError(400, "INVALID_LOG_DATE", "Chọn ngày công đoạn hợp lệ, tối đa đến hôm nay.");
     }
-    const result = await addOwnedLog(userId, batchId, { ...data, ...(loggedAt && { loggedAt }), stepOrder: stages.indexOf(data.stage) + 1 });
+    return loggedAt;
+}
+
+export async function createBatchLog(userId, batchId, { loggedOn, ...data }) {
+    const result = await addOwnedLog(userId, batchId, { ...data, loggedAt: logDate(loggedOn) });
     if (!result) throw new ApiError(404, "NOT_FOUND", "Không tìm thấy lô đang sản xuất.");
     return result;
 }
@@ -41,8 +42,8 @@ export async function finishBatch(userId, batchId) {
     if (!result) throw new ApiError(404, "NOT_FOUND", "Không tìm thấy lô đang sản xuất.");
     return result;
 }
-export async function updateBatchLog(userId, batchId, logId, data) {
-    const result = await editOwnedLog(userId, batchId, logId, data);
+export async function updateBatchLog(userId, batchId, logId, { loggedOn, ...data }) {
+    const result = await editOwnedLog(userId, batchId, logId, { ...data, loggedAt: logDate(loggedOn) });
     if (!result) throw new ApiError(404, "NOT_FOUND", "Không tìm thấy công đoạn đang sản xuất.");
     return result;
 }

@@ -1,5 +1,6 @@
 import { prisma } from "../database/prisma.js";
 import { lockAssignment, lockProductBatch, lockTradingArtisan } from "../database/postgresql/row-locks.js";
+import { defaultStageCodes, productionStepTitles, usesDefaultProductionSteps } from "../../../frontend/src/data/production-steps.js";
 
 const publicBatch = {
     orderAssignmentId: null,
@@ -10,6 +11,7 @@ const publicBatch = {
 const timelineFields = {
     batchCode: true,
     status: true,
+    productionSteps: true,
     product: { select: { slug: true, name: true, description: true, culturalStory: true, artisan: { select: { workshopName: true } } } },
     logs: {
         orderBy: [{ stepOrder: "asc" }, { loggedAt: "asc" }, { id: "asc" }],
@@ -56,8 +58,9 @@ export function listPublicProductBatches(slug) {
 export function createOwnedBatch(userId, data, journalUrl) {
     return prisma.$transaction(async (tx) => {
         if (!data.orderAssignmentId && !(await lockTradingArtisan(tx, userId)).length) return null;
-        const product = await tx.product.findFirst({ where: { id: data.productId, artisan: { userId, verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } } }, select: { artisanId: true } });
+        const product = await tx.product.findFirst({ where: { id: data.productId, artisan: { userId, verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } } }, select: { artisanId: true, productionSteps: true } });
         if (!product) return null;
+        const batch = { ...data, productionSteps: productionStepTitles(product.productionSteps) };
         if (data.orderAssignmentId) {
             await lockAssignment(tx, data.orderAssignmentId);
             const assignment = await tx.orderAssignment.findFirst({
@@ -67,9 +70,9 @@ export function createOwnedBatch(userId, data, journalUrl) {
             if (!assignment) return null;
             const existing = await tx.productBatch.aggregate({ where: { orderAssignmentId: assignment.id, status: { not: "CANCELLED" } }, _sum: { totalQuantity: true } });
             if ((existing._sum.totalQuantity ?? 0) + data.totalQuantity > assignment.allocatedQuantity) throw new Error("Batch exceeds allocated quantity");
-            return tx.productBatch.create({ data: { ...data, qrCodeUrl: journalUrl(assignment.quotationRequestId) } });
+            return tx.productBatch.create({ data: { ...batch, qrCodeUrl: journalUrl(assignment.quotationRequestId) } });
         }
-        return tx.productBatch.create({ data });
+        return tx.productBatch.create({ data: batch });
     });
 }
 export function listOwnedBatches(userId, { skip, take, assignmentId, productId }) {
@@ -79,35 +82,44 @@ export function listOwnedBatches(userId, { skip, take, assignmentId, productId }
             ...(productId && { productId }),
             ...(assignmentId && { orderAssignmentId: assignmentId, status: { not: "CANCELLED" } }),
         },
-        include: assignmentId || productId
-            ? { product: { select: { isPublished: true } }, _count: { select: { logs: true } } }
-            : { logs: { orderBy: { stepOrder: "asc" } } },
+        include: {
+            logs: { orderBy: { stepOrder: "asc" } },
+            ...((assignmentId || productId) && { product: { select: { isPublished: true } }, _count: { select: { logs: true } } }),
+        },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip, take,
     });
 }
-export function addOwnedLog(userId, batchId, data) {
+const editableBatch = userId => ({
+    status: "IN_PROGRESS", product: { artisan: { userId, verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } } },
+});
+
+export function addOwnedLog(userId, batchId, { stage, stepOrder, ...data }) {
     return prisma.$transaction(async (tx) => {
         await lockProductBatch(tx, batchId);
-        const batch = await tx.productBatch.findFirst({ where: { id: batchId, status: "IN_PROGRESS", product: { artisan: { userId, verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } } } }, select: { id: true } });
+        const batch = await tx.productBatch.findFirst({ where: { id: batchId, ...editableBatch(userId) }, select: { productionSteps: true } });
         if (!batch) return null;
         const count = await tx.batchLog.count({ where: { batchId } });
-        if (count !== data.stepOrder - 1) throw new Error("Invalid production step");
-        return tx.batchLog.create({ data: { ...data, batchId } });
+        const next = count + 1;
+        const nextStage = usesDefaultProductionSteps(batch.productionSteps) ? defaultStageCodes[count] : "CUSTOM";
+        if (next > productionStepTitles(batch.productionSteps).length ||
+            (stage !== undefined && stage !== nextStage) ||
+            (stepOrder !== undefined && stepOrder !== next)) throw new Error("Invalid production step");
+        return tx.batchLog.create({ data: { ...data, batchId, stage: nextStage, stepOrder: next } });
     });
 }
 export function completeOwnedBatch(userId, batchId) {
     return prisma.$transaction(async (tx) => {
         await lockProductBatch(tx, batchId);
-        const batch = await tx.productBatch.findFirst({ where: { id: batchId, status: "IN_PROGRESS", product: { artisan: { userId, verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } } } }, select: { id: true } });
+        const batch = await tx.productBatch.findFirst({ where: { id: batchId, ...editableBatch(userId) }, select: { productionSteps: true } });
         if (!batch) return null;
-        if (await tx.batchLog.count({ where: { batchId } }) !== 5) throw new Error("Incomplete production timeline");
+        if (await tx.batchLog.count({ where: { batchId } }) !== productionStepTitles(batch.productionSteps).length) throw new Error("Incomplete production timeline");
         return tx.productBatch.update({ where: { id: batchId }, data: { status: "COMPLETED", completedAt: new Date() } });
     });
 }
 export function editOwnedLog(userId, batchId, logId, data) {
     return prisma.$transaction(async (tx) => {
         await lockProductBatch(tx, batchId);
-        const result = await tx.batchLog.updateMany({ where: { id: logId, batchId, batch: { status: "IN_PROGRESS", product: { artisan: { userId, verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } } } } }, data });
+        const result = await tx.batchLog.updateMany({ where: { id: logId, batchId, batch: editableBatch(userId) }, data });
         return result.count ? tx.batchLog.findUnique({ where: { id: logId } }) : null;
     });
 }

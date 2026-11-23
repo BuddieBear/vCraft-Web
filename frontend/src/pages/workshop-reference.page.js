@@ -1,6 +1,6 @@
 import { request } from "../api/http.js";
 import { icon } from "../components/ui.js";
-import { sitePaths } from "../site-paths.js";
+import { referenceWorkshopPath, sitePaths } from "../site-paths.js";
 import { mountSearchSuggestions } from "../components/search-suggestions.js";
 import { referenceProductCard } from "../components/reference-product-card.js";
 
@@ -28,12 +28,12 @@ export function mountReferenceWorkshops(section) {
       const { data } = await request("/artisans/reference");
       grid.replaceChildren(...data.map(workshop => {
         const link = document.createElement("a");
-        link.href = sitePaths.catalog + "?" + new URLSearchParams({ "co-so": workshop.slug });
+        link.href = referenceWorkshopPath(workshop.slug);
         link.innerHTML = `<h3></h3><p></p><span class="reference-link"></span>`;
         link.querySelector("h3").textContent = workshop.name;
         link.querySelector("p").textContent = workshop.description;
         const action = link.querySelector(".reference-link");
-        action.textContent = workshop.productCount ? `Xem ${workshop.productCount} mẫu` : "Xem dòng sản phẩm";
+        action.textContent = "Xem showroom";
         action.insertAdjacentHTML("beforeend", icon("arrow"));
         return card(link, "reference-card");
       }));
@@ -46,6 +46,78 @@ export function mountReferenceWorkshops(section) {
 
   retry.addEventListener("click", load);
   load();
+}
+
+export async function mountReferenceShowroom(section, slug) {
+  section.innerHTML = `
+    <a class="text-link artisan-all" href="${sitePaths.artisans}">${icon("left")} Tất cả cơ sở dệt lụa</a>
+    <h1 id="artisans-title" class="page-title">Showroom làng nghề</h1>
+    <p class="reference-status" role="status">Đang tải showroom…</p>
+    <article class="trade-card reference-showroom" hidden>
+      <p class="workshop-story"></p>
+      <dl>
+        <dt>Địa chỉ tại làng nghề</dt><dd data-address></dd>
+        <dt>Giờ làm việc</dt><dd data-hours></dd>
+        <dt>Điểm đến</dt><dd data-position></dd>
+      </dl>
+      <div class="trade-toolbar" data-contact></div>
+    </article>
+    <section class="reference-showroom-products" hidden>
+      <h2>Sản phẩm của cơ sở</h2>
+      <div class="reference-grid"></div>
+      <ul class="reference-known-products" hidden></ul>
+    </section>
+    <button class="text-button" type="button" hidden>Thử lại</button>`;
+  const status = section.querySelector("[role=status]");
+  const retry = section.querySelector("button");
+  try {
+    const { data: workshop } = await request("/artisans/reference/" + encodeURIComponent(slug));
+    section.querySelector("h1").textContent = workshop.name;
+    document.title = workshop.name + " · vCraft";
+    const info = section.querySelector("article");
+    const locationInfo = workshop.location;
+    info.querySelector(".workshop-story").textContent = workshop.description;
+    info.querySelector("[data-address]").textContent = locationInfo.address;
+    info.querySelector("[data-hours]").textContent = locationInfo.workingHours || "Chưa công bố. Liên hệ cơ sở để xác nhận lịch tham quan.";
+    info.querySelector("[data-position]").textContent = locationInfo.areaPoint
+      ? "Ghim khu vực theo hồ sơ công khai. Xác nhận địa điểm cụ thể trước khi đi."
+      : Number.isFinite(locationInfo.latitude) ? "Có ghim trên bản đồ làng nghề." : "Chưa có tọa độ công khai.";
+    const contact = info.querySelector("[data-contact]");
+    for (const [label, href] of [
+      ["Xem bản đồ làng nghề", sitePaths.map],
+      [locationInfo.phone, locationInfo.phone && "tel:" + locationInfo.phone],
+      ["Gửi email hỏi lịch", locationInfo.email && "mailto:" + locationInfo.email],
+      ["Nguồn thông tin", locationInfo.source],
+    ]) {
+      if (!href) continue;
+      const link = document.createElement("a");
+      link.href = href;
+      link.className = "text-link";
+      link.textContent = label;
+      if (href === locationInfo.source) {
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+      }
+      contact.append(link);
+    }
+    info.hidden = false;
+    const showroom = section.querySelector(".reference-showroom-products");
+    showroom.querySelector(".reference-grid").replaceChildren(...workshop.products.map(product =>
+      referenceProductCard({ ...product, workshopName: workshop.name })));
+    const known = showroom.querySelector("ul");
+    for (const name of workshop.knownProducts ?? []) {
+      const item = document.createElement("li");
+      item.textContent = name;
+      known.append(item);
+    }
+    known.hidden = !known.childElementCount;
+    showroom.hidden = !workshop.products.length && known.hidden;
+    status.textContent = "";
+  } catch (error) {
+    status.textContent = error.message;
+    retry.hidden = error.status === 404;
+    retry.addEventListener("click", () => mountReferenceShowroom(section, slug), { once: true });
+  }
 }
 
 export function mountReferenceCatalog(section, slug) {

@@ -5,6 +5,8 @@ export const workshopReferences = [
         description: "Vải lụa hoa, satin đổi sắc, khăn nhuộm tự nhiên và áo dài may sẵn.",
         location: {
             address: "Ngã tư Nha Xá, phường Duy Tân, Ninh Bình",
+            phone: "0943549019",
+            email: "luanhaxa.vn@gmail.com",
             source: "https://nhaxasilk.com/lien-he",
         },
         products: [
@@ -54,6 +56,8 @@ export const workshopReferences = [
             latitude: 20.6644888,
             longitude: 106.019715,
             workingHours: "Thứ Hai đến Thứ Bảy, 08:00–18:00",
+            phone: "0981465666",
+            email: "vuvietsilk@gmail.com",
             source: "https://luatotamnhaxa.vn/lien-he",
         },
         products: [
@@ -105,6 +109,10 @@ export const workshopReferences = [
         description: "Vải satin và lụa dệt họa tiết của cơ sở Lê Thanh Sơn.",
         location: {
             address: "Làng Nha Xá, phường Duy Tân, Ninh Bình",
+            latitude: 20.663089,
+            longitude: 106.015528,
+            areaPoint: true,
+            email: "sonthuysilk@gmail.com",
             source: "https://idtc.moit.gov.vn/doanh_nghiep/doanh-nghiep/ho-kinh-doanh-le-thanh-son/",
         },
         products: [
@@ -147,6 +155,9 @@ export const workshopReferences = [
             address: "Làng Nha Xá, phường Duy Tân, Ninh Bình",
             latitude: 20.663089,
             longitude: 106.015528,
+            areaPoint: true,
+            phone: "0912469920",
+            email: "nguyentiensilk65@gmail.com",
             source: "https://idtc.moit.gov.vn/doanh_nghiep/doanh-nghiep/hop-tac-xa-du-lich-det-lua-hong-tien-nha-xa/",
         },
         products: [],
@@ -154,6 +165,10 @@ export const workshopReferences = [
         source: "https://nongthon.vietnamtourism.gov.vn/ha-nam-nang-tam-san-pham-lua-to-tam-nha-xa/",
     },
 ];
+
+export function findReferenceWorkshop(slug) {
+    return workshopReferences.find(workshop => workshop.slug === slug);
+}
 
 export function findReferenceProduct(slug) {
     for (const workshop of workshopReferences) {

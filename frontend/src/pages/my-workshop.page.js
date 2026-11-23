@@ -3,6 +3,7 @@ import { formatPrice, saleUnits } from "../components/ui.js";
 import { weaveTypes } from "../data/weave-types.js";
 import { productPagePath, sitePaths } from "../site-paths.js";
 import { createBatchForm, renderBatch } from "./wholesale/artisan.js";
+import { maxProductionSteps, productionStepKey, productionStepTitles } from "../data/production-steps.js";
 import { card, get, listSection, paragraph, write } from "./wholesale/view.js";
 
 const imageTypes = "image/jpeg,image/png,image/webp";
@@ -54,7 +55,11 @@ export async function workshopView(root, tools) {
   bids.href = sitePaths.bidding;
   bids.className = "text-link";
   bids.textContent = "Xem bảng đấu thầu";
-  actions.append(bids);
+  const sales = document.createElement("a");
+  sales.href = sitePaths.retailOrders;
+  sales.className = "text-link";
+  sales.textContent = "Xem đơn bán lẻ của xưởng";
+  actions.append(bids, sales);
   products.append(actions);
   if (workshop.isSuspended) products.append(paragraph("Sản phẩm đang ẩn khỏi danh mục. Bạn vẫn xem được nhật ký của các lô đã tạo."));
   try {
@@ -79,8 +84,13 @@ function profileForm(form, workshop) {
   const profile = form(`
     <label>Tên xưởng<input name="workshopName" maxlength="200" required></label>
     <label>Danh xưng nghệ nhân<input name="artisanTitle" maxlength="150"></label>
+    <label>Số năm kinh nghiệm<input name="experienceYears" type="number" min="0" max="32767" step="1"></label>
     <label>Lịch sử gia đình và tiểu sử<textarea name="familyHistory" maxlength="20000"></textarea></label>
     <label>Địa chỉ<input name="address" maxlength="255" required></label>
+    <div class="workshop-coordinates">
+      <label>Vĩ độ<input name="latitude" type="number" step="any" min="-90" max="90" required></label>
+      <label>Kinh độ<input name="longitude" type="number" step="any" min="-180" max="180" required></label>
+    </div>
     <label>Giờ tham quan<input name="openingHours" maxlength="100" placeholder="Ví dụ 08:00–17:00"></label>
     <label class="trade-choice"><input type="checkbox" name="isOpenForVisitors"> Đón khách tham quan</label>
     <label>Ảnh bìa mới<input name="cover" type="file" accept="${imageTypes}"></label>
@@ -90,15 +100,18 @@ function profileForm(form, workshop) {
     if (!workshopName || !address) throw new Error("Nhập tên xưởng và địa chỉ.");
     const gallery = await upload(values.getAll("gallery"));
     const [coverImageUrl] = await upload(values.getAll("cover"));
+    const years = values.get("experienceYears");
     return write("/artisans/me", {
       workshopName, address, artisanTitle: values.get("artisanTitle").trim() || null,
-      familyHistory: values.get("familyHistory").trim() || null, openingHours: values.get("openingHours").trim() || null,
+      experienceYears: years === "" ? null : Number(years),
+      latitude: Number(values.get("latitude")), longitude: Number(values.get("longitude")),
+      familyHistory: values.get("familyHistory").trim() || null, openingHours: values.get("openingHours").trim(),
       isOpenForVisitors: values.has("isOpenForVisitors"), ...(coverImageUrl && { coverImageUrl }),
       ...(gallery.length && { galleryImages: gallery }),
     }, "PATCH");
   });
-  for (const name of ["workshopName", "artisanTitle", "familyHistory", "address", "openingHours"]) {
-    profile.elements.namedItem(name).value = workshop[name] || "";
+  for (const name of ["workshopName", "artisanTitle", "experienceYears", "familyHistory", "address", "latitude", "longitude", "openingHours"]) {
+    profile.elements.namedItem(name).value = workshop[name] ?? "";
   }
   profile.elements.namedItem("isOpenForVisitors").checked = workshop.isOpenForVisitors;
   return profile;
@@ -139,6 +152,13 @@ function productForm(form, categories, product) {
     <label>Chất liệu<input name="rawMaterial" maxlength="150" required></label>
     <label>Mô tả<textarea name="description" maxlength="20000"></textarea></label>
     <label>Câu chuyện sản phẩm<textarea name="culturalStory" maxlength="20000"></textarea></label>
+    <fieldset class="production-editor">
+      <legend>Quy trình cho các lô mới</legend>
+      <label>Công đoạn theo thứ tự
+        <textarea name="productionSteps" rows="6" maxlength="${maxProductionSteps * 151}" required></textarea>
+      </label>
+      <p>Mỗi dòng là một công đoạn, tối đa ${maxProductionSteps} dòng. Bạn có thể đổi thứ tự để phù hợp với mặt hàng.</p>
+    </fieldset>
     <label>Cách niêm yết<select name="pricingMode"><option value="FIXED">Có giá bán</option><option value="CONTACT">Liên hệ</option></select></label>
     <label>Giá bán (đồng)<input name="price" type="number" min="0" max="9999999999.99" step="0.01"></label>
     <label>Đơn vị bán<select name="saleUnit"></select></label>
@@ -149,10 +169,15 @@ function productForm(form, categories, product) {
     const slug = values.get("slug").trim() || productSlug(name);
     const rawMaterial = values.get("rawMaterial").trim();
     if (!name || !slug || slug === "mine" || !rawMaterial) throw new Error("Nhập tên, chất liệu và mã đường dẫn sản phẩm hợp lệ.");
+    const productionSteps = values.get("productionSteps").split(/\r?\n/).map(title => title.trim()).filter(Boolean);
+    if (!productionSteps.length || productionSteps.length > maxProductionSteps || productionSteps.some(title => title.length > 150)) {
+      throw new Error(`Nhập từ 1 đến ${maxProductionSteps} công đoạn, mỗi tên tối đa 150 ký tự.`);
+    }
+    if (new Set(productionSteps.map(productionStepKey)).size !== productionSteps.length) throw new Error("Tên các công đoạn phải khác nhau.");
     const newImages = await upload(values.getAll("images"));
     const mediaUrls = newImages.length ? newImages : product?.mediaUrls || [];
     const data = {
-      name, slug, mediaUrls, categoryId: values.get("categoryId") || null, weaveType: values.get("weaveType"),
+      name, slug, mediaUrls, productionSteps, categoryId: values.get("categoryId") || null, weaveType: values.get("weaveType"),
       rawMaterial, description: values.get("description").trim() || null,
       culturalStory: values.get("culturalStory").trim() || null, pricingMode: values.get("pricingMode"), price: values.get("price"),
       saleUnit: values.get("saleUnit"), stockQuantity: Number(values.get("stockQuantity")), isPublished: values.has("isPublished"),
@@ -161,6 +186,7 @@ function productForm(form, categories, product) {
     return write("/products/" + encodeURIComponent(product.id), { ...data, expectedStockQuantity: product.stockQuantity }, "PUT");
   });
   const fields = editor.elements;
+  fields.namedItem("productionSteps").value = productionStepTitles(product?.productionSteps).join("\n");
   const category = fields.namedItem("categoryId");
   category.add(new Option("Chưa chọn", ""));
   for (const item of categories) category.add(new Option(item.name, item.id));

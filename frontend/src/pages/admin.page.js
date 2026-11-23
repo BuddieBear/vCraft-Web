@@ -1,4 +1,122 @@
-import { request, signedIn } from "../api/http.js";
+import { mediaUrl, request, signedIn } from "../api/http.js";
+
+function evidencePhoto(value, label, lazy = true) {
+  const src = mediaUrl(value);
+  if (!src) return null;
+  const link = document.createElement("a");
+  link.href = src;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.setAttribute("aria-label", "Mở ảnh đầy đủ · " + label);
+  const image = document.createElement("img");
+  image.src = src;
+  image.alt = label;
+  if (lazy) image.loading = "lazy";
+  image.referrerPolicy = "no-referrer";
+  link.append(image);
+  return link;
+}
+
+function renderEvidence(target, workshop) {
+  target.replaceChildren();
+  const info = document.createElement("dl");
+  const { user } = workshop;
+  for (const [label, value] of [
+    ["Người phụ trách", user.fullName],
+    ["Email", user.email],
+    ["Điện thoại", user.phone],
+    ["Địa chỉ", workshop.address],
+    ["Tọa độ", workshop.latitude + ", " + workshop.longitude],
+    ["Giờ đón khách", workshop.isOpenForVisitors ? workshop.openingHours : "Chưa mở cửa tham quan"],
+    ["Danh xưng", workshop.artisanTitle],
+    ["Số năm kinh nghiệm", workshop.experienceYears],
+    ["Lịch sử xưởng và tiểu sử", workshop.familyHistory],
+  ]) {
+    const term = document.createElement("dt");
+    const detail = document.createElement("dd");
+    term.textContent = label;
+    detail.textContent = value ?? "Chưa cung cấp";
+    if (value === "") detail.textContent = "Chưa cung cấp";
+    info.append(term, detail);
+  }
+  const heading = document.createElement("h4");
+  heading.textContent = "Ảnh xưởng";
+  const gallery = document.createElement("div");
+  gallery.className = "workshop-pictures";
+  const urls = [workshop.coverImageUrl, ...workshop.galleryImages].filter(Boolean);
+  for (const [index, value] of [...new Set(urls)].entries()) {
+    const photo = evidencePhoto(value, "Ảnh xưởng " + (index + 1));
+    if (photo) gallery.append(photo);
+  }
+  const missing = document.createElement("p");
+  missing.textContent = "Xưởng chưa cung cấp ảnh.";
+  const certificates = document.createElement("h4");
+  certificates.textContent = "Chứng nhận chất lượng";
+  const list = document.createElement("ul");
+  list.className = "admin-proof-list";
+  for (const certificate of workshop.certificates) {
+    const item = document.createElement("li");
+    const summary = document.createElement("p");
+    summary.textContent = [certificate.title, certificate.issuingAuthority, certificate.issuedYear].join(" · ");
+    item.append(summary);
+    const photo = evidencePhoto(certificate.certificateImageUrl, certificate.title);
+    if (photo) item.append(photo);
+    list.append(item);
+  }
+  if (!list.childElementCount) {
+    const item = document.createElement("li");
+    item.textContent = "Xưởng chưa cung cấp chứng nhận.";
+    list.append(item);
+  }
+  target.append(info, heading, gallery.childElementCount ? gallery : missing, certificates, list);
+}
+
+function reviewPanel(item, actions) {
+  const details = document.createElement("details");
+  details.className = "admin-review";
+  const summary = document.createElement("summary");
+  summary.textContent = "Xem hồ sơ và minh chứng";
+  const result = document.createElement("div");
+  const status = document.createElement("p");
+  status.setAttribute("role", "status");
+  details.append(summary, status, result);
+  if (actions) {
+    actions.hidden = true;
+    details.append(actions);
+  }
+
+  let loaded = false;
+  let loading = false;
+  async function load() {
+    if (loading || loaded) return;
+    loading = true;
+    status.textContent = "Đang tải minh chứng…";
+    result.replaceChildren();
+    try {
+      const { data } = await request("/admin/artisans/" + encodeURIComponent(item.id), { auth: true });
+      if (!details.isConnected) return;
+      renderEvidence(result, data);
+      loaded = true;
+      status.textContent = "";
+      if (actions) {
+        actions.hidden = data.verificationStatus !== "PENDING";
+        if (actions.hidden) status.textContent = "Hồ sơ đã được xử lý. Tải lại danh sách để xem trạng thái mới.";
+      }
+    } catch (error) {
+      status.textContent = error.message;
+      const retry = document.createElement("button");
+      retry.type = "button";
+      retry.className = "text-button";
+      retry.textContent = "Thử tải lại hồ sơ";
+      retry.addEventListener("click", load);
+      result.append(retry);
+    } finally {
+      loading = false;
+    }
+  }
+  details.addEventListener("toggle", () => { if (details.open && details.isConnected) load(); });
+  return details;
+}
 
 export function mountArtisanAdministration(section, account) {
   section.innerHTML = `
@@ -86,7 +204,8 @@ export function mountArtisanAdministration(section, account) {
           }));
           actions.append(button);
         }
-        card.append(heading, body, actions);
+        card.append(heading, body, reviewPanel(item, kind === "PENDING" ? actions : null));
+        if (kind !== "PENDING") card.append(actions);
         list.append(card);
       }
       status.textContent = message || (list.children.length ? "" : "Chưa có xưởng ở trạng thái này.");

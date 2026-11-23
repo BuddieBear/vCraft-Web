@@ -1,9 +1,11 @@
-import { mountReferenceWorkshops } from "./workshop-reference.page.js";
+import { mountReferenceShowroom, mountReferenceWorkshops } from "./workshop-reference.page.js";
 import { mediaUrl, request } from "../api/http.js";
 import { sitePaths } from "../site-paths.js";
 import { card, mountPageList, paragraph } from "./wholesale/view.js";
+import { mountPublicReviews } from "../components/public-reviews.js";
 
-export function renderArtisans(container) {
+export function renderArtisans(container, referenceSlug) {
+  if (referenceSlug) return mountReferenceShowroom(container, referenceSlug);
   const workshopId = new URLSearchParams(location.search).get("xuong");
   if (workshopId) return renderWorkshop(container, workshopId);
   container.innerHTML = `
@@ -91,9 +93,10 @@ async function renderWorkshop(container, id) {
       certificates.querySelector("ul").append(item);
     }
     certificates.hidden = !workshop.certificates.length;
-    article.querySelector("a").href = sitePaths.catalog + "?" + new URLSearchParams({ mua: "1", xuong: workshop.id });
+    article.querySelector("a.button").href = sitePaths.catalog + "?" + new URLSearchParams({ mua: "1", xuong: workshop.id });
     article.hidden = false;
     status.textContent = "";
+    mountPublicReviews(container, { workshopId: workshop.id });
   } catch (error) {
     status.textContent = error.message;
   }

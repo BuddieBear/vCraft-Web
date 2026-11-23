@@ -58,7 +58,13 @@ export function checkoutOrder(userId, details) {
             if (total.gt("9999999999.99")) throw new Error("ORDER_TOTAL_TOO_LARGE");
             lines.push({ productId: product.id, artisanId: product.artisanId, quantity: item.quantity, unitPrice: product.price, subtotal });
         }
-        const order = await createRetailOrder(tx, { orderCode: `ORD-${randomUUID().replaceAll("-", "").slice(0, 24)}`, buyerId: userId, ...details, totalAmount: total, items: { create: lines } });
+        const artisanIds = new Set(lines.map(({ artisanId }) => artisanId));
+        const order = await createRetailOrder(tx, {
+            orderCode: `ORD-${randomUUID().replaceAll("-", "").slice(0, 24)}`, buyerId: userId,
+            ...details, totalAmount: total,
+            items: { create: lines },
+            fulfillments: { create: [...artisanIds].map(artisanId => ({ artisanId })) },
+        });
         for (const item of items) {
             if ((await removePurchasedItem(tx, userId, item)).count !== 1) throw new Error("Cart changed during checkout");
         }
@@ -81,40 +87,109 @@ export async function listBuyerCart(userId) {
         }));
 }
 
+const fulfillmentWithWorkshop = { include: { artisan: { select: { workshopName: true } } }, orderBy: { artisanId: "asc" } };
+const lineWithName = { product: { select: { name: true } }, artisan: { select: { workshopName: true } } };
+const assignedArtisan = userId => ({ userId, verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } });
+
 export function listBuyerOrders(userId, { skip = 0, take = 24 } = {}) {
         return prisma.retailOrder.findMany({
             where: { buyerId: userId, buyer: { isActive: true, role: "BUYER" } },
             include: {
-                items: { include: { product: { select: { name: true } }, artisan: { select: { workshopName: true } } } },
+                items: { include: lineWithName },
+                fulfillments: fulfillmentWithWorkshop,
                 reviews: { select: { targetType: true, productId: true, artisanId: true } },
             },
             orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip, take,
         });
 }
 export function findBuyerOrder(userId, id) {
-        return prisma.retailOrder.findFirst({ where: { id, buyerId: userId, buyer: { isActive: true, role: "BUYER" } }, include: { items: true } });
+        return prisma.retailOrder.findFirst({ where: { id, buyerId: userId, buyer: { isActive: true, role: "BUYER" } }, include: { items: true, fulfillments: fulfillmentWithWorkshop } });
 }
-export function listArtisanOrders(userId, { skip, take }) {
-        return prisma.retailOrder.findMany({ where: { items: { some: { artisan: { userId, verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } } } } }, select: { id: true, orderCode: true, recipientName: true, recipientPhone: true, shippingAddress: true, shippingNote: true, paymentMethod: true, paymentStatus: true, status: true, createdAt: true, items: { where: { artisan: { userId } }, select: { id: true, productId: true, quantity: true, unitPrice: true, subtotal: true } } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip, take });
+export async function listArtisanOrders(userId, { skip, take, status }) {
+    const own = { artisan: assignedArtisan(userId) };
+    const orders = await prisma.retailOrder.findMany({
+        where: { fulfillments: { some: { ...own, ...(status && { status }) } } },
+        select: {
+            id: true, orderCode: true, recipientName: true, recipientPhone: true, shippingAddress: true,
+            shippingNote: true, paymentMethod: true, createdAt: true,
+            fulfillments: { where: own, select: { artisanId: true, status: true, paymentStatus: true } },
+            items: { where: own, select: { id: true, productId: true, quantity: true, unitPrice: true, subtotal: true, product: lineWithName.product } },
+        },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip, take,
+    });
+    return orders.flatMap(({ fulfillments: [part], ...order }) => part ? [{
+        ...order, ...part, totalAmount: order.items.reduce((total, item) => total.add(item.subtotal), new Prisma.Decimal(0)),
+    }] : []);
 }
 export function listAdminOrders({ skip, take, status }) {
-        return prisma.retailOrder.findMany({ where: status ? { status } : {}, include: { items: true }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip, take });
+        return prisma.retailOrder.findMany({ where: status ? { status } : {}, include: { fulfillments: fulfillmentWithWorkshop }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip, take });
 }
+const progress = ["PENDING", "CONFIRMED", "SHIPPING", "DELIVERED"];
+
+function nextPayment(order, part, status, paymentCollected) {
+    if (progress.indexOf(status) !== progress.indexOf(part.status) + 1 || part.status === "CANCELLED") {
+        throw new Error("Invalid order transition");
+    }
+    const collectingCod = status === "DELIVERED" && order.paymentMethod === "COD" && part.paymentStatus === "UNPAID";
+    if (collectingCod !== paymentCollected || (status === "DELIVERED" && !collectingCod && part.paymentStatus !== "PAID")) {
+        throw new Error("Invalid payment confirmation");
+    }
+    return collectingCod ? "PAID" : part.paymentStatus;
+}
+
+export function transitionWorkshopOrder(actor, orderId, artisanId, status, paymentCollected) {
+    return prisma.$transaction(async tx => {
+        await lockRetailOrder(tx, orderId);
+        if (actor.role !== "ARTISAN" && actor.role !== "ADMIN") return null;
+        const part = await tx.retailFulfillment.findFirst({
+            where: { orderId, artisanId, ...(actor.role === "ARTISAN" && { artisan: assignedArtisan(actor.id) }) },
+            include: { order: { include: { fulfillments: true } } },
+        });
+        if (!part) return null;
+        const { order } = part;
+        const paymentStatus = nextPayment(order, part, status, paymentCollected);
+        const updated = await tx.retailFulfillment.update({
+            where: { orderId_artisanId: { orderId, artisanId } },
+            data: { status, paymentStatus },
+            include: { artisan: { select: { workshopName: true } } },
+        });
+        const parts = order.fulfillments.map(part => part.artisanId === artisanId ? updated : part);
+        const orderStatus = progress.find(status => parts.some(part => part.status === status));
+        await tx.retailOrder.update({ where: { id: orderId }, data: {
+            status: orderStatus,
+            ...(parts.every(part => part.paymentStatus === "PAID") && { paymentStatus: "PAID" }),
+        } });
+        await tx.notification.create({ data: {
+            userId: order.buyerId, title: "Tiến độ đơn bán lẻ",
+            message: `${order.orderCode} · ${updated.artisan.workshopName}: ${status}`, type: "ORDER_STATUS",
+        } });
+        return updated;
+    });
+}
+
 export function transitionOrder(actor, orderId, status, paymentCollected) {
         return prisma.$transaction(async (tx) => {
                 await lockRetailOrder(tx, orderId);
-                const order = await tx.retailOrder.findUnique({ where: { id: orderId }, include: { items: { orderBy: { productId: "asc" }, select: { productId: true, artisanId: true, quantity: true } } } });
+                const order = await tx.retailOrder.findUnique({ where: { id: orderId }, include: {
+                    fulfillments: true,
+                    items: { orderBy: { productId: "asc" }, select: { productId: true, quantity: true } },
+                } });
                 if (!order) return null;
                 if (actor.role === "BUYER") {
                         if (actor.id !== order.buyerId || status !== "CANCELLED") return null;
                         if (order.status !== "PENDING") throw new Error("Invalid order transition");
                 } else if (actor.role === "ARTISAN") {
-                        const artisan = await tx.artisanProfile.findFirst({ where: { userId: actor.id, verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } }, select: { id: true } });
-                        if (!artisan || !order.items.length || order.items.some((item) => item.artisanId !== artisan.id)) return null;
+                        const workshop = await tx.artisanProfile.findFirst({ where: assignedArtisan(actor.id), select: { id: true } });
+                        if (!workshop || order.fulfillments.length !== 1 || order.fulfillments[0].artisanId !== workshop.id) return null;
                 } else if (actor.role !== "ADMIN") return null;
-                const previous = { CONFIRMED: "PENDING", SHIPPING: "CONFIRMED", DELIVERED: "SHIPPING" };
+                let paymentStatus = order.paymentStatus;
                 if (status === "CANCELLED") {
-                        if (!["PENDING", "CONFIRMED"].includes(order.status) || order.paymentStatus !== "UNPAID") throw new Error("Invalid order transition");
+                        if (paymentCollected) throw new Error("Invalid payment confirmation");
+                        if (!["PENDING", "CONFIRMED"].includes(order.status) || order.paymentStatus !== "UNPAID" ||
+                            order.fulfillments.some(part => !["PENDING", "CONFIRMED"].includes(part.status) || part.paymentStatus !== "UNPAID") ||
+                            (actor.role === "BUYER" && order.fulfillments.some(part => part.status !== "PENDING"))) {
+                            throw new Error("Invalid order transition");
+                        }
                         for (const item of order.items) {
                                 const restored = await tx.product.updateMany({
                                         where: { id: item.productId, stockQuantity: { lte: 2147483647 - item.quantity } },
@@ -122,11 +197,14 @@ export function transitionOrder(actor, orderId, status, paymentCollected) {
                                 });
                                 if (!restored.count) throw new Error("Stock limit exceeded on cancellation");
                         }
-                } else if (previous[status] !== order.status) throw new Error("Invalid order transition");
-                const collectingCod = status === "DELIVERED" && order.paymentMethod === "COD" && order.paymentStatus === "UNPAID";
-                if (collectingCod !== paymentCollected) throw new Error("Invalid payment confirmation");
-                if (status === "DELIVERED" && !collectingCod && order.paymentStatus !== "PAID") throw new Error("Invalid payment confirmation");
-                const updated = await tx.retailOrder.update({ where: { id: orderId }, data: { status, ...(collectingCod ? { paymentStatus: "PAID" } : {}) } });
+                } else {
+                        paymentStatus = nextPayment(order, order, status, paymentCollected);
+                        if (order.fulfillments.some(part => part.status !== order.status || part.paymentStatus !== order.paymentStatus)) {
+                            throw new Error("Invalid order transition");
+                        }
+                }
+                await tx.retailFulfillment.updateMany({ where: { orderId }, data: { status, paymentStatus } });
+                const updated = await tx.retailOrder.update({ where: { id: orderId }, data: { status, paymentStatus } });
                 await tx.notification.create({ data: { userId: order.buyerId, title: "Trạng thái đơn hàng", message: `${order.orderCode}: ${status}`, type: "ORDER_STATUS" } });
                 return updated;
         });

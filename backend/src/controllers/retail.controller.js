@@ -1,17 +1,25 @@
 import { ApiError } from "../middlewares/api-error.js";
-import { setCartItem, listCart, checkout, listOrders, getOrder, listSales, listAdminSales, changeOrderStatus } from "../services/retail.service.js";
-import { pageArgs } from "../routes/schemas.js";
+import { setCartItem, listCart, checkout, listOrders, getOrder, listSales, listAdminSales, changeOrderStatus, changeWorkshopOrderStatus } from "../services/retail.service.js";
+import { pageArgs, listPage } from "../routes/schemas.js";
 
 export async function adminOrderList(req, res) {
-    res.json({ data: await listAdminSales({ ...pageArgs(req.validatedQuery), status: req.validatedQuery.status }) });
+    const query = req.validatedQuery;
+    res.json(await listPage(query, options => listAdminSales({ ...options, status: query.status })));
 }
 
 export async function artisanSales(req, res) {
-    res.json({ data: await listSales(req.user.id, pageArgs(req.validatedQuery)) });
+    const query = req.validatedQuery;
+    res.json(await listPage(query, options => listSales(req.user.id, { ...options, status: query.status })));
 }
 
 export async function setOrderStatus(req, res) {
     res.json({ data: await changeOrderStatus(req.user, req.validatedParams.id, req.validatedBody.status, req.validatedBody.paymentCollected) });
+}
+
+export async function setWorkshopOrderStatus(req, res) {
+    const { id, artisanId } = req.validatedParams;
+    const { status, paymentCollected } = req.validatedBody;
+    res.json({ data: await changeWorkshopOrderStatus(req.user, id, artisanId, status, paymentCollected) });
 }
 
 export async function cart(req, res) {

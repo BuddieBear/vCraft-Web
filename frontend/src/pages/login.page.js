@@ -29,7 +29,7 @@ export function mountAccount(dialog, trigger) {
     const pending = ++version;
     profile = null;
     profileError = undefined;
-    trigger.setAttribute("aria-label", signedIn() ? "Tài khoản" : "Đăng nhập");
+    trigger.setAttribute("aria-label", signedIn() ? "Tài khoản" : "Hồ sơ");
     loading = signedIn() ? fetchProfile(pending) : undefined;
     syncDialog();
     for (const listener of users) listener(profile);
@@ -53,10 +53,20 @@ export function mountAccount(dialog, trigger) {
   }
 
   function render() {
-    dialog.innerHTML = `
-      <div class="cart-header"><h2 id="account-title">Tài khoản</h2>
-        <button class="icon-button" type="button" aria-label="Đóng tài khoản">${icon("close")}</button>
-      </div>
+    const header = `<div class="cart-header"><h2 id="account-title">Tài khoản</h2>
+      <button class="icon-button" type="button" aria-label="Đóng tài khoản">${icon("close")}</button>
+    </div>`;
+    if (!signedIn()) {
+      dialog.innerHTML = `${header}
+        <p class="account-profile">Chưa đăng nhập</p>
+        <div class="trade-toolbar account-logout">
+          <a class="button button-primary">Đăng nhập</a>
+        </div>`;
+      dialog.querySelector("a").href = signInUrl();
+      dialog.querySelector(".icon-button").addEventListener("click", () => dialog.close());
+      return;
+    }
+    dialog.innerHTML = `${header}
       <p class="account-profile"></p>
       <nav class="account-links" aria-label="Tài khoản" hidden>
         <a class="text-link" href="${sitePaths.notifications}">Thông báo</a>
@@ -120,18 +130,23 @@ export function mountAccount(dialog, trigger) {
   }
 
   onSessionChange(loadProfile);
-  trigger.addEventListener("click", open);
+  trigger.addEventListener("click", openProfile);
   loadProfile();
 
+  function signInUrl() {
+    const destination = location.pathname + location.search + location.hash;
+    return signInPath + "?" + new URLSearchParams({ returnTo: destination });
+  }
+
   function open() {
-    if (!signedIn()) {
-      const destination = location.pathname + location.search + location.hash;
-      location.assign(signInPath + "?" + new URLSearchParams({ returnTo: destination }));
-      return;
-    }
+    if (signedIn()) openProfile();
+    else location.assign(signInUrl());
+  }
+
+  function openProfile() {
     render();
     if (!dialog.open) dialog.showModal();
-    syncDialog();
+    if (signedIn()) syncDialog();
   }
 
   return {

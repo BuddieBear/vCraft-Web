@@ -1,4 +1,4 @@
-import { checkoutOrder, findBuyerOrder, listArtisanOrders, listAdminOrders, transitionOrder, listBuyerCart, listBuyerOrders, setCartItem as setCartItemRecord } from "../repositories/retail.repository.js";
+import { checkoutOrder, findBuyerOrder, listArtisanOrders, listAdminOrders, transitionOrder, transitionWorkshopOrder, listBuyerCart, listBuyerOrders, setCartItem as setCartItemRecord } from "../repositories/retail.repository.js";
 import { ApiError } from "../middlewares/api-error.js";
 import { validRecipientPhone } from "../../../frontend/src/data/input-values.js";
 
@@ -7,6 +7,11 @@ export function listAdminSales(options) { return listAdminOrders(options); }
 export async function changeOrderStatus(actor, id, status, paymentCollected = false) {
     const result = await transitionOrder(actor, id, status, paymentCollected);
     if (!result) throw new ApiError(404, "NOT_FOUND", "Không tìm thấy đơn hàng.");
+    return result;
+}
+export async function changeWorkshopOrderStatus(actor, id, artisanId, status, paymentCollected = false) {
+    const result = await transitionWorkshopOrder(actor, id, artisanId, status, paymentCollected);
+    if (!result) throw new ApiError(404, "NOT_FOUND", "Không tìm thấy phần đơn của xưởng.");
     return result;
 }
 

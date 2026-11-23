@@ -23,10 +23,10 @@ Các endpoint riêng yêu cầu `Authorization: Bearer <accessToken>`. Mỗi tok
 | GET | `/products` | Công khai; `page`, `limit`, `category`, `artisanId`, `q` tìm theo tên sản phẩm, xưởng, danh mục hoặc chất liệu (có hoặc không dấu tiếng Việt), `sort=asc` hoặc `desc` theo giá. |
 | GET | `/products/:slug`, `/products/by-slug/:slug` | Công khai; gồm giá, tồn kho và điểm đánh giá. |
 | GET | `/categories` | Công khai; danh mục sản phẩm. |
-| GET, POST | `/products/mine`, `/products` | ARTISAN; xem sản phẩm của mình, tạo sản phẩm của xưởng đã duyệt. |
+| GET, POST | `/products/mine`, `/products` | ARTISAN; xem sản phẩm của mình, tạo sản phẩm của xưởng đã duyệt. Khi tạo hoặc sửa có thể gửi `productionSteps`, từ 1 đến 12 tên công đoạn theo thứ tự. |
 | PUT, DELETE | `/products/:id` | ARTISAN sở hữu; thay dữ liệu hoặc ẩn sản phẩm. Khi dùng PUT, gửi `expectedStockQuantity` là tồn kho lúc mở form; trả `409 STALE_STOCK` nếu đã thay đổi. |
 | GET | `/artisans` | Công khai; `page`, `limit`, `visitorsOnly=true` hoặc `false`. |
-| GET | `/artisans/reference` | Danh sách cơ sở tham khảo. `location` có địa chỉ, nguồn và tọa độ nếu đã xác minh. |
+| GET | `/artisans/reference`, `/artisans/reference/:slug` | Danh sách và chi tiết cơ sở tham khảo. `location` có địa chỉ, giờ, liên hệ và tọa độ theo thông tin công bố. `areaPoint` đánh dấu vị trí khu vực cần xác nhận trước khi đến. |
 | GET | `/artisans/:id` | Công khai. |
 | GET, PATCH | `/artisans/me` | ARTISAN; xem và cập nhật hồ sơ của mình. |
 | POST, DELETE | `/artisans/me/certificates`, `/artisans/me/certificates/:id` | ARTISAN; thêm hoặc xóa chứng nhận. |
@@ -35,9 +35,10 @@ Các endpoint riêng yêu cầu `Authorization: Bearer <accessToken>`. Mỗi tok
 | GET | `/traceability/public/recent` | Công khai; tối đa 24 lô gần đây và tên sản phẩm. |
 | GET | `/traceability/purchased/:code` | BUYER sở hữu yêu cầu sỉ liên kết; xem nhật ký lô của đơn kể cả khi sản phẩm đã ẩn. |
 | GET | `/traceability/:code/qr`, `/traceability/products/:slug` | Công khai; ảnh QR PNG và danh sách lô được công bố. |
-| GET, POST | `/traceability/mine`, `/traceability/batches` | ARTISAN; danh sách lô của mình (`productId`, `assignmentId`, `page`, `limit`) hoặc tạo lô cho sản phẩm của mình. |
-| POST, PUT | `/traceability/batches/:id/logs`, `/traceability/batches/:id/logs/:logId` | ARTISAN sở hữu; thêm công đoạn theo thứ tự hoặc sửa công đoạn của lô đang sản xuất. Khi tạo, có thể gửi `loggedOn` theo `YYYY-MM-DD` đến ngày hiện tại theo giờ Việt Nam. |
-| POST | `/traceability/batches/:id/complete` | ARTISAN sở hữu; hoàn thành sau khi ghi đủ năm công đoạn. |
+| GET | `/traceability/product-guide/:slug/qr` | QR của sản phẩm công khai, mở `/trace/product/:slug` với câu chuyện sản phẩm và danh sách nhật ký lô công khai. |
+| GET, POST | `/traceability/mine`, `/traceability/batches` | ARTISAN; danh sách lô của mình (`productId`, `assignmentId`, `page`, `limit`) hoặc tạo lô cho sản phẩm của mình. Lô lưu thứ tự công đoạn tại lúc tạo. |
+| POST, PUT | `/traceability/batches/:id/logs`, `/traceability/batches/:id/logs/:logId` | ARTISAN sở hữu; gửi `stepOrder` khi thêm công đoạn theo thứ tự lô. API cũ dùng `stage` vẫn làm việc với quy trình mặc định. Có thể sửa tên, ghi chú, ảnh và `loggedOn` của lô đang sản xuất. Ngày theo `YYYY-MM-DD`, tối đa đến hôm nay theo giờ Việt Nam. |
+| POST | `/traceability/batches/:id/complete` | ARTISAN sở hữu; hoàn thành sau khi ghi đủ công đoạn theo quy trình của lô. |
 | GET | `/news`, `/news/:slug` | Công khai; danh sách hỗ trợ `page`, `limit`, `category`. |
 | GET, POST | `/news/admin/list`, `/news` | ADMIN; danh sách quản trị và đăng tin. |
 | PUT, DELETE | `/news/:id` | ADMIN; thay nội dung hoặc xóa tin. |
@@ -46,8 +47,9 @@ Các endpoint riêng yêu cầu `Authorization: Bearer <accessToken>`. Mỗi tok
 | GET | `/retail/cart` | BUYER; `product.isAvailable` cho biết sản phẩm còn được phép bán. Đối chiếu số lượng với `stockQuantity`. |
 | PUT | `/retail/cart/:id` | BUYER; `quantity` nguyên, 0 xóa mục. Có thể giảm số lượng mục đã lưu khi tồn kho giảm. `id` là mã sản phẩm. |
 | POST | `/retail/checkout` | BUYER; `recipientName`, `recipientPhone`, `shippingAddress`, tùy chọn `shippingNote`, `paymentMethod`. |
-| GET | `/retail/orders`, `/retail/orders/:id` | BUYER; chỉ đơn của mình, danh sách hỗ trợ `page`, `limit`. |
-| GET | `/retail/sales`, `/retail/admin/orders` | ARTISAN xem đơn có sản phẩm của mình; ADMIN xem tất cả đơn. |
+| GET | `/retail/orders`, `/retail/orders/:id` | BUYER; chỉ đơn của mình, có tiến độ từng xưởng trong `fulfillments`. Danh sách hỗ trợ `page`, `limit`. |
+| GET | `/retail/sales`, `/retail/admin/orders` | Hỗ trợ `page`, `limit`, `status`. ARTISAN nhận mặt hàng, số tiền và trạng thái của xưởng mình. ADMIN nhận tiến độ của từng xưởng trong đơn. |
+| PATCH | `/retail/orders/:id/workshops/:artisanId/status` | ARTISAN cập nhật phần đơn của mình; ADMIN có thể cập nhật từng xưởng. Luồng `CONFIRMED → SHIPPING → DELIVERED`. Xác nhận `paymentCollected: true` khi đã thu tiền COD của phần đó. |
 | PATCH | `/retail/orders/:id/status` | ARTISAN phụ trách toàn bộ đơn hoặc ADMIN cập nhật trạng thái; BUYER có thể hủy đơn chưa thanh toán đang chờ. Khi giao COD, gửi `{ status: "DELIVERED", paymentCollected: true }` sau khi đã thu tiền. |
 | GET | `/wholesale/quotes`, `/wholesale/quotes/:id` | BUYER; chỉ yêu cầu của mình; danh sách hỗ trợ `page`, `limit`. |
 | GET | `/wholesale/quotes/:id/journal` | BUYER sở hữu đơn đã chốt, đang sản xuất hoặc đã giao. Trả về các xưởng được giao và danh sách lô. |
@@ -64,9 +66,10 @@ Các endpoint riêng yêu cầu `Authorization: Bearer <accessToken>`. Mỗi tok
 | POST | `/wholesale/quotes/:id/assignments` | ADMIN; `allocations: [{ bidId, quantity }]`. |
 | PATCH | `/wholesale/assignments/:id` | ARTISAN phụ trách; `status`: `IN_PRODUCTION`, `READY_FOR_DELIVERY`, `COMPLETED` theo thứ tự. Để sẵn sàng giao, các lô phải hoàn thành và tổng số lượng phải bằng số lượng được phân công. |
 | POST | `/reviews` | BUYER; `targetType`, `artisanId`, `rating`, `comment`, một trong `retailOrderId` hoặc `quotationRequestId`; `productId` bắt buộc cho PRODUCT. |
-| GET | `/reviews/products/:slug`, `/reviews/artisans/:id` | Công khai; đánh giá sản phẩm hoặc xưởng được công bố. |
+| GET | `/reviews/products/:slug`, `/reviews/artisans/:id` | Công khai; đánh giá sản phẩm hoặc xưởng được công bố. Trả `summary` (điểm trung bình, số đánh giá) và `pagination` cùng `data`. |
 | GET, POST | `/admin/artisans` | ADMIN; lọc `status` theo `PENDING`, `APPROVED`, `SUSPENDED`, hoặc cấp tài khoản nghệ nhân với hồ sơ `PENDING`. |
 | GET | `/admin/artisans/pending` | ADMIN; danh sách hồ sơ chờ duyệt. |
+| GET | `/admin/artisans/:id` | ADMIN; thông tin hồ sơ, ảnh xưởng và chứng nhận, gồm cả hồ sơ chờ duyệt. |
 | PATCH | `/admin/artisans/:id/verification` | ADMIN; `status` là `APPROVED` hoặc `REJECTED`. |
 | PATCH | `/admin/artisans/:id/suspension` | ADMIN; `isSuspended: true` để đình chỉ, `false` để mở lại xưởng đã duyệt. |
 

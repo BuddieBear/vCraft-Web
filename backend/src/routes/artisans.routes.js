@@ -6,7 +6,7 @@ import { byId, listPage, pageQuery, urls, mediaUrl } from "./schemas.js";
 import { getArtisan, listArtisans, getMyWorkshop, updateMyWorkshop, createCertificate, removeCertificate } from "../services/artisans.service.js";
 import { authenticate } from "../middlewares/authenticate.js";
 import { authorize } from "../middlewares/authorize.js";
-import { findReferenceProduct, workshopReferences } from "../data/workshop-references.js";
+import { findReferenceProduct, findReferenceWorkshop, workshopReferences } from "../data/workshop-references.js";
 const router = Router();
 const own = [authenticate, authorize("ARTISAN")];
 router.get("/reference", (_req, res) => res.json({
@@ -21,7 +21,7 @@ router.get("/reference/products/:slug", (req, res) => {
     res.json({ data: product });
 });
 router.get("/reference/:slug", (req, res) => {
-    const workshop = workshopReferences.find(({ slug }) => slug === req.params.slug);
+    const workshop = findReferenceWorkshop(req.params.slug);
     if (!workshop) throw new ApiError(404, "NOT_FOUND", "Không tìm thấy cơ sở dệt lụa.");
     res.json({ data: workshop });
 });

@@ -6,6 +6,7 @@ export function findDeliveredQuote(tx, quoteId, buyerId) {
     return tx.quotationRequest.findFirst({ where: { id: quoteId, buyerId, status: "DELIVERED" }, include: { assignments: { where: { status: "COMPLETED" }, select: { artisanId: true, batches: { where: { status: "COMPLETED" }, select: { productId: true } } } } } });
 }
 import { prisma } from "../database/prisma.js";
+import { tradingWorkshop } from "./artisans.repository.js";
 export function findActiveBuyer(tx, userId) { return tx.user.findFirst({ where: { id: userId, role: "BUYER", isActive: true }, select: { id: true } }); }
 export function createVerifiedReview(tx, data) { return tx.review.create({ data }); }
 export function createReview(data) {
@@ -24,9 +25,26 @@ export function createReview(data) {
     });
 }
 const reviewFields = { id: true, targetType: true, rating: true, comment: true, mediaUrls: true, isVerifiedPurchase: true, createdAt: true, buyer: { select: { fullName: true, avatarUrl: true } } };
-export function publicProductReviews(slug, { skip, take }) {
-    return prisma.review.findMany({ where: { targetType: "PRODUCT", product: { slug, isPublished: true, artisan: { verificationStatus: "APPROVED", user: { isActive: true } } } }, select: reviewFields, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip, take });
+async function publicReviews(where, { page, limit }) {
+    const [data, { _count, _avg }] = await Promise.all([
+        prisma.review.findMany({
+            where, select: reviewFields, orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+            skip: (page - 1) * limit, take: limit + 1,
+        }),
+        prisma.review.aggregate({ where, _avg: { rating: true }, _count: true }),
+    ]);
+    return {
+        data: data.slice(0, limit),
+        summary: { averageRating: _avg.rating, totalReviews: _count },
+        pagination: { page, limit, hasNext: page < 10000 && data.length > limit },
+    };
 }
-export function publicArtisanReviews(id, { skip, take }) {
-    return prisma.review.findMany({ where: { artisanId: id, artisan: { verificationStatus: "APPROVED", user: { isActive: true } } }, select: reviewFields, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip, take });
+export function publicProductReviews(slug, query) {
+    return publicReviews({ targetType: "PRODUCT", product: { slug, isPublished: true, artisan: tradingWorkshop } }, query);
+}
+export function publicArtisanReviews(id, query) {
+    return publicReviews({
+        artisanId: id, artisan: tradingWorkshop,
+        OR: [{ targetType: "ARTISAN" }, { targetType: "PRODUCT", product: { isPublished: true } }],
+    }, query);
 }

@@ -1,5 +1,5 @@
 import { batches as demoBatches } from "../../../frontend/src/data/demo-data.js";
-import { sitePaths } from "../../../frontend/src/site-paths.js";
+import { productPagePath, sitePaths } from "../../../frontend/src/site-paths.js";
 import { icon } from "../../../frontend/src/components/ui.js";
 import { escapeHtml as html, renderProductionGuide } from "../../../frontend/src/components/production-guide.js";
 
@@ -73,7 +73,7 @@ function renderPage(product, { title, eyebrow, caption, attribution, cover, back
 </html>`;
 }
 
-export function renderTraceabilityPage({ batchCode, product, logs, status }) {
+export function renderTraceabilityPage({ batchCode, product, productionSteps, logs, status }) {
     const isComplete = status === "COMPLETED";
     const cover = product.mediaUrls?.map(imageUrl).find(Boolean);
     const steps = logs.length;
@@ -95,19 +95,27 @@ export function renderTraceabilityPage({ batchCode, product, logs, status }) {
       <ol class="trace-stages" role="list">${logs.map(renderLog).join("")}</ol>`
           : '<p class="trace-timeline-guide">Lô chưa có công đoạn nào được ghi nhận.</p>'}
     </section>
-    ${renderProductionGuide(product, { cover })}`,
+    ${renderProductionGuide({ ...product, productionSteps }, { cover })}`,
     });
 }
 
-export function renderProductProductionPage(product, reference) {
+export function renderProductProductionPage(product, reference, batches) {
     const cover = product.mediaUrls.map(imageUrl).find(Boolean);
     return renderPage(product, {
         title: "Quy trình " + product.name,
         eyebrow: "Quy trình sản xuất",
         attribution: product.artisan.workshopName,
         cover,
-        back: sitePaths.catalog,
-        backLabel: "Xem danh mục",
-        body: renderProductionGuide(product, { reference, cover }),
+        back: productPagePath(product.slug, reference),
+        backLabel: "Về chi tiết sản phẩm",
+        body: `${reference ? "" : `
+    <section class="trace-timeline" aria-labelledby="product-batches-title">
+      <h2 id="product-batches-title">Nhật ký lô sản xuất</h2>
+      ${batches.length ? `<ul class="trace-product-batches">${batches.map(batch => `
+        <li><a class="text-link" href="/trace/${encodeURIComponent(batch.batchCode)}">${html(batch.batchCode)} ${icon("arrow")}</a>
+        <span>${batch.status === "COMPLETED" ? "Đã hoàn thành" : "Đang sản xuất"} · ${date.format(batch.startedAt)}</span></li>`).join("")}</ul>`
+        : '<p class="trace-timeline-guide">Xưởng chưa công bố lô sản xuất cho sản phẩm này.</p>'}
+    </section>`}
+    ${renderProductionGuide(product, { reference, cover })}`,
     });
 }

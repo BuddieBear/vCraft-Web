@@ -10,6 +10,10 @@ const fields = {
     isOpenForVisitors: true, coverImageUrl: true, galleryImages: true,
     averageRating: true, totalReviews: true,
 };
+const certificates = {
+    select: { id: true, title: true, issuingAuthority: true, issuedYear: true, certificateImageUrl: true },
+    orderBy: [{ issuedYear: "desc" }, { id: "asc" }],
+};
 
 export function listPublicArtisans({ skip = 0, take = 24, visitorsOnly = false, storefront = false } = {}) {
     return prisma.artisanProfile.findMany({
@@ -21,7 +25,17 @@ export function listPublicArtisans({ skip = 0, take = 24, visitorsOnly = false, 
 export function findPublicArtisan(id, storefront = false) {
     return prisma.artisanProfile.findUnique({
         where: { id, ...(storefront ? publicStorefront : publicWorkshop) },
-        select: { ...fields, certificates: { select: { id: true, title: true, issuingAuthority: true, issuedYear: true, certificateImageUrl: true } } },
+        select: { ...fields, certificates },
+    });
+}
+
+export function findArtisanForReview(id) {
+    return prisma.artisanProfile.findUnique({
+        where: { id, user: { role: "ARTISAN" } },
+        select: {
+            ...fields, certificates, experienceYears: true, verificationStatus: true, isSuspended: true, createdAt: true,
+            user: { select: { fullName: true, email: true, phone: true, isActive: true } },
+        },
     });
 }
 

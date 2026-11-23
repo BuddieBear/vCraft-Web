@@ -5,10 +5,7 @@ import { weaveTypes } from "../../data/weave-types.js";
 import { vietnamToday } from "../../data/input-values.js";
 import { biddingPagePath, sitePaths } from "../../site-paths.js";
 import { card, displayDate, get, labels, listSection, paragraph, write } from "./view.js";
-
-const stages = [
-  ["UOM_TO", "Ươm tơ"], ["MAC_CUI", "Mắc cửi"], ["DET_LUA", "Dệt lụa"], ["NHUOM_MAU", "Nhuộm màu"], ["CAN_LANG", "Cán láng"],
-];
+import { productionStepTitles } from "../../data/production-steps.js";
 
 export function artisanView(root, tools) {
   const quotes = listSection(root, "Đang mời chào giá");
@@ -173,7 +170,8 @@ function mountBatchForm(details, assignmentId, remaining, { form, list }, pageSi
 export function renderBatch(target, batch, { button, form }) {
   const block = document.createElement("div");
   block.className = "trade-batch";
-  const step = batch._count.logs;
+  const stages = productionStepTitles(batch.productionSteps);
+  const step = batch.logs.length;
   block.append(paragraph(`Lô ${batch.batchCode} · ${batch.totalQuantity} sản phẩm · ${step}/${stages.length} công đoạn`));
   if (!batch.orderAssignmentId && batch.product.isPublished && ["IN_PROGRESS", "COMPLETED"].includes(batch.status)) {
     block.append(batchQr(batch.batchCode));
@@ -183,42 +181,103 @@ export function renderBatch(target, batch, { button, form }) {
     link.textContent = "Xem nhật ký lô";
     block.append(link);
   }
-  if (batch.status === "IN_PROGRESS") {
-    const path = "/traceability/batches/" + batch.id;
-    const stage = stages[step];
-    if (stage) {
-      let uploadedFiles = [];
-      let imageUrls = [];
-      const log = form(`
-        <label>Ngày công đoạn<input name="loggedOn" type="date" required></label>
-        <label>Tên công đoạn<input name="stageTitle" maxlength="150" required></label>
-        <label>Ghi chú công đoạn<textarea name="description" required maxlength="10000"></textarea></label>
-        <label>Ảnh minh chứng (tối đa 4 ảnh)<input name="evidence" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>`,
-      "Ghi công đoạn " + stage[1], async values => {
-        const description = values.get("description").trim();
-        const stageTitle = values.get("stageTitle").trim();
-        if (!description) throw new Error("Nhập mô tả công đoạn trước khi lưu.");
-        if (!stageTitle) throw new Error("Nhập tên công đoạn trước khi lưu.");
-        const files = [...log.elements.namedItem("evidence").files];
-        if (files.length > 4) throw new Error("Chọn tối đa 4 ảnh mỗi công đoạn.");
-        if (files.length && (files.length !== uploadedFiles.length || files.some((file, index) => file !== uploadedFiles[index]))) {
-          if (files.some(file => file.type && !["image/jpeg", "image/png", "image/webp"].includes(file.type))) {
-            throw new Error("Chọn ảnh định dạng JPEG, PNG hoặc WebP.");
-          }
-          if (files.some(file => !file.size || file.size > 5 * 1024 * 1024)) throw new Error("Mỗi ảnh minh chứng phải có dung lượng từ trên 0 đến 5 MB.");
-          const body = new FormData();
-          for (const file of files) body.append("images", file);
-          const { data } = await write("/media/images", body);
-          imageUrls = data.urls;
-          uploadedFiles = files;
-        }
-        await write(path + "/logs", { stage: stage[0], stageTitle, description, loggedOn: values.get("loggedOn"), evidenceImageUrls: files.length ? imageUrls : [] });
+  const path = "/traceability/batches/" + batch.id;
+  const editable = batch.status === "IN_PROGRESS";
+  const timeline = document.createElement("ol");
+  timeline.className = "production-log-list";
+  for (const entry of batch.logs) {
+    const row = document.createElement("li");
+    const details = document.createElement("details");
+    const summary = document.createElement("summary");
+    summary.textContent = entry.stageTitle + " · " + displayDate.format(new Date(entry.loggedAt));
+    details.append(summary);
+    if (editable) {
+      details.append(logForm(form, entry.stageTitle, body => write(path + "/logs/" + encodeURIComponent(entry.id), body, "PUT"), entry));
+    } else {
+      details.append(paragraph(entry.description));
+      const gallery = document.createElement("div");
+      gallery.className = "workshop-pictures";
+      entry.evidenceImageUrls.forEach((url, index) => {
+        const photo = evidenceThumbnail(url, index);
+        if (photo) gallery.append(photo);
       });
-      log.elements.namedItem("stageTitle").value = stage[1];
-      const loggedOn = log.elements.namedItem("loggedOn");
-      loggedOn.max = loggedOn.value = vietnamToday();
-      block.append(log);
-    } else block.append(button("Hoàn thành lô", () => write(path + "/complete")));
+      if (gallery.childElementCount) details.append(gallery);
+    }
+    row.append(details);
+    timeline.append(row);
   }
+  if (step) block.append(timeline);
+  if (editable && step < stages.length) {
+    block.append(logForm(form, stages[step], body => write(path + "/logs", { ...body, stepOrder: step + 1 })));
+  } else if (editable) block.append(button("Hoàn thành lô", () => write(path + "/complete")));
   target.append(block);
+}
+
+function evidenceThumbnail(url, index) {
+  const src = mediaUrl(url);
+  if (!src) return null;
+  const photo = document.createElement("img");
+  photo.src = src;
+  photo.alt = "Ảnh minh chứng " + (index + 1);
+  photo.loading = "lazy";
+  photo.referrerPolicy = "no-referrer";
+  return photo;
+}
+
+function logForm(form, title, submit, entry) {
+  const images = entry?.evidenceImageUrls ?? [];
+  let uploadedFiles = [];
+  let imageUrls = [];
+  const editor = form(`
+    <label>Ngày công đoạn<input name="loggedOn" type="date" required></label>
+    <label>Tên công đoạn<input name="stageTitle" maxlength="150" required></label>
+    <label>Ghi chú công đoạn<textarea name="description" required maxlength="10000"></textarea></label>
+    <label>Ảnh minh chứng mới (tối đa 4 ảnh)<input name="evidence" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>`,
+  entry ? "Lưu công đoạn" : "Ghi công đoạn " + title, async values => {
+    const description = values.get("description").trim();
+    const stageTitle = values.get("stageTitle").trim();
+    if (!description || !stageTitle) throw new Error("Nhập tên và ghi chú công đoạn trước khi lưu.");
+    const retained = values.getAll("keepEvidence").map(index => images[Number(index)]);
+    const files = [...editor.elements.namedItem("evidence").files];
+    if (files.length > 4 || retained.length + files.length > 20) throw new Error("Chọn tối đa 4 ảnh mới và 20 ảnh tổng cộng.");
+    if (files.length && (files.length !== uploadedFiles.length || files.some((file, index) => file !== uploadedFiles[index]))) {
+      if (files.some(file => file.type && !["image/jpeg", "image/png", "image/webp"].includes(file.type))) {
+        throw new Error("Chọn ảnh định dạng JPEG, PNG hoặc WebP.");
+      }
+      if (files.some(file => !file.size || file.size > 5 * 1024 * 1024)) throw new Error("Mỗi ảnh minh chứng phải có dung lượng từ trên 0 đến 5 MB.");
+      const body = new FormData();
+      for (const file of files) body.append("images", file);
+      const { data } = await write("/media/images", body);
+      imageUrls = data.urls;
+      uploadedFiles = files;
+    }
+    await submit({ stageTitle, description, loggedOn: values.get("loggedOn"), evidenceImageUrls: [...retained, ...(files.length ? imageUrls : [])] });
+  });
+  editor.elements.namedItem("stageTitle").value = title;
+  editor.elements.namedItem("description").value = entry?.description ?? "";
+  const loggedOn = editor.elements.namedItem("loggedOn");
+  loggedOn.max = vietnamToday();
+  loggedOn.value = entry ? vietnamToday(new Date(entry.loggedAt)) : loggedOn.max;
+  if (images.length) {
+    const gallery = document.createElement("fieldset");
+    gallery.className = "production-evidence";
+    const legend = document.createElement("legend");
+    legend.textContent = "Ảnh hiện có · bỏ chọn ảnh muốn gỡ";
+    gallery.append(legend);
+    images.forEach((url, index) => {
+      const label = document.createElement("label");
+      label.className = "trade-choice";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.name = "keepEvidence";
+      checkbox.value = index;
+      checkbox.checked = true;
+      label.append(checkbox, "Ảnh " + (index + 1));
+      const photo = evidenceThumbnail(url, index);
+      if (photo) label.append(photo);
+      gallery.append(label);
+    });
+    editor.elements.namedItem("evidence").closest("label").before(gallery);
+  }
+  return editor;
 }

@@ -144,6 +144,15 @@ export function mountCart(dialog, updateBadge, notify, account) {
         for (const order of data) {
           const item = document.createElement("li");
           item.textContent = `${order.orderCode} · ${orderStatus[order.status]} · ${formatPrice(order.totalAmount)} · ${paymentLabel(order)}`;
+          if (order.fulfillments.length > 1) {
+            const progress = document.createElement("ul");
+            for (const part of order.fulfillments) {
+              const row = document.createElement("li");
+              row.textContent = `${part.artisan.workshopName} · ${orderStatus[part.status]} · ${paymentLabel({ ...part, paymentMethod: order.paymentMethod })}`;
+              progress.append(row);
+            }
+            item.append(progress);
+          }
           if (order.status === "DELIVERED" && order.paymentStatus === "PAID") {
             const review = reviewForm(order, "retailOrderId", order.items.map(line => ({
               productId: line.productId, productName: line.product.name,

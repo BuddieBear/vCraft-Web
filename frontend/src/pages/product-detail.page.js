@@ -4,6 +4,7 @@ import { getCatalogProduct } from "../api/catalog.js";
 import { quoteDraftPath, sitePaths } from "../site-paths.js";
 import { renderProductionGuide } from "../components/production-guide.js";
 import { referenceProductPrice } from "../components/reference-product-card.js";
+import { mountPublicReviews } from "../components/public-reviews.js";
 
 export async function mountProductDetail(section, { slug, reference }, addToCart, account) {
   section.innerHTML = `
@@ -113,6 +114,7 @@ export async function mountProductDetail(section, { slug, reference }, addToCart
     }
     actions.append(wholesale);
     syncBuyerActions(account.profile);
+    mountPublicReviews(section, { productSlug: slug });
   } catch (error) {
     status.textContent = error.message;
     if (error.status !== 404) {

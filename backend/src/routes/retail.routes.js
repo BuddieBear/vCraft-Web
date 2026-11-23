@@ -7,9 +7,15 @@ import { uuid, pageQuery, byId } from "./schemas.js";
 import * as actions from "../controllers/retail.controller.js";
 
 const router = Router();
+const fulfillmentStatus = z.enum(["CONFIRMED", "SHIPPING", "DELIVERED"]);
+const salesQuery = pageQuery.extend({ status: z.enum(["PENDING", "CONFIRMED", "SHIPPING", "DELIVERED", "CANCELLED"]).optional() });
 router.use(authenticate);
-router.get("/admin/orders", authorize("ADMIN"), validate({ query: pageQuery.extend({ status: z.enum(["PENDING", "CONFIRMED", "SHIPPING", "DELIVERED", "CANCELLED"]).optional() }) }), actions.adminOrderList);
-router.get("/sales", authorize("ARTISAN"), validate({ query: pageQuery }), actions.artisanSales);
+router.get("/admin/orders", authorize("ADMIN"), validate({ query: salesQuery }), actions.adminOrderList);
+router.get("/sales", authorize("ARTISAN"), validate({ query: salesQuery }), actions.artisanSales);
+router.patch("/orders/:id/workshops/:artisanId/status", authorize("ARTISAN", "ADMIN"), validate({
+    params: byId.extend({ artisanId: uuid }),
+    body: z.object({ status: fulfillmentStatus, paymentCollected: z.boolean().optional() }).strict(),
+}), actions.setWorkshopOrderStatus);
 router.patch("/orders/:id/status", authorize("BUYER", "ARTISAN", "ADMIN"), validate({ params: byId, body: z.object({ status: z.enum(["CONFIRMED", "SHIPPING", "DELIVERED", "CANCELLED"]), paymentCollected: z.boolean().optional() }).strict() }), actions.setOrderStatus);
 router.use(authorize("BUYER"));
 router.get("/cart", actions.cart);

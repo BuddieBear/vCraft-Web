@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { fileURLToPath } from "node:url";
-import { productPageRoots, productTraceSegment, quoteJournalRoot, quotePageRoot, signInPath, sitePaths } from "../../../frontend/src/site-paths.js";
+import { productPageRoots, productTraceSegment, quoteJournalRoot, quotePageRoot, referenceWorkshopRoot, signInPath, sitePaths } from "../../../frontend/src/site-paths.js";
 import { byId } from "./schemas.js";
 import { getCatalogProduct } from "../services/products.service.js";
-import { findReferenceProduct } from "../data/workshop-references.js";
+import { findReferenceProduct, findReferenceWorkshop } from "../data/workshop-references.js";
 import { batchPage, productionPage } from "../controllers/traceability.controller.js";
 import { getPublicProductionProduct } from "../services/traceability.service.js";
 import { getNews } from "../services/news.service.js";
@@ -32,6 +32,7 @@ router.get("/login.html", (request, response) => {
 });
 router.get(productPageRoots.retail + "/:slug", publicSlugPage(slug => getCatalogProduct(slug, { storefront: true }), { demoRedirect: true }));
 router.get(productPageRoots.reference + "/:slug", publicSlugPage(findReferenceProduct));
+router.get(referenceWorkshopRoot + "/:slug", publicSlugPage(findReferenceWorkshop));
 router.get(sitePaths.news + "/:slug", publicSlugPage(getNews));
 router.get([quotePageRoot + "/:id", quoteJournalRoot + "/:id", sitePaths.bidding + "/:id"], (request, response) => {
     if (!byId.safeParse(request.params).success) return sendNotFound(response);
