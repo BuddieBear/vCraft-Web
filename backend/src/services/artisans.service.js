@@ -1,4 +1,4 @@
-import { findPublicArtisan, listPublicArtisans, findOwnWorkshop, updateOwnWorkshop, addOwnCertificate, deleteOwnCertificate } from "../repositories/artisans.repository.js";
+import { findPublicArtisan, listPublicArtisans, findOwnWorkshop, updateOwnWorkshop, addOwnCertificate, deleteOwnCertificate, resubmitWorkshop } from "../repositories/artisans.repository.js";
 import { ApiError } from "../middlewares/api-error.js";
 
 export function listArtisans(options) {
@@ -19,9 +19,15 @@ export async function getMyWorkshop(userId) {
 
 export async function updateMyWorkshop(userId, data) {
     const result = await updateOwnWorkshop(userId, data);
-    if (!result.count) {
+    if (!result) {
         throw new ApiError(404, "NOT_FOUND", "Không tìm thấy hồ sơ xưởng.");
     }
+    return result;
+}
+
+export async function resubmitMyWorkshop(userId) {
+    const result = await resubmitWorkshop(userId);
+    if (!result.count) throw new ApiError(409, "CONFLICT", "Chỉ nộp lại hồ sơ sau khi hồ sơ bị từ chối.");
     return getMyWorkshop(userId);
 }
 

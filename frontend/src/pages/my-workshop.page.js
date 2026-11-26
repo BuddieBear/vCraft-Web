@@ -39,6 +39,8 @@ export async function workshopView(root, tools) {
   const workshop = await get("/artisans/me", tools.signal);
   if (tools.signal.aborted) return;
   const profile = card(root, workshop.workshopName, workshop.isSuspended ? "Xưởng đang bị đình chỉ" : verificationLabels[workshop.verificationStatus]);
+  if (workshop.pendingIdentity) profile.append(paragraph("Thay đổi tên, địa chỉ hoặc tọa độ đang chờ Ban quản lý duyệt. Trang công khai vẫn hiển thị thông tin đã được xác minh."));
+  if (workshop.rejectionReason) profile.append(paragraph("Lý do từ chối gần nhất · " + workshop.rejectionReason));
   profile.append(profileForm(tools.form, workshop));
   pictures(profile, [workshop.coverImageUrl, ...workshop.galleryImages].filter(Boolean), "Ảnh xưởng");
   const certificates = listSection(root, "Chứng nhận chất lượng");
@@ -46,6 +48,7 @@ export async function workshopView(root, tools) {
   const products = listSection(root, "Sản phẩm và nhật ký của xưởng");
   products.classList.add("trade-list-full");
   if (workshop.verificationStatus !== "APPROVED") {
+    if (workshop.verificationStatus === "REJECTED") profile.append(tools.button("Nộp lại hồ sơ để duyệt", () => write("/artisans/me/resubmit")));
     products.append(paragraph("Sau khi hồ sơ được duyệt, bạn có thể đăng sản phẩm, tạo lô và chào giá."));
     return;
   }
@@ -111,7 +114,7 @@ function profileForm(form, workshop) {
     }, "PATCH");
   });
   for (const name of ["workshopName", "artisanTitle", "experienceYears", "familyHistory", "address", "latitude", "longitude", "openingHours"]) {
-    profile.elements.namedItem(name).value = workshop[name] ?? "";
+    profile.elements.namedItem(name).value = workshop.pendingIdentity?.[name] ?? workshop[name] ?? "";
   }
   profile.elements.namedItem("isOpenForVisitors").checked = workshop.isOpenForVisitors;
   return profile;
@@ -183,7 +186,7 @@ function productForm(form, categories, product) {
       saleUnit: values.get("saleUnit"), stockQuantity: Number(values.get("stockQuantity")), isPublished: values.has("isPublished"),
     };
     if (!product) return write("/products", data);
-    return write("/products/" + encodeURIComponent(product.id), { ...data, expectedStockQuantity: product.stockQuantity }, "PUT");
+    return write("/products/" + encodeURIComponent(product.id), { ...data, expectedStockQuantity: product.stockQuantity, expectedRevision: product.revision }, "PUT");
   });
   const fields = editor.elements;
   fields.namedItem("productionSteps").value = productionStepTitles(product?.productionSteps).join("\n");

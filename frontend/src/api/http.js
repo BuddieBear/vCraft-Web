@@ -1,3 +1,5 @@
+import { batchImageParts } from "../data/batch-media.js";
+
 let token = sessionStorage.getItem("vcraft-access-token");
 const listeners = new Set();
 
@@ -37,6 +39,7 @@ export async function request(path, { method = "GET", body, signal, auth = false
     if (response.status === 401 && session && token === session && (!result || result.error?.code === "UNAUTHENTICATED")) setToken(null);
     const error = new Error(result?.error?.message || "Không nhận được phản hồi hợp lệ từ máy chủ.");
     error.status = response.status;
+    error.code = result?.error?.code;
     error.fields = Array.isArray(result?.error?.fields) ? result.error.fields : [];
     throw error;
   }
@@ -50,6 +53,33 @@ export function mediaUrl(path) {
     if (["https:", "http:"].includes(url.protocol) && !url.username && !url.password) return url.href;
   } catch { /* Invalid media URL. */ }
   return null;
+}
+
+export function setEvidenceImage(image, path) {
+  if (!batchImageParts(path)) {
+    const src = mediaUrl(path);
+    if (!src) return false;
+    image.src = src;
+    image.loading = "lazy";
+    return true;
+  }
+  const session = token;
+  if (!session) return false;
+  fetch(path, { headers: { Authorization: "Bearer " + session }, cache: "no-store", redirect: "error" })
+    .then(response => {
+      if (!response.ok || response.headers.get("Content-Type") !== "image/webp") throw new Error("Image unavailable");
+      return response.blob();
+    })
+    .then(blob => {
+      if (session !== token || !image.isConnected) return;
+      const source = URL.createObjectURL(blob);
+      const release = () => URL.revokeObjectURL(source);
+      image.addEventListener("load", release, { once: true });
+      image.addEventListener("error", release, { once: true });
+      image.src = source;
+    })
+    .catch(() => { image.hidden = true; });
+  return true;
 }
 
 export function apiUrl(path) {

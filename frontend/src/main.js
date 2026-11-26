@@ -1,5 +1,6 @@
 import { icon } from "./components/ui.js";
 import { mountCart } from "./pages/cart.page.js";
+import { retailOrderLinkId } from "./data/retail-status.js";
 import { mountAccount } from "./pages/login.page.js";
 import { homeMapId, matchProductPage, pageSegment, quoteJournalRoot, quotePageRoot, referenceWorkshopRoot, sitePaths } from "./site-paths.js";
 
@@ -84,6 +85,8 @@ function renderPage() {
     badge.textContent = count;
     cartButton.setAttribute("aria-label", `Mở giỏ hàng (${count})`);
   }, notify, account);
+  const linkedOrder = retailOrderLinkId(location.pathname + location.search);
+  if (linkedOrder) cart.open(linkedOrder);
 
   const main = document.querySelector("#main-content");
   const page = pages.get(path);
