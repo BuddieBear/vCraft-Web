@@ -1,4 +1,4 @@
-import { findApprovedArtisan, findArtisanQuote, listOpenQuotes, listArtisanAssignments, listBuyerQuotes, listAcceptedQuotes, findBuyerQuote as findBuyerQuoteRow, findBuyerJournal as findBuyerJournalRow, createQuote as createQuoteRecord, replaceDraftWorkshops, sendQuote as sendQuoteRecord, submitForDispatch, dispatchQuote as dispatchQuoteRecord, submitBid as submitBidRecord, acceptBids as acceptBidsRecord, assignBids as assignBidsRecord, advanceAssignment as advanceAssignmentRecord } from "../repositories/wholesale.repository.js";
+import { findApprovedArtisan, findArtisanQuote, listOpenQuotes, listArtisanAssignments, listBuyerQuotes, listAcceptedQuotes, findBuyerQuote as findBuyerQuoteRow, findBuyerJournal as findBuyerJournalRow, createQuote as createQuoteRecord, replaceDraftWorkshops, sendQuote as sendQuoteRecord, submitForDispatch, dispatchQuote as dispatchQuoteRecord, closeExpiredDispatch as closeExpiredDispatchRecord, submitBid as submitBidRecord, acceptBids as acceptBidsRecord, assignBids as assignBidsRecord, advanceAssignment as advanceAssignmentRecord } from "../repositories/wholesale.repository.js";
 import { quoteBudgetMax, validPositiveAmount, vietnamToday } from "../../../frontend/src/data/input-values.js";
 import { biddingPagePath, quotePagePath } from "../../../frontend/src/site-paths.js";
 
@@ -73,7 +73,7 @@ function validateWorkshops(artisanIds, minimum = 1) {
     artisanIds.forEach(id);
 }
 
-export function createQuote({ userId, title, specifications, targetQuantity, deadline, targetArtisanId = null, artisanIds = [], maxBudget = null, preferredWeaveType = "LUA_VAN", attachmentUrls = [] }) {
+export function createQuote({ userId, title, specifications, targetQuantity, deadline, targetArtisanId = null, artisanIds = [], maxBudget = null, preferredWeaveType = null, attachmentUrls = [] }) {
     id(userId);
     const data = { userId, title: text(title, 255), specifications: text(specifications, 10000), targetQuantity: positive(targetQuantity), deadline: deadlineDate(deadline), targetArtisanId, maxBudget: maxBudget === null ? null : money(maxBudget, quoteBudgetMax), preferredWeaveType, attachmentUrls };
     if (targetArtisanId !== null) id(targetArtisanId);
@@ -84,7 +84,7 @@ export function createQuote({ userId, title, specifications, targetQuantity, dea
 }
 
 export function updateQuoteWorkshops({ userId, quoteId, artisanIds }) {
-    validateWorkshops(artisanIds);
+    validateWorkshops(artisanIds, 0);
     return replaceDraftWorkshops(id(userId), id(quoteId), artisanIds);
 }
 
@@ -104,20 +104,25 @@ export function dispatchQuote({ userId, quoteId, artisanIds }) {
     return dispatchQuoteRecord(userId, quoteId, artisanIds, deadlinePassed, biddingPagePath(quoteId));
 }
 
-export function submitBid({ userId, quoteId, proposedPrice, proposedCompletionDays, note = null, sampleImages = [] }) {
-    id(userId); id(quoteId); positive(proposedCompletionDays);
-    const price = money(proposedPrice, "9999999999.99");
-    if (!Array.isArray(sampleImages) || sampleImages.some((sample) => typeof sample !== "string" || sample.length > 500)) throw new Error("Invalid images");
-    if (note != null && (typeof note !== "string" || note.length > 10000)) throw new Error("Invalid note");
-    return submitBidRecord({ userId, quoteId, price, proposedCompletionDays, note, sampleImages }, deadlinePassed, quotePagePath(quoteId));
+export function closeExpiredDispatch({ userId, quoteId }) {
+    return closeExpiredDispatchRecord(id(userId), id(quoteId), deadlinePassed, quotePagePath(quoteId));
 }
 
-export function acceptBids({ userId, quoteId, bidIds, allocations }) {
+export function submitBid({ userId, quoteId, proposedPrice, proposedCompletionDays, note = null, sampleImages, expectedRevision }, action = "create") {
+    if (action === "withdraw") return submitBidRecord({ userId: id(userId), quoteId: id(quoteId), expectedRevision }, deadlinePassed, quotePagePath(quoteId), action);
+    id(userId); id(quoteId); positive(proposedCompletionDays);
+    const price = money(proposedPrice, "9999999999.99");
+    if (sampleImages !== undefined && (!Array.isArray(sampleImages) || sampleImages.some((sample) => typeof sample !== "string" || sample.length > 500))) throw new Error("Invalid images");
+    if (note != null && (typeof note !== "string" || note.length > 10000)) throw new Error("Invalid note");
+    return submitBidRecord({ userId, quoteId, price, proposedCompletionDays, note, sampleImages, expectedRevision }, deadlinePassed, quotePagePath(quoteId), action);
+}
+
+export function acceptBids({ userId, quoteId, bidIds, allocations, bidVersions }) {
     id(userId); id(quoteId);
     if (!Array.isArray(bidIds) || !bidIds.length || new Set(bidIds).size !== bidIds.length) throw new Error("Invalid bids");
     bidIds.forEach(id);
     if (allocations !== undefined) validateAllocations(allocations);
-    return acceptBidsRecord(userId, quoteId, bidIds, deadlinePassed, biddingPagePath(quoteId), allocations);
+    return acceptBidsRecord(userId, quoteId, bidIds, deadlinePassed, biddingPagePath(quoteId), allocations, bidVersions);
 }
 
 function validateAllocations(allocations) {

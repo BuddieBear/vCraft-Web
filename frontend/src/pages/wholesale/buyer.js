@@ -1,14 +1,15 @@
 import { formatPrice, saleUnits } from "../../components/ui.js";
 import { getCatalogProduct } from "../../api/catalog.js";
 import { referenceProductPrice } from "../../components/reference-product-card.js";
-import { quoteBudgetError, quoteBudgetMax, validPositiveAmount, vietnamToday } from "../../data/input-values.js";
+import { vietnamToday } from "../../data/input-values.js";
 import { weaveTypes } from "../../data/weave-types.js";
 import { productPagePath, quoteJournalPath, quotePagePath, sitePaths } from "../../site-paths.js";
 import { reviewForm } from "../reviews.page.js";
-import { bidText, card, displayDate, get, hasQuoteJournal, labels, paragraph, quoteProgress, workshopName, write } from "./view.js";
+import { allocationPreview, bidText, card, displayDate, get, hasQuoteJournal, labels, paragraph, quoteExpired, quoteLabel, quoteProgress, workshopName, write } from "./view.js";
 
 const workshopFields = `<fieldset class="quote-workshops">
   <legend>Chọn xưởng nhận yêu cầu</legend>
+  <p>Có thể để trống để nhờ Ban quản lý chọn xưởng.</p>
   <p role="status" data-workshop-selection></p>
   <ul class="quote-selected-workshops"></ul>
   <div data-workshop-options></div>
@@ -66,7 +67,6 @@ function mountWorkshopPicker(form, list, key, selected, onChange) {
 }
 
 function selectedWorkshopIds(selected) {
-  if (!selected.size) throw new Error("Chọn ít nhất một xưởng để gửi yêu cầu.");
   if (selected.size > 100) throw new Error("Chọn tối đa 100 xưởng cho mỗi yêu cầu.");
   return [...selected.keys()];
 }
@@ -95,7 +95,7 @@ export async function buyerView(root, { form, query, list, signal }) {
         link.className = "text-link";
         link.href = quotePagePath(quote.id);
         link.textContent = quote.title;
-        item.append(link, paragraph(labels[quote.status]));
+        item.append(link, paragraph(quoteLabel(quote)));
         if (hasQuoteJournal(quote.status)) item.append(journalLink(quote.id));
         items.append(item);
       }
@@ -115,7 +115,6 @@ export async function buyerView(root, { form, query, list, signal }) {
     <label>Sản phẩm cần đặt<input name="title" required maxlength="255" placeholder="Ví dụ: Khăn lụa in logo"></label>
     <label>Loại lụa<select name="preferredWeaveType"><option value="">Chọn loại lụa</option>${Object.entries(weaveTypes).map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}</select></label>
     <label>Số lượng<input name="targetQuantity" type="number" min="1" max="2147483647" required></label>
-    <label>Ngân sách tối đa (đồng)<input name="maxBudget" type="number" min="0.01" max="${quoteBudgetMax}" step="0.01" inputmode="decimal"></label>
     <label>Ngày cần hàng<input name="deadline" type="date" required></label>
     <label>Ghi chú và quy cách<textarea name="specifications" rows="6" required maxlength="10000" placeholder="Màu, kích thước, yêu cầu cá nhân hóa hoặc thời gian mong muốn"></textarea></label>
     ${workshopFields}`, "Lưu yêu cầu nháp", async values => {
@@ -127,7 +126,6 @@ export async function buyerView(root, { form, query, list, signal }) {
       specifications: priceNote + notes,
       deadline: values.get("deadline"),
       targetQuantity: Number(values.get("targetQuantity")),
-      ...(values.get("maxBudget") !== "" && { maxBudget: values.get("maxBudget") }),
       ...(values.get("preferredWeaveType") && { preferredWeaveType: values.get("preferredWeaveType") }),
       artisanIds,
     });
@@ -136,12 +134,6 @@ export async function buyerView(root, { form, query, list, signal }) {
   const deadline = fields.elements.namedItem("deadline");
   deadline.min = vietnamToday();
   deadline.dataset.minMessage = "Chọn ngày cần hàng từ hôm nay trở đi.";
-  const budget = fields.elements.namedItem("maxBudget");
-  budget.dataset.minMessage = "Ngân sách phải lớn hơn 0. Để trống nếu chưa xác định.";
-  budget.addEventListener("input", () => {
-    const value = budget.value;
-    budget.setCustomValidity(value && !validPositiveAmount(value, quoteBudgetMax) ? quoteBudgetError : "");
-  });
   mountWorkshopPicker(fields, list, "buyer-workshops", selectedWorkshops);
   if (source?.error) create.append(paragraph("Chưa tải được mẫu lụa. Bạn có thể nhập thông tin để đặt sỉ."));
   const link = document.createElement("a");
@@ -176,27 +168,26 @@ function journalLink(id) {
 export async function buyerQuoteView(root, { button, form, expand, list, quoteId, signal }) {
   const path = "/wholesale/quotes/" + encodeURIComponent(quoteId);
   const quote = await get(path, signal);
-  const panel = card(root, quote.title, labels[quote.status] + " · " + quote.targetQuantity + " sản phẩm");
+  const panel = card(root, quote.title, quoteLabel(quote) + " · " + quote.targetQuantity + " sản phẩm");
   panel.classList.add("quote-detail");
   const notes = paragraph(quote.specifications);
   notes.className = "quote-notes";
   panel.append(quoteProgress(quote.status), notes);
-  if (quote.maxBudget !== null) panel.append(paragraph("Ngân sách tối đa · " + formatPrice(quote.maxBudget)));
   panel.append(paragraph("Ngày cần hàng · " + displayDate.format(new Date(quote.deadline))));
   const selected = new Map(quote.recipients.map(({ artisanId, artisan }) => [artisanId, artisan.workshopName]));
   if (quote.targetArtisan) selected.set(quote.targetArtisan.id, quote.targetArtisan.workshopName);
   const workshops = [...selected.values()];
   if (workshops.length) panel.append(paragraph("Xưởng nhận yêu cầu · " + workshops.join(", ")));
   if (hasQuoteJournal(quote.status)) panel.append(journalLink(quote.id));
-  if (quote.status === "DRAFT") {
+  if (quote.status === "DRAFT" && !quoteExpired(quote)) {
     const actions = document.createElement("div");
     actions.className = "trade-toolbar";
-    const send = button(workshops.length ? "Gửi xưởng đã chọn" : "Gửi nghệ nhân", () => write(path + "/send"));
-    const dispatch = !quote.recipients.length && button("Gửi Ban quản lý điều phối", () => write(path + "/request-dispatch"));
+    const send = workshops.length ? button("Gửi xưởng đã chọn", () => write(path + "/send")) : null;
+    const dispatch = !workshops.length ? button("Gửi Ban quản lý điều phối", () => write(path + "/request-dispatch")) : null;
     const pendingSelection = paragraph("Lưu danh sách xưởng trước khi gửi.");
     pendingSelection.hidden = true;
     pendingSelection.setAttribute("role", "status");
-    actions.append(send);
+    if (send) actions.append(send);
     if (dispatch) actions.append(dispatch);
     panel.append(actions, pendingSelection);
     const savedWorkshops = [...selected.keys()];
@@ -207,7 +198,7 @@ export async function buyerQuoteView(root, { button, form, expand, list, quoteId
           write(path + "/workshops", { artisanIds: selectedWorkshopIds(selected) }, "PATCH"));
         mountWorkshopPicker(picker, list, "draft-workshops-" + quoteId, selected, () => {
           const changed = selected.size !== savedWorkshops.length || savedWorkshops.some(id => !selected.has(id));
-          send.disabled = changed;
+          if (send) send.disabled = changed;
           if (dispatch) dispatch.disabled = changed;
           pendingSelection.hidden = !changed;
         });
@@ -215,9 +206,9 @@ export async function buyerQuoteView(root, { button, form, expand, list, quoteId
       },
     });
   }
-  if (quote.status === "PENDING_DISPATCH") panel.append(paragraph("Ban quản lý đã nhận yêu cầu và sẽ mời các xưởng phù hợp chào giá."));
+  if (quote.status === "PENDING_DISPATCH" && !quoteExpired(quote)) panel.append(paragraph("Ban quản lý đã nhận yêu cầu và sẽ mời các xưởng phù hợp chào giá."));
   const options = quote.bids.filter(bid => bid.status === "SUBMITTED");
-  if (options.length && quote.status === "ARTISANS_BIDDING") {
+  if (options.length && quote.status === "ARTISANS_BIDDING" && !quoteExpired(quote)) {
     const due = new Date(quote.deadline).getTime();
     const today = new Date(vietnamToday() + "T00:00:00Z").getTime();
     const bids = form("", "Chốt báo giá", async values => {
@@ -231,10 +222,14 @@ export async function buyerQuoteView(root, { button, form, expand, list, quoteId
       if (allocations.reduce((total, item) => total + item.quantity, 0) !== quote.targetQuantity) {
         throw new Error(`Tổng số lượng chia cho các xưởng phải bằng ${quote.targetQuantity}.`);
       }
-      await write(path + "/accept", { bidIds, allocations });
+      const bidVersions = Object.fromEntries(options.filter(bid => bidIds.includes(bid.id)).map(bid => [bid.id, bid.revision]));
+      await write(path + "/accept", { bidIds, allocations, bidVersions });
       return quoteJournalPath(quote.id);
     });
     const choices = [];
+    const preview = paragraph("");
+    preview.setAttribute("aria-live", "polite");
+    bids.querySelector('button[type="submit"]').before(paragraph("Giá từng phần được tính theo tỷ lệ số lượng giao cho xưởng, làm tròn đến 0,01 ₫."), preview);
     for (const bid of options) {
       const label = document.createElement("label");
       label.className = "trade-choice";
@@ -256,16 +251,21 @@ export async function buyerQuoteView(root, { button, form, expand, list, quoteId
       choices.push({ choice, allocation, quantity });
     }
     function syncQuantities() {
-      const multiple = choices.filter(({ choice }) => choice.checked).length > 1;
+      const checked = choices.filter(({ choice }) => choice.checked);
+      const multiple = checked.length > 1;
       for (const { choice, allocation, quantity } of choices) {
         allocation.hidden = quantity.disabled = !(multiple && choice.checked);
       }
+      allocationPreview(preview, quote, options, checked.map(({ choice, quantity }) => ({ bidId: choice.value, quantity: multiple ? Number(quantity.value) : quote.targetQuantity })));
     }
-    bids.addEventListener("change", syncQuantities);
+    bids.addEventListener("input", syncQuantities);
     syncQuantities();
     panel.append(bids);
   } else {
     for (const bid of quote.bids) panel.append(paragraph(bidText(bid) + " · " + labels[bid.status]));
+  }
+  for (const assignment of quote.assignments) {
+    panel.append(paragraph(`${workshopName(assignment)} · ${assignment.allocatedQuantity} sản phẩm · ${formatPrice(assignment.agreedPrice)}`));
   }
   if (quote.status === "DELIVERED") {
     const items = quote.assignments.filter(assignment => assignment.status === "COMPLETED").flatMap(assignment => {

@@ -1,10 +1,10 @@
 import { formatPrice } from "../../components/ui.js";
 import { batchQr } from "../../components/batch-qr.js";
-import { mediaUrl } from "../../api/http.js";
+import { mediaUrl, setEvidenceImage } from "../../api/http.js";
 import { weaveTypes } from "../../data/weave-types.js";
 import { vietnamToday } from "../../data/input-values.js";
 import { biddingPagePath, sitePaths } from "../../site-paths.js";
-import { card, displayDate, get, labels, listSection, paragraph, write } from "./view.js";
+import { card, displayDate, displayLogDate, get, labels, listSection, paragraph, quoteExpired, quoteLabel, write } from "./view.js";
 import { productionStepTitles } from "../../data/production-steps.js";
 
 export function artisanView(root, tools) {
@@ -34,7 +34,7 @@ export function artisanView(root, tools) {
 }
 
 function renderQuoteSummary(root, quote) {
-  const panel = card(root, quote.title, [labels[quote.status], `${quote.targetQuantity.toLocaleString("vi-VN")} sản phẩm`].join(" · "));
+  const panel = card(root, quote.title, [quoteLabel(quote), `${quote.targetQuantity.toLocaleString("vi-VN")} sản phẩm`].join(" · "));
   panel.append(paragraph("Ngày cần hàng · " + displayDate.format(new Date(quote.deadline))));
   if (quote.bids.length) panel.append(paragraph("Báo giá của bạn · " + labels[quote.bids[0].status]));
   const link = document.createElement("a");
@@ -44,15 +44,14 @@ function renderQuoteSummary(root, quote) {
   panel.append(link);
 }
 
-export async function artisanBidView(root, { bidQuoteId, form, signal }) {
+export async function artisanBidView(root, { bidQuoteId, button, form, signal, isSuspended }) {
   const quote = await get("/wholesale/open-quotes/" + encodeURIComponent(bidQuoteId), signal);
-  const panel = card(root, quote.title, `${labels[quote.status]} · ${quote.targetQuantity.toLocaleString("vi-VN")} sản phẩm`);
+  const panel = card(root, quote.title, `${quoteLabel(quote)} · ${quote.targetQuantity.toLocaleString("vi-VN")} sản phẩm`);
   panel.classList.add("quote-detail");
   const notes = paragraph(quote.specifications);
   notes.className = "quote-notes";
   panel.append(notes, paragraph("Ngày cần hàng · " + displayDate.format(new Date(quote.deadline))));
   if (weaveTypes[quote.preferredWeaveType]) panel.append(paragraph("Loại lụa · " + weaveTypes[quote.preferredWeaveType]));
-  if (quote.maxBudget !== null) panel.append(paragraph("Ngân sách tối đa · " + formatPrice(quote.maxBudget)));
   for (const [index, url] of quote.attachmentUrls.entries()) {
     const address = mediaUrl(url);
     if (!address) continue;
@@ -77,20 +76,32 @@ export async function artisanBidView(root, { bidQuoteId, form, signal }) {
       link.textContent = "Xem đơn được phân công";
       panel.append(link);
     }
-    return;
   }
-  panel.append(form(`
+  if (isSuspended || quoteExpired(quote) || !["SENT_TO_ARTISANS", "ARTISANS_BIDDING"].includes(quote.status)) return;
+  const editing = bid?.status === "SUBMITTED";
+  const path = `/wholesale/quotes/${quote.id}/bids`;
+  const bidForm = form(`
+    <p>Chào giá cho đủ ${quote.targetQuantity.toLocaleString("vi-VN")} sản phẩm. Nếu được giao một phần, tiền phần hàng tính theo tỷ lệ số lượng và làm tròn đến 0,01 ₫.</p>
     <label>Tổng giá chào (đồng)<input name="proposedPrice" type="number" min="0.01" max="9999999999.99" step="0.01" required></label>
     <label>Thời gian hoàn thành (ngày)<input name="proposedCompletionDays" type="number" min="1" max="2147483647" required></label>
-    <label>Ghi chú<textarea name="note" maxlength="10000"></textarea></label>`, "Gửi báo giá", values =>
-    write("/wholesale/quotes/" + quote.id + "/bids", {
+    <label>Ghi chú<textarea name="note" maxlength="10000"></textarea></label>`, editing ? "Lưu báo giá đã sửa" : "Gửi báo giá", values =>
+    write(path, {
       proposedPrice: values.get("proposedPrice"), proposedCompletionDays: Number(values.get("proposedCompletionDays")), note: values.get("note")?.trim() || null,
-    })));
+      ...(editing && { expectedRevision: bid.revision }),
+    }, editing ? "PATCH" : "POST"));
+  if (bid) {
+    bidForm.elements.namedItem("proposedPrice").value = bid.proposedPrice;
+    bidForm.elements.namedItem("proposedCompletionDays").value = bid.proposedCompletionDays;
+    bidForm.elements.namedItem("note").value = bid.note || "";
+  }
+  panel.append(bidForm);
+  if (editing) panel.append(button("Rút báo giá", () => write(path + "/withdraw", { expectedRevision: bid.revision })));
 }
 
 function renderAssignment(root, assignment, tools, pageSignal) {
   const { button, expand, list } = tools;
   const panel = card(root, assignment.quotationRequest.title, assignment.allocatedQuantity + " sản phẩm · " + labels[assignment.status]);
+  panel.append(paragraph("Giá phần hàng · " + formatPrice(assignment.agreedPrice)));
   const remaining = assignment.allocatedQuantity - assignment.batchedQuantity;
   const completed = assignment.completedQuantity;
   const canShip = completed === assignment.allocatedQuantity && completed === assignment.batchedQuantity;
@@ -115,7 +126,7 @@ function renderAssignment(root, assignment, tools, pageSignal) {
         key, path: "/traceability/mine?" + new URLSearchParams({ assignmentId: assignment.id }),
         label: "lô của " + assignment.quotationRequest.title, empty: "Chưa có lô sản xuất.",
         render(rows, target) {
-          for (const batch of rows) renderBatch(target, batch, tools);
+          for (const batch of rows) renderBatch(target, batch, tools, assignment.status === "IN_PRODUCTION");
         },
       }, pageSignal),
     }, pageSignal);
@@ -167,7 +178,7 @@ function mountBatchForm(details, assignmentId, remaining, { form, list }, pageSi
   details.append(create);
 }
 
-export function renderBatch(target, batch, { button, form }) {
+export function renderBatch(target, batch, { button, form }, canCancel = false) {
   const block = document.createElement("div");
   block.className = "trade-batch";
   const stages = productionStepTitles(batch.productionSteps);
@@ -182,6 +193,7 @@ export function renderBatch(target, batch, { button, form }) {
     block.append(link);
   }
   const path = "/traceability/batches/" + batch.id;
+  const uploadPath = "/media/images" + (batch.orderAssignmentId ? `?batchId=${encodeURIComponent(batch.id)}` : "");
   const editable = batch.status === "IN_PROGRESS";
   const timeline = document.createElement("ol");
   timeline.className = "production-log-list";
@@ -189,10 +201,10 @@ export function renderBatch(target, batch, { button, form }) {
     const row = document.createElement("li");
     const details = document.createElement("details");
     const summary = document.createElement("summary");
-    summary.textContent = entry.stageTitle + " · " + displayDate.format(new Date(entry.loggedAt));
+    summary.textContent = entry.stageTitle + " · " + displayLogDate.format(new Date(entry.loggedAt));
     details.append(summary);
     if (editable) {
-      details.append(logForm(form, entry.stageTitle, body => write(path + "/logs/" + encodeURIComponent(entry.id), body, "PUT"), entry));
+      details.append(logForm(form, uploadPath, entry.stageTitle, body => write(path + "/logs/" + encodeURIComponent(entry.id), body, "PUT"), entry));
     } else {
       details.append(paragraph(entry.description));
       const gallery = document.createElement("div");
@@ -208,23 +220,29 @@ export function renderBatch(target, batch, { button, form }) {
   }
   if (step) block.append(timeline);
   if (editable && step < stages.length) {
-    block.append(logForm(form, stages[step], body => write(path + "/logs", { ...body, stepOrder: step + 1 })));
+    block.append(logForm(form, uploadPath, stages[step], body => write(path + "/logs", { ...body, stepOrder: step + 1 })));
   } else if (editable) block.append(button("Hoàn thành lô", () => write(path + "/complete")));
+  if (canCancel && ["IN_PROGRESS", "COMPLETED"].includes(batch.status)) {
+    const cancel = button("Hủy lô nhập sai");
+    const action = button("Xác nhận hủy lô", () => write(path + "/cancel"));
+    action.hidden = true;
+    cancel.addEventListener("click", () => {
+      action.hidden = !action.hidden;
+      cancel.textContent = action.hidden ? "Hủy lô nhập sai" : "Giữ lô";
+    });
+    block.append(cancel, action);
+  }
   target.append(block);
 }
 
 function evidenceThumbnail(url, index) {
-  const src = mediaUrl(url);
-  if (!src) return null;
   const photo = document.createElement("img");
-  photo.src = src;
   photo.alt = "Ảnh minh chứng " + (index + 1);
-  photo.loading = "lazy";
   photo.referrerPolicy = "no-referrer";
-  return photo;
+  return setEvidenceImage(photo, url) ? photo : null;
 }
 
-function logForm(form, title, submit, entry) {
+function logForm(form, uploadPath, title, submit, entry) {
   const images = entry?.evidenceImageUrls ?? [];
   let uploadedFiles = [];
   let imageUrls = [];
@@ -247,7 +265,7 @@ function logForm(form, title, submit, entry) {
       if (files.some(file => !file.size || file.size > 5 * 1024 * 1024)) throw new Error("Mỗi ảnh minh chứng phải có dung lượng từ trên 0 đến 5 MB.");
       const body = new FormData();
       for (const file of files) body.append("images", file);
-      const { data } = await write("/media/images", body);
+      const { data } = await write(uploadPath, body);
       imageUrls = data.urls;
       uploadedFiles = files;
     }
