@@ -3,6 +3,7 @@ import { hash } from "bcryptjs";
 import { env, readDatabaseUrl } from "../backend/src/config/env.js";
 import { batchLandingUrl } from "../backend/src/config/trace-url.js";
 import { artisans, batches, products, productionStages } from "../frontend/src/data/demo-data.js";
+import { demoWorkshopDomain } from "../backend/src/data/demo-workshop.js";
 
 const prisma = new PrismaClient({ datasourceUrl: readDatabaseUrl("MIGRATION_DATABASE_URL") });
 const categorySlugs = {
@@ -14,7 +15,7 @@ const categorySlugs = {
 const stageCodes = ["UOM_TO", "MAC_CUI", "DET_LUA", "NHUOM_MAU", "CAN_LANG"];
 const pricingMigration = "20261108000200_product_pricing_and_sale_units";
 const saleUnits = { "mét": "METER", "chiếc": "PIECE", "bộ": "SET", "hộp": "BOX" };
-const workshopEmail = (id) => `${id}@nhaxa.example`;
+const workshopEmail = (id) => id + demoWorkshopDomain;
 const imagePath = (file) => `/public/images/${file}`;
 
 // Reference point for the village. All workshops and their pins are illustrative.

@@ -7,7 +7,7 @@ import { randomBytes } from "node:crypto";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { PrismaClient } from "@prisma/client";
-import { readDatabaseUrl } from "../../src/config/env.js";
+import { assertSeparateTestDatabase, testDatabase } from "../test-env.js";
 import { artisans, batches, products } from "../../../frontend/src/data/demo-data.js";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
@@ -18,16 +18,10 @@ const persistenceTest = fileURLToPath(new URL("./persistence.test.js", import.me
 const commerceTest = fileURLToPath(new URL("./commerce.test.js", import.meta.url));
 const apiTest = fileURLToPath(new URL("./api.test.js", import.meta.url));
 const featureTest = fileURLToPath(new URL("./features.test.js", import.meta.url));
-const databaseName = (url) => decodeURIComponent(new URL(url).pathname.slice(1));
 
 test("fresh ORM migration, idempotent seed, pricing and rating rollups", { timeout: 120_000 }, async () => {
-    const url = readDatabaseUrl("ORM_TEST_DATABASE_URL");
-    const name = databaseName(url);
-    assert.match(name, /^vcraft_orm_test_[a-z0-9_]+$/);
-    for (const key of ["DATABASE_URL", "MIGRATION_DATABASE_URL"]) {
-        if (process.env[key]) assert.notEqual(name, databaseName(process.env[key]), `Use a separate database from ${key}.`);
-    }
-    assert.equal(new URL(url).searchParams.get("schema") ?? "public", "public");
+    const { url, name } = testDatabase();
+    assertSeparateTestDatabase(name);
 
     const prisma = new PrismaClient({ datasourceUrl: url });
     const env = {
@@ -37,7 +31,11 @@ test("fresh ORM migration, idempotent seed, pricing and rating rollups", { timeo
         NODE_ENV: "test",
         SEED_DEMO_PASSWORD: randomBytes(24).toString("base64url"),
         JWT_SECRET: randomBytes(48).toString("base64url"),
+        RESEND_API_KEY: "",
+        PASSWORD_RESET_FROM: "",
+        PUBLIC_APP_URL: "",
         CORS_ALLOWED_ORIGINS: "http://127.0.0.1:5189",
+        SITE_CSP_REPORT_ONLY: "false",
         UPLOAD_DIR: resolve(tmpdir(), `vcraft-upload-test-${randomBytes(8).toString("hex")}`),
     };
     const run = (...args) => execFileSync(process.execPath, args, {

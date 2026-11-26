@@ -1,11 +1,17 @@
-import { checkoutOrder, findBuyerOrder, listArtisanOrders, listAdminOrders, transitionOrder, listBuyerCart, listBuyerOrders, setCartItem as setCartItemRecord } from "../repositories/retail.repository.js";
+import { checkoutOrder, findBuyerOrder, listArtisanOrders, listAdminOrders, transitionOrder, transitionWorkshopOrder, listBuyerCart, listBuyerOrders, setCartItem as setCartItemRecord } from "../repositories/retail.repository.js";
 import { ApiError } from "../middlewares/api-error.js";
+import { validRecipientPhone } from "../../../frontend/src/data/input-values.js";
 
 export function listSales(userId, options) { return listArtisanOrders(userId, options); }
 export function listAdminSales(options) { return listAdminOrders(options); }
 export async function changeOrderStatus(actor, id, status, paymentCollected = false) {
     const result = await transitionOrder(actor, id, status, paymentCollected);
     if (!result) throw new ApiError(404, "NOT_FOUND", "Không tìm thấy đơn hàng.");
+    return result;
+}
+export async function changeWorkshopOrderStatus(actor, id, artisanId, status, paymentCollected = false) {
+    const result = await transitionWorkshopOrder(actor, id, artisanId, status, paymentCollected);
+    if (!result) throw new ApiError(404, "NOT_FOUND", "Không tìm thấy phần đơn của xưởng.");
     return result;
 }
 
@@ -35,6 +41,7 @@ export async function checkout({ userId, recipientName, recipientPhone, shipping
     for (const [name, value, max] of [["recipientName", recipientName, 120], ["recipientPhone", recipientPhone, 20], ["shippingAddress", shippingAddress, 2000]]) {
         if (typeof value !== "string" || !value.trim() || value.length > max) throw new Error(`Invalid ${name}`);
     }
+    if (!validRecipientPhone(recipientPhone)) throw new Error("Invalid recipientPhone");
     if (shippingNote != null && (typeof shippingNote !== "string" || shippingNote.length > 2000)) throw new Error("Invalid shippingNote");
     if (!["COD", "BANK_TRANSFER", "VNPAY", "MOMO"].includes(paymentMethod)) throw new Error("Invalid paymentMethod");
     if (paymentMethod !== "COD") throw new ApiError(422, "PAYMENT_METHOD_UNAVAILABLE", "Hiện chỉ hỗ trợ thanh toán khi nhận hàng (COD).");

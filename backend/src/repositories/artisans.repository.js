@@ -1,24 +1,41 @@
 import { prisma } from "../database/prisma.js";
+import { demoWorkshopDomain } from "../data/demo-workshop.js";
 
-const publicWorkshop = { verificationStatus: "APPROVED", user: { isActive: true } };
+export const tradingWorkshop = { verificationStatus: "APPROVED", isSuspended: false, user: { isActive: true, role: "ARTISAN" } };
+const publicWorkshop = tradingWorkshop;
+const publicStorefront = { ...publicWorkshop, user: { ...publicWorkshop.user, email: { not: { endsWith: demoWorkshopDomain }, mode: "insensitive" } } };
 const fields = {
     id: true, workshopName: true, artisanTitle: true, familyHistory: true,
     address: true, latitude: true, longitude: true, openingHours: true,
     isOpenForVisitors: true, coverImageUrl: true, galleryImages: true,
     averageRating: true, totalReviews: true,
 };
+const certificates = {
+    select: { id: true, title: true, issuingAuthority: true, issuedYear: true, certificateImageUrl: true },
+    orderBy: [{ issuedYear: "desc" }, { id: "asc" }],
+};
 
-export function listPublicArtisans({ skip = 0, take = 24, visitorsOnly = false } = {}) {
+export function listPublicArtisans({ skip = 0, take = 24, visitorsOnly = false, storefront = false } = {}) {
     return prisma.artisanProfile.findMany({
-        where: { ...publicWorkshop, ...(visitorsOnly ? { isOpenForVisitors: true } : {}) },
+        where: { ...(storefront ? publicStorefront : publicWorkshop), ...(visitorsOnly ? { isOpenForVisitors: true } : {}) },
         select: fields, orderBy: [{ workshopName: "asc" }, { id: "asc" }], skip, take,
     });
 }
 
-export function findPublicArtisan(id) {
+export function findPublicArtisan(id, storefront = false) {
     return prisma.artisanProfile.findUnique({
-        where: { id, ...publicWorkshop },
-        select: { ...fields, certificates: { select: { id: true, title: true, issuingAuthority: true, issuedYear: true, certificateImageUrl: true } } },
+        where: { id, ...(storefront ? publicStorefront : publicWorkshop) },
+        select: { ...fields, certificates },
+    });
+}
+
+export function findArtisanForReview(id) {
+    return prisma.artisanProfile.findUnique({
+        where: { id, user: { role: "ARTISAN" } },
+        select: {
+            ...fields, certificates, experienceYears: true, verificationStatus: true, isSuspended: true, createdAt: true,
+            user: { select: { fullName: true, email: true, phone: true, isActive: true } },
+        },
     });
 }
 
