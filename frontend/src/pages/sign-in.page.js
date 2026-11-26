@@ -9,6 +9,10 @@ const toggle = document.querySelector(".sign-in-toggle");
 const submit = form.querySelector('button[type="submit"]');
 const nameField = document.querySelector("#name-field");
 const fullName = form.elements.namedItem("fullName");
+const credential = form.querySelector('[name="identifier"]');
+const credentialLabel = document.querySelector("#credential-label");
+const usernameField = document.querySelector("#username-field");
+const username = form.elements.namedItem("username");
 const password = form.elements.namedItem("password");
 const forgot = document.querySelector(".sign-in-forgot");
 const resetRequest = document.querySelector("#reset-request-form");
@@ -39,6 +43,11 @@ function updateMode() {
   nameField.hidden = !registration;
   fullName.disabled = !registration;
   fullName.required = registration;
+  credentialLabel.textContent = registration ? "Email" : "Email hoặc tên người dùng";
+  credential.name = registration ? "email" : "identifier";
+  credential.type = registration ? "email" : "text";
+  credential.autocomplete = registration ? "email" : "username";
+  usernameField.hidden = username.disabled = !registration;
   password.autocomplete = registration ? "new-password" : "current-password";
   title.textContent = registration ? "Tạo tài khoản" : "Đăng nhập";
   document.title = title.textContent + " · vCraft";
@@ -62,7 +71,7 @@ forgot.addEventListener("click", () => {
   resetConfirm.hidden = true;
   resetRequest.hidden = false;
   clearFormErrors(resetRequest);
-  resetRequest.elements.namedItem("email").value = form.elements.namedItem("email").value;
+  resetRequest.elements.namedItem("email").value = credential.value.includes("@") ? credential.value : "";
   title.textContent = "Quên mật khẩu";
   document.title = title.textContent + " · vCraft";
   toggle.textContent = "Quay lại đăng nhập";
@@ -92,6 +101,8 @@ function validNewPassword(form, name, value) {
 
 function showReset(token) {
   resetToken = token;
+  resetConfirm.reset();
+  clearFormErrors(resetConfirm);
   form.hidden = resetRequest.hidden = toggle.hidden = true;
   resetConfirm.hidden = false;
   forgot.textContent = "Quay lại đăng nhập";
@@ -102,11 +113,14 @@ function showReset(token) {
   resetConfirm.elements.namedItem("newPassword").focus();
 }
 
-const resetLink = new URLSearchParams(location.hash.slice(1)).get("reset");
-if (resetLink) {
+function openResetLink() {
+  const token = new URLSearchParams(location.hash.slice(1)).get("reset");
+  if (!token) return;
   history.replaceState(null, "", location.pathname + location.search);
-  if (/^[A-Za-z0-9_-]{20,200}$/.test(resetLink)) showReset(resetLink);
+  if (/^[A-Za-z0-9_-]{20,200}$/.test(token)) showReset(token);
 }
+openResetLink();
+window.addEventListener("hashchange", openResetLink);
 
 resetRequest.addEventListener("submit", async event => {
   event.preventDefault();
@@ -160,15 +174,16 @@ form.addEventListener("submit", async event => {
   status.textContent = "";
   const body = Object.fromEntries(new FormData(form));
   if (registration && !validNewPassword(form, "password", body.password)) return;
+  const credentials = registration ? { email: body.email, password: body.password } : body;
   submit.disabled = toggle.disabled = forgot.disabled = true;
   try {
     if (registration) {
+      body.username = body.username.trim() || undefined;
       await request("/auth/register", { method: "POST", body });
-      delete body.fullName;
       registration = false;
       updateMode();
     }
-    const { data } = await request("/auth/login", { method: "POST", body });
+    const { data } = await request("/auth/login", { method: "POST", body: credentials });
     setToken(data.accessToken);
     location.assign(returnTo);
   } catch (error) {
