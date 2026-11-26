@@ -83,6 +83,12 @@ test("checkout, multi-artisan quote and verified review transactions", async () 
         await assert.rejects(async () => submitBid({ userId: a1.id, quoteId: quote.id, proposedPrice: "0.001", proposedCompletionDays: 5 }));
         const bid1 = await submitBid({ userId: a1.id, quoteId: quote.id, proposedPrice: 20, proposedCompletionDays: 5 });
         const bid2 = await submitBid({ userId: a2.id, quoteId: quote.id, proposedPrice: 30, proposedCompletionDays: 7 });
+        const pricing = [{ bidId: bid1.id, quantity: 4 }, { bidId: bid2.id, quantity: 6 }];
+        await prisma.quotationRequest.update({ where: { id: quote.id }, data: { maxBudget: "25.99" } });
+        await assert.rejects(acceptBids({ userId: buyer.id, quoteId: quote.id, bidIds: [bid1.id, bid2.id], allocations: pricing }), { code: "QUOTE_BUDGET_EXCEEDED" });
+        await assert.rejects(acceptBids({ userId: buyer.id, quoteId: quote.id, bidIds: [bid1.id, bid2.id] }), { code: "ALLOCATIONS_REQUIRED" });
+        assert.equal(await prisma.orderAssignment.count({ where: { quotationRequestId: quote.id } }), 0);
+        await prisma.quotationRequest.update({ where: { id: quote.id }, data: { maxBudget: null } });
         const decisions = await Promise.allSettled([acceptBids({ userId: buyer.id, quoteId: quote.id, bidIds: [bid1.id, bid2.id] }), acceptBids({ userId: buyer.id, quoteId: quote.id, bidIds: [bid1.id, bid2.id] })]);
         assert.equal(decisions.filter((r) => r.status === "fulfilled").length, 1);
         const accepted = await prisma.bid.findMany({ where: { quotationRequestId: quote.id, status: "ACCEPTED" } });
@@ -90,6 +96,8 @@ test("checkout, multi-artisan quote and verified review transactions", async () 
         const allocations = [{ bidId: bid1.id, quantity: 4 }, { bidId: bid2.id, quantity: 6 }];
         await assert.rejects(assignBids({ userId: buyer.id, quoteId: quote.id, allocations }));
         const assignments = await assignBids({ userId: admin.id, quoteId: quote.id, allocations });
+        assert.equal(assignments.find(item => item.bidId === bid1.id).agreedPrice.toString(), "8");
+        assert.equal(assignments.find(item => item.bidId === bid2.id).agreedPrice.toString(), "18");
         const wrongAssignment = assignments.find(({ artisanId }) => artisanId === w2.id);
         await assert.rejects(prisma.productBatch.create({
             data: { productId: product.id, orderAssignmentId: wrongAssignment.id, batchCode: "COMMERCE-WRONG-WORKSHOP", qrCodeUrl: "https://example.test/qr", totalQuantity: 1 },
