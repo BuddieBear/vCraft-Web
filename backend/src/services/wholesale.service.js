@@ -80,7 +80,7 @@ export function createQuote({ userId, title, specifications, targetQuantity, dea
     if (targetArtisanId !== null) id(targetArtisanId);
     validateWorkshops(artisanIds, 0);
     if (targetArtisanId && artisanIds.length) throw new Error("Invalid allocations");
-    if (submitMode === "DISPATCH" && artisanIds.length) throw new Error("Invalid allocations");
+    if (submitMode === "DISPATCH" && (artisanIds.length || targetArtisanId)) throw new Error("Invalid allocations");
     if (!Array.isArray(attachmentUrls) || attachmentUrls.some((url) => typeof url !== "string" || url.length > 500)) throw new Error("Invalid attachments");
     return createQuoteRecord({ ...data, artisanIds, submitMode, linkForQuote: biddingPagePath });
 }

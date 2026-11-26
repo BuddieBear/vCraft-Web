@@ -128,7 +128,9 @@ export async function buyerView(root, { form, query, list, signal }) {
     if (!notes) throw new Error("Nhập ghi chú hoặc quy cách của sản phẩm cần đặt.");
     const isDraft = actionMode === "DRAFT";
     const submitMode = isDraft ? "DRAFT" : routing === "dispatch" ? "DISPATCH" : "SEND";
-    const artisanIds = routing === "direct" ? selectedWorkshopIds(selectedWorkshops) : undefined;
+    const artisanIds = routing === "direct"
+      ? (!isDraft || selectedWorkshops.size ? selectedWorkshopIds(selectedWorkshops) : undefined)
+      : undefined;
     const { data } = await write("/wholesale/quotes", {
       title: values.get("title").trim(),
       specifications: priceNote + notes,
@@ -199,14 +201,22 @@ export async function buyerQuoteView(root, { button, form, expand, list, quoteId
   if (quote.status === "DRAFT") {
     const actions = document.createElement("div");
     actions.className = "trade-toolbar";
-    const send = button(workshops.length ? "Gửi xưởng đã chọn" : "Gửi nghệ nhân", () => write(path + "/send"));
-    send.className = "button button-primary";
+    const send = button(workshops.length ? "Gửi xưởng đã chọn" : "Gửi rộng tới các xưởng", () => write(path + "/send"));
     const dispatch = !quote.recipients.length && button("Gửi Ban quản lý điều phối", () => write(path + "/request-dispatch"));
     const pendingSelection = paragraph("Lưu danh sách xưởng trước khi gửi.");
     pendingSelection.hidden = true;
     pendingSelection.setAttribute("role", "status");
-    actions.append(send);
-    if (dispatch) actions.append(dispatch);
+    if (workshops.length) {
+      send.className = "button button-primary";
+      actions.append(send);
+      if (dispatch) actions.append(dispatch);
+    } else {
+      if (dispatch) {
+        dispatch.className = "button button-primary";
+        actions.append(dispatch);
+      }
+      actions.append(send);
+    }
     panel.append(actions, pendingSelection);
     const savedWorkshops = [...selected.keys()];
     expand(panel, {
