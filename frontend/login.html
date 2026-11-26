@@ -17,18 +17,27 @@
       <h1 id="sign-in-title">Đăng nhập</h1>
       <form class="account-form" id="sign-in-form" method="post">
         <label id="name-field" hidden>Họ tên<input name="fullName" autocomplete="name" maxlength="120" disabled></label>
-        <label><span id="credential-label">Email hoặc tên người dùng</span><input name="identifier" type="text" autocomplete="username" maxlength="255" required></label>
-        <label id="username-field" hidden>Tên người dùng (không bắt buộc)<input name="username" autocomplete="off" autocapitalize="none" minlength="3" maxlength="32" disabled></label>
-        <label>Mật khẩu<input name="password" type="password" autocomplete="current-password" maxlength="72" required></label>
+        <div class="account-field" id="username-field" hidden>
+          <label>Tên đăng nhập (tùy chọn)<input name="username" autocomplete="username" autocapitalize="none" maxlength="32" pattern="[a-zA-Z0-9][a-zA-Z0-9._\-]{2,31}" placeholder="Ví dụ: minh.nhaxa" aria-describedby="register-username-hint" disabled></label>
+          <span class="field-hint" id="register-username-hint">3–32 ký tự không dấu (chữ, số, ., _, -), bắt đầu bằng chữ cái hoặc chữ số.</span>
+        </div>
+        <label id="identifier-field"><span data-identifier-label>Email hoặc tên đăng nhập</span><input name="identifier" type="text" autocomplete="username" maxlength="255" placeholder="Nhập email hoặc username" required></label>
+        <div class="account-field">
+          <label>Mật khẩu<input name="password" type="password" autocomplete="current-password" maxlength="72" required></label>
+          <span class="field-hint" id="password-hint" hidden>Tối thiểu 12 ký tự (tối đa 72 byte UTF-8).</span>
+        </div>
         <button class="button button-primary" type="submit">Đăng nhập</button>
       </form>
       <form class="account-form" id="reset-request-form" method="post" hidden>
-        <label>Email tài khoản<input name="email" type="email" autocomplete="email" maxlength="255" required></label>
+        <label>Email hoặc tên đăng nhập<input name="identifier" type="text" autocomplete="username" maxlength="255" placeholder="Nhập email hoặc username tài khoản" required></label>
         <button class="button button-primary" type="submit">Gửi yêu cầu đặt lại</button>
       </form>
       <form class="account-form" id="reset-confirm-form" method="post" hidden>
-        <label>Mật khẩu mới<input name="newPassword" type="password" autocomplete="new-password" maxlength="72" required></label>
-        <label>Nhập lại mật khẩu mới<input name="confirmPassword" type="password" autocomplete="new-password" maxlength="72" required></label>
+        <div class="account-field">
+          <label>Mật khẩu mới<input name="newPassword" type="password" autocomplete="new-password" minlength="12" maxlength="72" aria-describedby="reset-password-hint" required></label>
+          <span class="field-hint" id="reset-password-hint">Tối thiểu 12 ký tự (tối đa 72 byte UTF-8).</span>
+        </div>
+        <label>Nhập lại mật khẩu mới<input name="confirmPassword" type="password" autocomplete="new-password" minlength="12" maxlength="72" required></label>
         <button class="button button-primary" type="submit">Đặt lại mật khẩu</button>
       </form>
       <p role="status" aria-live="polite"></p>

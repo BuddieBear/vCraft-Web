@@ -6,19 +6,19 @@ API đặt dưới `/api`, trả JSON dạng `{ data: ... }` hoặc `{ error: { 
 
 Đặt `JWT_SECRET` thành chuỗi ngẫu nhiên ít nhất 32 byte trong `.env` trước khi đăng nhập. Ví dụ, tự tạo một giá trị bằng `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`. Không dùng giá trị mẫu hoặc chia sẻ secret. API ký token HS256, kiểm tra issuer, audience và thời hạn một giờ; mỗi request được xác thực còn kiểm tra tài khoản hiện đang hoạt động và lấy vai trò từ database.
 
-Các endpoint riêng yêu cầu `Authorization: Bearer <accessToken>`. Mỗi token được ghi nhận trong `auth_sessions`. Logout, đổi mật khẩu, reset mật khẩu và logout-all đều thu hồi phiên tương ứng. Tính năng đặt lại mật khẩu gửi email qua Resend với ba biến `PUBLIC_APP_URL` (origin HTTPS khi triển khai production), `PASSWORD_RESET_FROM` (địa chỉ từ tên miền đã xác minh) và `RESEND_API_KEY`. Email chứa liên kết về vCraft có hiệu lực 15 phút. Khi thiếu cấu hình gửi email, API trả 503. Bộ kiểm thử tự động dùng `NODE_ENV=test` và lấy token trực tiếp từ API trong database kiểm thử. Giới hạn đăng nhập/đăng ký dùng bộ nhớ từng tiến trình và cần bộ lưu trữ dùng chung khi chạy nhiều instance.
+Các endpoint riêng yêu cầu `Authorization: Bearer <accessToken>`. Mỗi token được ghi nhận trong `auth_sessions`. Logout, đổi mật khẩu, reset mật khẩu và logout-all đều thu hồi phiên tương ứng. Tính năng đặt lại mật khẩu gửi email qua Resend với ba biến `PUBLIC_APP_URL` (origin HTTPS khi triển khai production), `PASSWORD_RESET_FROM` (địa chỉ từ tên miền đã xác minh) và `RESEND_API_KEY`. Email chứa liên kết về vCraft có hiệu lực 15 phút. Trong môi trường `NODE_ENV=development` khi cả ba biến gửi email chưa được thiết lập, API ghi liên kết khôi phục cục bộ (`/dang-nhap#reset=<token>`) ra console máy chủ và chỉ trả `{ accepted: true }` (không trả `resetToken` trong phản hồi HTTP). Bộ kiểm thử tự động dùng `NODE_ENV=test` (khi cả ba biến gửi email đều trống) để nhận `resetToken` trực tiếp trong database kiểm thử. Khi triển khai `NODE_ENV=production`, không đặt `NODE_ENV`, hoặc thiếu/sai cấu hình gửi email, API từ chối an toàn với `503 RESET_MAIL_UNAVAILABLE`. Giới hạn đăng nhập/đăng ký dùng bộ nhớ từng tiến trình và cần bộ lưu trữ dùng chung khi chạy nhiều instance.
 
 `CORS_ALLOWED_ORIGINS` là danh sách origin frontend ngăn cách bằng dấu phẩy. Môi trường phát triển mặc định cho phép `http://127.0.0.1:5189` và `http://localhost:5189`; production mặc định không cho phép origin nào. CORS chỉ điều khiển trình duyệt đọc phản hồi, còn API vẫn xác thực và phân quyền từng request.
 
 | Phương thức | Đường dẫn | Quyền / dữ liệu |
 | --- | --- | --- |
-| POST | `/auth/register` | Công khai, tạo BUYER từ `email`, `password` (12–72 byte UTF-8), `fullName` và `username` tùy chọn. |
-| POST | `/auth/login` | Gửi `identifier` (email hoặc tên người dùng) và `password`. Client cũ có thể gửi `email` thay cho `identifier`. Trả `accessToken`, `tokenType`, `expiresIn`. |
+| POST | `/auth/register` | Công khai; tạo BUYER từ `email`, `password` (12–72 byte UTF-8), `fullName` và tùy chọn `username` (3–32 ký tự không dấu gồm chữ, số, `.`, `_`, `-`, bắt đầu bằng chữ cái hoặc chữ số, lưu dạng chữ thường). |
+| POST | `/auth/login` | Công khai; `identifier` (email hoặc tên đăng nhập; vẫn tương thích `email` hoặc `username`), `password`; trả `accessToken`, `tokenType`, `expiresIn`. |
 | POST | `/auth/logout` | Đăng nhập; thu hồi phiên hiện tại. |
 | POST | `/auth/logout-all` | Đăng nhập; thu hồi mọi phiên của tài khoản. |
-| GET, PATCH | `/auth/me` | Đăng nhập để xem hoặc cập nhật họ tên, số điện thoại, ảnh đại diện và tên người dùng. Gửi `username: null` để bỏ tên người dùng. |
+| GET, PATCH | `/auth/me` | Đăng nhập; xem hoặc cập nhật `fullName`, `username` (3–32 ký tự hợp lệ; gửi `null` hoặc chuỗi rỗng để bỏ tên đăng nhập), `phone` (số điện thoại 8–15 chữ số hợp lệ hoặc để trống để xóa), `avatarUrl` (URL HTTP/HTTPS hoặc ảnh `/uploads/...`, hoặc để trống để xóa). |
 | POST | `/auth/password/change` | Đăng nhập; đổi mật khẩu bằng mật khẩu hiện tại và thu hồi phiên. |
-| POST | `/auth/password/reset/request` | Công khai; yêu cầu token đặt lại mà không tiết lộ trạng thái email. |
+| POST | `/auth/password/reset/request` | Công khai; `identifier` (email hoặc tên đăng nhập; vẫn tương thích `email` hoặc `username`); yêu cầu đặt lại mật khẩu mà không tiết lộ trạng thái tài khoản. |
 | POST | `/auth/password/reset/confirm` | Công khai; dùng token một lần để đặt mật khẩu mới. |
 | GET | `/products` | Công khai; `page`, `limit`, `category`, `artisanId`, `q` tìm theo tên sản phẩm, xưởng, danh mục hoặc chất liệu (có hoặc không dấu tiếng Việt), `sort=asc` hoặc `desc` theo giá. |
 | GET | `/products/:slug`, `/products/by-slug/:slug` | Công khai; gồm giá, tồn kho và điểm đánh giá. |
@@ -56,7 +56,7 @@ Các endpoint riêng yêu cầu `Authorization: Bearer <accessToken>`. Mỗi tok
 | PATCH | `/retail/orders/:id/status` | ARTISAN phụ trách toàn bộ đơn hoặc ADMIN cập nhật trạng thái; BUYER có thể hủy đơn chưa thanh toán đang chờ. Khi giao COD, gửi `{ status: "DELIVERED", paymentCollected: true }` sau khi đã thu tiền. |
 | GET | `/wholesale/quotes`, `/wholesale/quotes/:id` | BUYER; chỉ yêu cầu của mình; danh sách hỗ trợ `page`, `limit`. |
 | GET | `/wholesale/quotes/:id/journal` | BUYER sở hữu đơn đã chốt, đang sản xuất hoặc đã giao. Trả về các xưởng được giao và danh sách lô. |
-| POST | `/wholesale/quotes` | BUYER; `title`, `specifications`, `targetQuantity`, `deadline` dạng `YYYY-MM-DD`, tùy chọn `artisanIds` để chọn nhiều xưởng hoặc `targetArtisanId` để chọn một xưởng, cùng `maxBudget`, `preferredWeaveType`, `attachmentUrls`. |
+| POST | `/wholesale/quotes` | BUYER; `title`, `specifications`, `targetQuantity`, `deadline` dạng `YYYY-MM-DD`, tùy chọn `artisanIds` để chọn nhiều xưởng hoặc `targetArtisanId` để chọn một xưởng, cùng `maxBudget`, `preferredWeaveType`, `attachmentUrls`, và `submitMode` (`DRAFT` mặc định để lưu bản nháp, `SEND` để gửi thẳng tới xưởng đã chọn hoặc mở chào giá, `DISPATCH` để chuyển ngay sang `PENDING_DISPATCH` nhờ Ban quản lý điều phối — không kết hợp `DISPATCH` với `artisanIds`/`targetArtisanId`). |
 | POST | `/wholesale/quotes/:id/send` | BUYER sở hữu bản nháp; gửi thẳng tới xưởng đã chọn hoặc mở chào giá cho các xưởng đủ điều kiện. |
 | PATCH | `/wholesale/quotes/:id/workshops` | BUYER sở hữu bản nháp. Dùng `artisanIds: []` để bỏ chọn xưởng và chuyển sang luồng nhờ điều phối. |
 | POST | `/wholesale/quotes/:id/request-dispatch` | BUYER sở hữu bản nháp; chuyển sang `PENDING_DISPATCH` để Ban quản lý nhận điều phối. |
@@ -72,7 +72,7 @@ Các endpoint riêng yêu cầu `Authorization: Bearer <accessToken>`. Mỗi tok
 | PATCH | `/wholesale/assignments/:id` | ARTISAN phụ trách; `status`: `IN_PRODUCTION`, `READY_FOR_DELIVERY`, `COMPLETED` theo thứ tự. Để sẵn sàng giao, các lô phải hoàn thành và tổng số lượng phải bằng số lượng được phân công. |
 | POST | `/reviews` | BUYER; `targetType`, `artisanId`, `rating`, `comment`, một trong `retailOrderId` hoặc `quotationRequestId`; `productId` bắt buộc cho PRODUCT. |
 | GET | `/reviews/products/:slug`, `/reviews/artisans/:id` | Công khai; đánh giá sản phẩm hoặc xưởng được công bố. Trả `summary` (điểm trung bình, số đánh giá) và `pagination` cùng `data`. |
-| GET, POST | `/admin/artisans` | ADMIN; lọc `status` theo `PENDING`, `APPROVED`, `SUSPENDED`, `REJECTED` hoặc `IDENTITY_REVIEW`, hoặc cấp tài khoản với hồ sơ `PENDING`. |
+| GET, POST | `/admin/artisans` | ADMIN; lọc `status` theo `PENDING`, `APPROVED`, `SUSPENDED`, `REJECTED` hoặc `IDENTITY_REVIEW`, hoặc cấp tài khoản nghệ nhân (có thể kèm `username` tùy chọn 3–32 ký tự) với hồ sơ `PENDING`. |
 | GET | `/admin/artisans/pending` | ADMIN; danh sách hồ sơ chờ duyệt. |
 | GET | `/admin/artisans/:id` | ADMIN; thông tin hồ sơ, ảnh xưởng và chứng nhận, gồm cả hồ sơ chờ duyệt. |
 | PATCH | `/admin/artisans/:id/verification` | ADMIN gửi `expectedVersion` lấy từ `reviewVersion` của bản hồ sơ đã xem. `status: "REJECTED"` cần kèm `reason`. |

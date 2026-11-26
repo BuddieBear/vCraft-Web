@@ -78,19 +78,25 @@ test("artisan, production, administration, media and retail APIs", async () => {
         const artisan = await login(product.artisan.user.email);
         const buyer = await login("buyer@nhaxa.example");
         const buyerProfile = (await request("/auth/me", { token: buyer })).json.data;
-        assert.equal(buyerProfile.username, null);
+        assert.equal(buyerProfile.username, "buyer");
+        const invalidUsername = await request("/auth/me", { method: "PATCH", token: buyer, body: { username: ".invalid" } });
+        assert.equal(invalidUsername.status, 400);
+        assert.equal(invalidUsername.json.error.fields[0].name, "username");
         const username = { username: "Buyer.Feature" };
         const profileWithUsername = await request("/auth/me", { method: "PATCH", token: buyer, body: username });
         assert.equal(profileWithUsername.status, 200);
         assert.equal(profileWithUsername.json.data.username, "buyer.feature");
-        assert.equal((await request("/auth/me", { method: "PATCH", token: artisan, body: username })).json.error.code, "USERNAME_TAKEN");
+        const dupUsername = await request("/auth/me", { method: "PATCH", token: artisan, body: username });
+        assert.equal(dupUsername.status, 409);
+        assert.equal(dupUsername.json.error.code, "USERNAME_TAKEN");
+        assert.equal(dupUsername.json.error.fields[0].name, "username");
         const usernameLogin = await request("/auth/login", { method: "POST", body: {
             identifier: "BUYER.FEATURE", password: process.env.SEED_DEMO_PASSWORD,
         } });
         assert.equal(usernameLogin.status, 200);
         const signedInAs = await request("/auth/me", { token: usernameLogin.json.data.accessToken });
         assert.equal(signedInAs.json.data.id, buyerProfile.id);
-        assert.equal((await request("/auth/me", { method: "PATCH", token: buyer, body: { username: null } })).json.data.username, null);
+        assert.equal((await request("/auth/me", { method: "PATCH", token: buyer, body: { username: "buyer" } })).json.data.username, "buyer");
         const invalidQuote = await request("/wholesale/quotes", { method: "POST", token: buyer, body: { title: " ", specifications: "Tơ", targetQuantity: 5, deadline: "2099-01-01" } });
         assert.equal(invalidQuote.status, 400);
         assert.equal(invalidQuote.json.error.fields[0].name, "title");
@@ -128,9 +134,12 @@ test("artisan, production, administration, media and retail APIs", async () => {
         const certificate = await request("/artisans/me/certificates", { method: "POST", token: artisan, body: { title: "Certificate", issuingAuthority: "Test", issuedYear: 2020, certificateImageUrl: uploaded } });
         assert.equal(certificate.status, 201);
         assert.equal((await request(`/artisans/me/certificates/${certificate.json.data.id}`, { method: "DELETE", token: artisan })).status, 204);
-        const newArtisan = await request("/admin/artisans", { method: "POST", token: admin, body: { email: "feature-artisan@example.test", password: "Strong-test-password", fullName: "New Artisan", workshopName: "New Workshop", address: "Test", latitude: 20, longitude: 106 } });
+        const newArtisan = await request("/admin/artisans", { method: "POST", token: admin, body: { email: "feature-artisan@example.test", username: "feature_artisan", password: "Strong-test-password", fullName: "New Artisan", workshopName: "New Workshop", address: "Test", latitude: 20, longitude: 106 } });
         assert.equal(newArtisan.status, 201);
-        const other = await login("feature-artisan@example.test", "Strong-test-password");
+        assert.equal(newArtisan.json.data.username, "feature_artisan");
+        const otherLogin = await request("/auth/login", { method: "POST", body: { identifier: "FEATURE_ARTISAN", password: "Strong-test-password" } });
+        assert.equal(otherLogin.status, 200);
+        const other = otherLogin.json.data.accessToken;
         const workshopId = newArtisan.json.data.artisanProfile.id;
         const proofPath = "/admin/artisans/" + workshopId;
         assert.equal(newArtisan.json.data.artisanProfile.isOpenForVisitors, false);
@@ -150,6 +159,7 @@ test("artisan, production, administration, media and retail APIs", async () => {
         assert.equal(proof.json.data.familyHistory, "Workshop history");
         assert.equal(proof.json.data.galleryImages[0], uploaded);
         assert.equal(proof.json.data.certificates[0].title, "Pending workshop certificate");
+        assert.equal(proof.json.data.user.username, "feature_artisan");
         assert.equal(proof.json.data.user.passwordHash, undefined);
         const suspensionPath = `/admin/artisans/${workshopId}/suspension`;
         const suspension = (isSuspended, token = admin) => request(suspensionPath, { method: "PATCH", token, body: { isSuspended } });
@@ -197,9 +207,11 @@ test("artisan, production, administration, media and retail APIs", async () => {
         assert.equal((await fetch(base + sitePaths.workshop)).status, 200);
         assert.equal((await fetch(base + biddingPagePath(quoteId))).status, 200);
         assert.equal((await fetch(base + biddingPagePath("invalid"))).status, 404);
-        const otherBuyer = { email: "quote-viewer@example.test", fullName: "Other buyer", password: process.env.SEED_DEMO_PASSWORD };
+        const otherBuyer = { email: "quote-viewer@example.test", username: "quote_viewer", fullName: "Other buyer", password: process.env.SEED_DEMO_PASSWORD };
         assert.equal((await request("/auth/register", { method: "POST", body: otherBuyer })).status, 201);
-        const viewer = await login(otherBuyer.email);
+        const viewerLogin = await request("/auth/login", { method: "POST", body: { username: "QUOTE_VIEWER", password: otherBuyer.password } });
+        assert.equal(viewerLogin.status, 200);
+        const viewer = viewerLogin.json.data.accessToken;
         const privateQuote = "/wholesale/quotes/" + quoteId;
         assert.equal((await request(privateQuote)).status, 401);
         assert.equal((await request(privateQuote, { token: other })).status, 403);

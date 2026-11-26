@@ -44,7 +44,7 @@ function mountWorkshopPicker(form, list, key, selected, onChange) {
   }
   updateSelection();
   list(options, {
-    key, path: "/artisans?storefront=true", auth: false, label: "xưởng nhận yêu cầu",
+    key, path: "/artisans", auth: false, label: "xưởng nhận yêu cầu",
     empty: "Chưa có xưởng nhận yêu cầu đặt sỉ.",
     render(workshops, target) {
       for (const workshop of workshops) {
@@ -117,23 +117,41 @@ export async function buyerView(root, { form, query, list, signal }) {
     <label>Số lượng<input name="targetQuantity" type="number" min="1" max="2147483647" required></label>
     <label>Ngày cần hàng<input name="deadline" type="date" required></label>
     <label>Ghi chú và quy cách<textarea name="specifications" rows="6" required maxlength="10000" placeholder="Màu, kích thước, yêu cầu cá nhân hóa hoặc thời gian mong muốn"></textarea></label>
-    ${workshopFields}`, "Lưu yêu cầu nháp", async values => {
-    const artisanIds = selectedWorkshopIds(selectedWorkshops);
+    <fieldset class="quote-workshops">
+      <legend>Hình thức gửi yêu cầu</legend>
+      <label class="trade-choice"><input type="radio" name="routing" value="direct" checked> Chọn xưởng nhận trực tiếp</label>
+      <label class="trade-choice"><input type="radio" name="routing" value="dispatch"> Nhờ Ban quản lý điều phối xưởng phù hợp</label>
+    </fieldset>
+    ${workshopFields}`, "Gửi yêu cầu đặt sỉ", async (values, actionMode) => {
+    const routing = values.get("routing") || "direct";
     const notes = values.get("specifications").trim();
     if (!notes) throw new Error("Nhập ghi chú hoặc quy cách của sản phẩm cần đặt.");
+    const isDraft = actionMode === "DRAFT";
+    const submitMode = isDraft ? "DRAFT" : routing === "dispatch" ? "DISPATCH" : "SEND";
+    const artisanIds = routing === "direct"
+      ? (!isDraft || selectedWorkshops.size ? selectedWorkshopIds(selectedWorkshops) : undefined)
+      : undefined;
     const { data } = await write("/wholesale/quotes", {
       title: values.get("title").trim(),
       specifications: priceNote + notes,
       deadline: values.get("deadline"),
       targetQuantity: Number(values.get("targetQuantity")),
       ...(values.get("preferredWeaveType") && { preferredWeaveType: values.get("preferredWeaveType") }),
-      artisanIds,
+      ...(artisanIds && { artisanIds }),
+      submitMode,
     });
     return quotePagePath(data.id);
-  });
+  }, { primary: true, secondary: { label: "Lưu nháp", mode: "DRAFT" } });
   const deadline = fields.elements.namedItem("deadline");
   deadline.min = vietnamToday();
   deadline.dataset.minMessage = "Chọn ngày cần hàng từ hôm nay trở đi.";
+  const workshopSection = fields.querySelectorAll("fieldset.quote-workshops")[1];
+  const syncRouting = () => {
+    const dispatchMode = fields.querySelector('input[name="routing"]:checked')?.value === "dispatch";
+    workshopSection.hidden = dispatchMode;
+  };
+  for (const radio of fields.querySelectorAll('input[name="routing"]')) radio.addEventListener("change", syncRouting);
+  syncRouting();
   mountWorkshopPicker(fields, list, "buyer-workshops", selectedWorkshops);
   if (source?.error) create.append(paragraph("Chưa tải được mẫu lụa. Bạn có thể nhập thông tin để đặt sỉ."));
   const link = document.createElement("a");
@@ -174,6 +192,7 @@ export async function buyerQuoteView(root, { button, form, expand, list, quoteId
   notes.className = "quote-notes";
   panel.append(quoteProgress(quote.status), notes);
   panel.append(paragraph("Ngày cần hàng · " + displayDate.format(new Date(quote.deadline))));
+  if (quote.maxBudget != null) panel.append(paragraph("Ngân sách tối đa · " + formatPrice(quote.maxBudget)));
   const selected = new Map(quote.recipients.map(({ artisanId, artisan }) => [artisanId, artisan.workshopName]));
   if (quote.targetArtisan) selected.set(quote.targetArtisan.id, quote.targetArtisan.workshopName);
   const workshops = [...selected.values()];
@@ -182,13 +201,18 @@ export async function buyerQuoteView(root, { button, form, expand, list, quoteId
   if (quote.status === "DRAFT" && !quoteExpired(quote)) {
     const actions = document.createElement("div");
     actions.className = "trade-toolbar";
-    const send = workshops.length ? button("Gửi xưởng đã chọn", () => write(path + "/send")) : null;
-    const dispatch = !workshops.length ? button("Gửi Ban quản lý điều phối", () => write(path + "/request-dispatch")) : null;
+    const send = button(workshops.length ? "Gửi xưởng đã chọn" : "Gửi rộng tới các xưởng", () => write(path + "/send"));
+    const dispatch = !workshops.length && button("Gửi Ban quản lý điều phối", () => write(path + "/request-dispatch"));
     const pendingSelection = paragraph("Lưu danh sách xưởng trước khi gửi.");
     pendingSelection.hidden = true;
     pendingSelection.setAttribute("role", "status");
-    if (send) actions.append(send);
-    if (dispatch) actions.append(dispatch);
+    if (workshops.length) {
+      send.className = "button button-primary";
+      actions.append(send);
+    } else {
+      dispatch.className = "button button-primary";
+      actions.append(dispatch, send);
+    }
     panel.append(actions, pendingSelection);
     const savedWorkshops = [...selected.keys()];
     expand(panel, {

@@ -51,6 +51,7 @@ export async function artisanBidView(root, { bidQuoteId, button, form, signal, i
   const notes = paragraph(quote.specifications);
   notes.className = "quote-notes";
   panel.append(notes, paragraph("Ngày cần hàng · " + displayDate.format(new Date(quote.deadline))));
+  if (quote.maxBudget != null) panel.append(paragraph("Ngân sách tối đa · " + formatPrice(quote.maxBudget)));
   if (weaveTypes[quote.preferredWeaveType]) panel.append(paragraph("Loại lụa · " + weaveTypes[quote.preferredWeaveType]));
   for (const [index, url] of quote.attachmentUrls.entries()) {
     const address = mediaUrl(url);

@@ -20,11 +20,20 @@ function validationFields(issues) {
         if (issue.code === "too_big" && issue.origin === "string") message = `Nhập tối đa ${issue.maximum} ký tự.`;
         if (name === "maxBudget") message = quoteBudgetError;
         if (name === "phone" || name === "recipientPhone") message = recipientPhoneError;
-        if (name === "username") message = "Dùng 3–32 ký tự gồm chữ không dấu, số, dấu chấm, gạch dưới hoặc gạch ngang. Bắt đầu bằng chữ hoặc số.";
-        if (name === "identifier") message = "Nhập email hoặc tên người dùng hợp lệ.";
+        if ((name === "password" || name === "newPassword") && issue.code === "custom") message = "Mật khẩu phải từ 12 đến 72 byte UTF-8.";
+        if (name === "username" && issue.code !== "too_small" && issue.code !== "too_big") message = "Tên đăng nhập gồm 3–32 ký tự không dấu (chữ, số, ., _, -), bắt đầu bằng chữ cái hoặc chữ số.";
+        if (name === "identifier" && (issue.code === "too_small" || issue.code === "custom")) message = "Nhập email hoặc tên đăng nhập.";
         fields.set(name, { name, message });
     }
     return [...fields.values()];
+}
+
+function conflictTargetIncludes(error, field) {
+    if (error.code !== "P2002") return false;
+    const target = error.meta?.target;
+    if (Array.isArray(target)) return target.some((item) => String(item).toLowerCase().includes(field));
+    if (typeof target === "string") return target.toLowerCase().includes(field);
+    return false;
 }
 
 export function errorHandler(error, _request, response, next) {
@@ -37,10 +46,6 @@ export function errorHandler(error, _request, response, next) {
     }
 
     if (error instanceof ApiError) return response.status(error.status).json({ error: { code: error.code, message: error.message } });
-    if (error.code === "P2002" && Array.isArray(error.meta?.target) && error.meta.target.includes("username")) {
-        const message = "Tên người dùng đã được sử dụng.";
-        return response.status(409).json({ error: { code: "USERNAME_TAKEN", message, fields: [{ name: "username", message }] } });
-    }
     if (error.message === "Quote buyer is unavailable") return response.status(409).json({ error: { code: "BUYER_UNAVAILABLE", message: "Tài khoản người mua không còn hoạt động." } });
     if (error.message === "Artisan is unavailable") return response.status(409).json({ error: { code: "ARTISAN_UNAVAILABLE", message: "Xưởng hiện không đủ điều kiện tham gia giao dịch." } });
     if (error.message === "Assignment has unfinished batches") return response.status(409).json({ error: { code: "BATCHES_INCOMPLETE", message: "Còn lô sản xuất chưa hoàn thành." } });
@@ -63,7 +68,17 @@ export function errorHandler(error, _request, response, next) {
     if (["charset.unsupported", "encoding.unsupported"].includes(error.type)) return response.status(415).json({ error: { code: "UNSUPPORTED_ENCODING", message: "Định dạng mã hóa không được hỗ trợ." } });
     if (conflict.has(error.message)) return response.status(409).json({ error: { code: "CONFLICT", message: "Thao tác không phù hợp với trạng thái hiện tại." } });
     if (["Buyer is not active", "Admin is not active", "Artisan is not active"].includes(error.message)) return response.status(403).json({ error: { code: "FORBIDDEN", message: "Không có quyền thực hiện thao tác." } });
-    if (isPersistenceConflict(error)) return response.status(409).json({ error: { code: "CONFLICT", message: "Dữ liệu đã thay đổi hoặc bị trùng; vui lòng kiểm tra lại." } });
+    if (isPersistenceConflict(error)) {
+        if (conflictTargetIncludes(error, "username")) {
+            const message = "Tên đăng nhập này đã được sử dụng.";
+            return response.status(409).json({ error: { code: "USERNAME_TAKEN", message, fields: [{ name: "username", message }] } });
+        }
+        if (conflictTargetIncludes(error, "email")) {
+            const message = "Email này đã được đăng ký.";
+            return response.status(409).json({ error: { code: "CONFLICT", message, fields: [{ name: "email", message }] } });
+        }
+        return response.status(409).json({ error: { code: "CONFLICT", message: "Dữ liệu đã thay đổi hoặc bị trùng; vui lòng kiểm tra lại." } });
+    }
 
     console.error("Request failed.", { name: error.name, code: error.code, route: _request.route?.path, method: _request.method });
     return response.status(500).json({

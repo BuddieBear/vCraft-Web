@@ -37,7 +37,7 @@ export function findArtisanForReview(id) {
         select: {
             ...fields, certificates, experienceYears: true, verificationStatus: true, isSuspended: true, createdAt: true,
             reviewVersion: true, pendingIdentity: true, rejectionReason: true,
-            user: { select: { fullName: true, email: true, phone: true, isActive: true } },
+            user: { select: { fullName: true, email: true, username: true, phone: true, isActive: true } },
         },
     });
 }

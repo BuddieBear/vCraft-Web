@@ -1,4 +1,5 @@
 import { mediaUrl, request, signedIn } from "../api/http.js";
+import { bindFormErrors, clearFormErrors, showFormErrors } from "../components/form-errors.js";
 
 function evidencePhoto(value, label, lazy = true) {
   const src = mediaUrl(value);
@@ -24,6 +25,7 @@ function renderEvidence(target, workshop) {
   for (const [label, value] of [
     ["Tên xưởng", workshop.workshopName],
     ["Người phụ trách", user.fullName],
+    ["Tên đăng nhập", user.username ? "@" + user.username : "Chưa đặt"],
     ["Email", user.email],
     ["Điện thoại", user.phone],
     ["Địa chỉ", workshop.address],
@@ -164,16 +166,25 @@ export function mountArtisanAdministration(section, account) {
     <p role="status"></p>
     <button class="button button-outline" type="button" data-sign-in>Đăng nhập</button>
     <div class="admin-content" hidden>
-      <details class="trade-card">
+      <details class="trade-card" data-issue-artisan>
         <summary>Cấp tài khoản nghệ nhân</summary>
         <form class="account-form">
           <label>Email<input name="email" type="email" required maxlength="255"></label>
-          <label>Mật khẩu ban đầu<input name="password" type="password" autocomplete="new-password" required minlength="12" maxlength="72"></label>
+          <div class="account-field">
+            <label>Tên đăng nhập (tùy chọn)<input name="username" autocapitalize="none" maxlength="32" pattern="[a-zA-Z0-9][a-zA-Z0-9._\\-]{2,31}" placeholder="Ví dụ: xuong-lua-a" aria-describedby="admin-artisan-username-hint"></label>
+            <span class="field-hint" id="admin-artisan-username-hint">3–32 ký tự không dấu (chữ, số, ., _, -), bắt đầu bằng chữ cái hoặc chữ số.</span>
+          </div>
+          <div class="account-field">
+            <label>Mật khẩu ban đầu<input name="password" type="password" autocomplete="new-password" required minlength="12" maxlength="72" aria-describedby="admin-artisan-password-hint"></label>
+            <span class="field-hint" id="admin-artisan-password-hint">Tối thiểu 12 ký tự (tối đa 72 byte UTF-8).</span>
+          </div>
           <label>Họ tên<input name="fullName" required maxlength="120"></label>
           <label>Tên xưởng<input name="workshopName" required maxlength="200"></label>
           <label>Địa chỉ<input name="address" required maxlength="255"></label>
-          <label>Vĩ độ<input name="latitude" type="number" step="any" min="-90" max="90" required></label>
-          <label>Kinh độ<input name="longitude" type="number" step="any" min="-180" max="180" required></label>
+          <div class="workshop-coordinates">
+            <div class="account-field"><label>Vĩ độ<input name="latitude" type="number" step="any" min="-90" max="90" required></label></div>
+            <div class="account-field"><label>Kinh độ<input name="longitude" type="number" step="any" min="-180" max="180" required></label></div>
+          </div>
           <button class="button button-primary" type="submit">Cấp tài khoản</button>
         </form>
       </details>
@@ -226,7 +237,7 @@ export function mountArtisanAdministration(section, account) {
         const heading = document.createElement("h3");
         heading.textContent = item.workshopName;
         const body = document.createElement("p");
-        body.textContent = [item.user.fullName, item.user.email, item.address].join(" · ");
+        body.textContent = [item.user.fullName, item.user.username ? "@" + item.user.username : null, item.user.email, item.address].filter(Boolean).join(" · ");
         const actions = document.createElement("div");
         actions.className = "trade-toolbar";
         const review = kind === "PENDING" || kind === "IDENTITY_REVIEW";
@@ -267,24 +278,41 @@ export function mountArtisanAdministration(section, account) {
     }
   }
 
-  async function save(control, work) {
+  async function save(control, work, onError) {
     control.inert = true;
+    let failure;
     try { await work(); }
-    catch (error) { if (account.profile?.role === "ADMIN") status.textContent = error.message; }
+    catch (error) { failure = error; }
     finally { control.inert = false; }
+    if (failure && account.profile?.role === "ADMIN") {
+      if (!onError?.(failure)) status.textContent = failure.message;
+    }
   }
 
+  bindFormErrors(form);
+  const issueSection = content.querySelector("[data-issue-artisan]");
   form.addEventListener("submit", event => {
     event.preventDefault();
-    const body = Object.fromEntries(new FormData(form));
-    body.latitude = Number(body.latitude);
-    body.longitude = Number(body.longitude);
+    clearFormErrors(form);
+    status.textContent = "";
+    const raw = Object.fromEntries(new FormData(form));
+    const body = {
+      email: raw.email.trim(),
+      ...(raw.username?.trim() ? { username: raw.username.trim() } : {}),
+      password: raw.password,
+      fullName: raw.fullName.trim(),
+      workshopName: raw.workshopName.trim(),
+      address: raw.address.trim(),
+      latitude: Number(raw.latitude),
+      longitude: Number(raw.longitude),
+    };
     save(form, async () => {
       await request("/admin/artisans", { method: "POST", auth: true, body });
       form.reset();
+      if (issueSection) issueSection.open = false;
       filter.value = "PENDING";
       await load(false, "Đã cấp tài khoản. Hồ sơ đang chờ duyệt.");
-    });
+    }, error => showFormErrors(form, error.fields));
   });
   signIn.addEventListener("click", account.open);
   filter.addEventListener("change", () => {
