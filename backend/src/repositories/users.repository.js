@@ -2,12 +2,12 @@ import { prisma } from "../database/prisma.js";
 import { lockActiveUserPassword } from "../database/postgresql/row-locks.js";
 import { createHash } from "node:crypto";
 
-export function createBuyer({ email, fullName, passwordHash }) {
-    return prisma.user.create({ data: { email, fullName, passwordHash, role: "BUYER" }, select: { id: true, email: true, fullName: true, role: true } });
+export function createBuyer({ email, username = null, fullName, passwordHash }) {
+    return prisma.user.create({ data: { email, username, fullName, passwordHash, role: "BUYER" }, select: { id: true, email: true, username: true, fullName: true, role: true } });
 }
 export function createArtisanAccount(userId, account, profile) {
     return prisma.$transaction(async (tx) => {
-        const user = await tx.user.create({ data: { ...account, role: "ARTISAN", artisanProfile: { create: profile } }, select: { id: true, email: true, fullName: true, role: true, artisanProfile: true } });
+        const user = await tx.user.create({ data: { ...account, role: "ARTISAN", artisanProfile: { create: profile } }, select: { id: true, email: true, username: true, fullName: true, role: true, artisanProfile: true } });
         await tx.auditLog.create({ data: { userId, action: "ARTISAN_CREATED", targetTable: "users", targetRecordId: user.id } });
         return user;
     });
@@ -19,7 +19,7 @@ export function listAdminArtisans({ skip, take, status }) {
             verificationStatus: approved ? "APPROVED" : status,
             ...(approved && { isSuspended: status === "SUSPENDED" }),
         },
-        select: { id: true, userId: true, workshopName: true, address: true, createdAt: true, user: { select: { email: true, fullName: true, isActive: true } } },
+        select: { id: true, userId: true, workshopName: true, address: true, createdAt: true, user: { select: { email: true, username: true, fullName: true, isActive: true } } },
         orderBy: [{ createdAt: "asc" }, { id: "asc" }], skip, take,
     });
 }
@@ -48,11 +48,20 @@ export function setArtisanSuspension(adminId, id, isSuspended) {
 export function findActiveCredentialsByEmail(email) {
     return prisma.user.findUnique({
         where: { email, isActive: true },
-        select: { id: true, email: true, role: true, passwordHash: true },
+        select: { id: true, email: true, username: true, role: true, passwordHash: true },
     });
 }
 
-const profileFields = { id: true, fullName: true, email: true, phone: true, avatarUrl: true, role: true, artisanProfile: { select: { isSuspended: true } } };
+export function findActiveCredentialsByIdentifier(identifier) {
+    const normalized = identifier.trim().toLowerCase();
+    if (normalized.includes("@")) return findActiveCredentialsByEmail(normalized);
+    return prisma.user.findFirst({
+        where: { username: { equals: normalized, mode: "insensitive" }, isActive: true },
+        select: { id: true, email: true, username: true, role: true, passwordHash: true },
+    });
+}
+
+const profileFields = { id: true, fullName: true, email: true, username: true, phone: true, avatarUrl: true, role: true, artisanProfile: { select: { isSuspended: true } } };
 const hashToken = (token) => createHash("sha256").update(token).digest("hex");
 export function findUserById(id) { return prisma.user.findUnique({ where: { id, isActive: true }, select: profileFields }); }
 export function updateUserProfile(id, data) { return prisma.user.update({ where: { id, isActive: true }, data, select: profileFields }); }
@@ -113,7 +122,7 @@ export function consumePasswordResetToken(id, userId, passwordHash) {
 export function findActiveUserProfile(userId) {
     return prisma.user.findUnique({
         where: { id: userId, isActive: true },
-        select: { id: true, fullName: true, email: true, phone: true, avatarUrl: true, role: true },
+        select: { id: true, fullName: true, email: true, username: true, phone: true, avatarUrl: true, role: true },
     });
 }
 export function findActiveUserById(id) { return prisma.user.findUnique({ where: { id, isActive: true }, select: { id: true, role: true } }); }

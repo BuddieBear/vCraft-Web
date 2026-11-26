@@ -3,9 +3,10 @@ import { createArtisanAccount, listAdminArtisans, decideArtisan, setArtisanSuspe
 import { ApiError } from "../middlewares/api-error.js";
 import { findArtisanForReview } from "../repositories/artisans.repository.js";
 
-export async function issueArtisan(adminId, { email, password, fullName, ...profile }) {
+export async function issueArtisan(adminId, { email, username, password, fullName, ...profile }) {
     const passwordHash = await hash(password, 12);
-    return createArtisanAccount(adminId, { email: email.toLowerCase(), passwordHash, fullName }, {
+    const normalizedUsername = typeof username === "string" && username.trim() ? username.trim().toLowerCase() : null;
+    return createArtisanAccount(adminId, { email: email.toLowerCase(), username: normalizedUsername, passwordHash, fullName }, {
         ...profile, isOpenForVisitors: false, openingHours: "",
     });
 }

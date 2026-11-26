@@ -53,9 +53,9 @@ async function seed() {
     if (!pricing) throw new Error("Run npm run db:migrate before seeding.");
 
     const users = [
-        { email: "admin@nhaxa.example", fullName: "Quản trị Nha Xá (demo)", role: "ADMIN" },
-        { email: "buyer@nhaxa.example", fullName: "Khách hàng Nha Xá (demo)", role: "BUYER" },
-        ...artisans.map(({ id, artisan }) => ({ email: workshopEmail(id), fullName: artisan, role: "ARTISAN" })),
+        { email: "admin@nhaxa.example", username: "admin", fullName: "Quản trị Nha Xá (demo)", role: "ADMIN" },
+        { email: "buyer@nhaxa.example", username: "buyer", fullName: "Khách hàng Nha Xá (demo)", role: "BUYER" },
+        ...artisans.map(({ id, artisan }) => ({ email: workshopEmail(id), username: id, fullName: artisan, role: "ARTISAN" })),
     ];
     const accounts = await Promise.all(users.map(async (user) => ({
         ...user,
@@ -74,9 +74,12 @@ async function seed() {
         for (const account of accounts) {
             const user = await tx.user.upsert({
                 where: { email: account.email }, create: account, update: {},
-                select: { id: true, role: true },
+                select: { id: true, role: true, username: true },
             });
             if (user.role !== account.role) throw new Error(`Conflicting demo account role: ${account.email}`);
+            if (!user.username && account.username) {
+                await tx.user.update({ where: { id: user.id }, data: { username: account.username } });
+            }
             userIds.set(account.email, user.id);
         }
         for (const workshop of artisans) {

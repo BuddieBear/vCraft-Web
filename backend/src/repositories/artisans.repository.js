@@ -34,7 +34,7 @@ export function findArtisanForReview(id) {
         where: { id, user: { role: "ARTISAN" } },
         select: {
             ...fields, certificates, experienceYears: true, verificationStatus: true, isSuspended: true, createdAt: true,
-            user: { select: { fullName: true, email: true, phone: true, isActive: true } },
+            user: { select: { fullName: true, email: true, username: true, phone: true, isActive: true } },
         },
     });
 }
