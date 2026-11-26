@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 import { jwtSecret } from "../config/security.js";
 import { ApiError } from "../middlewares/api-error.js";
 import { passwordResetDelivery } from "./password-reset-mail.js";
-import { createBuyer, createAuthSession, createPasswordResetToken, consumePasswordResetToken, findActiveCredentialsByEmail, findActiveSession, findPasswordHashById, findUserById, findValidPasswordResetToken, revokeAllAuthSessions, revokeAuthSession, updatePasswordAndRevokeSessions, updateUserProfile } from "../repositories/users.repository.js";
+import { createBuyer, createAuthSession, createPasswordResetToken, consumePasswordResetToken, findActiveCredentialsByEmail, findActiveCredentialsByUsername, findActiveSession, findPasswordHashById, findUserById, findValidPasswordResetToken, revokeAllAuthSessions, revokeAuthSession, updatePasswordAndRevokeSessions, updateUserProfile } from "../repositories/users.repository.js";
 
 const dummyHash = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6Ttx1g0skAUsV/2jU3BZid7jKkDmO";
 
@@ -18,18 +18,19 @@ function issueToken(user) {
     return { accessToken, tokenType: "Bearer", expiresIn: 3600, jti };
 }
 
-export async function registerBuyer({ email, password, fullName }) {
+export async function registerBuyer({ email, username, password, fullName }) {
     validatePassword(password);
-    return createBuyer({ email: email.toLowerCase(), fullName: fullName.trim(), passwordHash: await hash(password, 12) });
+    return createBuyer({ email: email.toLowerCase(), username, fullName: fullName.trim(), passwordHash: await hash(password, 12) });
 }
 
-export async function login({ email, password }) {
-    const user = await findActiveCredentialsByEmail(email.toLowerCase());
+export async function login({ email, identifier = email, password }) {
+    const account = identifier.toLowerCase();
+    const user = await (account.includes("@") ? findActiveCredentialsByEmail(account) : findActiveCredentialsByUsername(account));
     const valid = await compare(password, user?.passwordHash ?? dummyHash);
-    if (!user || !valid) throw new ApiError(401, "INVALID_CREDENTIALS", "Email hoặc mật khẩu không đúng.");
+    if (!user || !valid) throw new ApiError(401, "INVALID_CREDENTIALS", "Thông tin đăng nhập không đúng.");
     const issued = issueToken(user);
     const session = await createAuthSession({ userId: user.id, expectedHash: user.passwordHash, jti: issued.jti, expiresAt: new Date(Date.now() + 3600_000) });
-    if (!session) throw new ApiError(401, "INVALID_CREDENTIALS", "Email hoặc mật khẩu không đúng.");
+    if (!session) throw new ApiError(401, "INVALID_CREDENTIALS", "Thông tin đăng nhập không đúng.");
     const { jti, ...response } = issued;
     return response;
 }
@@ -86,6 +87,7 @@ export async function getProfile(userId) {
 export async function updateProfile(userId, data) {
     const allowed = {};
     if (data.fullName !== undefined) allowed.fullName = data.fullName.trim();
+    if (data.username !== undefined) allowed.username = data.username;
     if (data.phone !== undefined) allowed.phone = data.phone?.trim() || null;
     if (data.avatarUrl !== undefined) allowed.avatarUrl = data.avatarUrl?.trim() || null;
     if (allowed.fullName !== undefined && !allowed.fullName) throw new ApiError(400, "INVALID_PROFILE", "Họ tên không được để trống.");

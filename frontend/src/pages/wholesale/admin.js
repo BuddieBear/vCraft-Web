@@ -1,4 +1,5 @@
-import { bidText, card, displayDate, labels, listSection, paragraph, workshopName, write } from "./view.js";
+import { allocationPreview, bidText, card, displayDate, labels, listSection, paragraph, quoteExpired, quoteLabel, workshopName, write } from "./view.js";
+import { formatPrice } from "../../components/ui.js";
 
 export function adminView(root, tools) {
   const section = listSection(root, "Yêu cầu và phân công");
@@ -10,23 +11,27 @@ export function adminView(root, tools) {
   });
 }
 
-function renderQuotes(root, allQuotes, { form, expand, list }, pageSignal) {
+function renderQuotes(root, allQuotes, { button, form, expand, list }, pageSignal) {
   const pending = allQuotes.filter(quote => quote.status === "PENDING_DISPATCH");
   const quotes = allQuotes.filter(quote => quote.status !== "PENDING_DISPATCH");
   for (const quote of pending) {
-    const panel = card(root, quote.title, `${labels[quote.status]} · ${quote.targetQuantity} sản phẩm`);
+    const panel = card(root, quote.title, `${quoteLabel(quote)} · ${quote.targetQuantity} sản phẩm`);
     panel.append(paragraph(quote.specifications), paragraph("Ngày cần hàng · " + displayDate.format(new Date(quote.deadline))));
+    if (quoteExpired(quote)) {
+      panel.append(button("Đóng yêu cầu đã hết hạn", () => write(`/wholesale/quotes/${quote.id}/close-dispatch`)));
+      continue;
+    }
     expand(panel, {
       key: "dispatch-" + quote.id, label: "Chọn xưởng để mời chào giá",
       mount: (details) => mountDispatch(details, quote, { form, list }, pageSignal),
     }, pageSignal);
   }
   for (const quote of quotes) {
-    const panel = card(root, quote.title, `${labels[quote.status]} · ${quote.targetQuantity} sản phẩm`);
+    const panel = card(root, quote.title, `${quoteLabel(quote)} · ${quote.targetQuantity} sản phẩm`);
     if (quote.assignments.length) {
       panel.append(paragraph("Đã phân công cho " + quote.assignments.length + " xưởng."));
       for (const assignment of quote.assignments) {
-        panel.append(paragraph(`${workshopName(assignment)} · ${assignment.allocatedQuantity} sản phẩm · ${labels[assignment.status]}`));
+        panel.append(paragraph(`${workshopName(assignment)} · ${assignment.allocatedQuantity} sản phẩm · ${formatPrice(assignment.agreedPrice)} · ${labels[assignment.status]}`));
       }
       continue;
     }
@@ -54,6 +59,12 @@ function renderQuotes(root, allQuotes, { form, expand, list }, pageSignal) {
       label.append(bidText(bid) + " · Số lượng", input);
       allocate.prepend(label);
     }
+    const preview = paragraph("");
+    preview.setAttribute("aria-live", "polite");
+    allocate.querySelector('button[type="submit"]').before(preview);
+    const sync = () => allocationPreview(preview, quote, bids, bids.map(bid => ({ bidId: bid.id, quantity: Number(allocate.elements.namedItem(bid.id).value) })));
+    allocate.addEventListener("input", sync);
+    sync();
     panel.append(allocate);
   }
 }

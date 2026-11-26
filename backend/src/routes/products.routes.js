@@ -25,7 +25,7 @@ const productionSteps = z.array(z.string().trim().min(1).max(150)).min(1).max(ma
     .refine(steps => new Set(steps.map(productionStepKey)).size === steps.length, "Tên các công đoạn phải khác nhau.");
 const editableProduct = productFields.extend({ productionSteps: productionSteps.optional() });
 const productBody = editableProduct.superRefine(validatePricing);
-const replaceBody = editableProduct.extend({ expectedStockQuantity: stockQuantity }).superRefine(validatePricing);
+const replaceBody = editableProduct.extend({ expectedStockQuantity: stockQuantity, expectedRevision: stockQuantity }).superRefine(validatePricing);
 const own = [authenticate, authorize("ARTISAN")];
 router.get("/mine", ...own, validate({ query: pageQuery }), async (req, res) => res.json(await listPage(req.validatedQuery, (options) => getMyProducts(req.user.id, options))));
 router.post("/", ...own, validate({ body: productBody }), async (req, res) => res.status(201).json({ data: await createProduct(req.user.id, req.validatedBody) }));

@@ -19,6 +19,9 @@ function validationFields(issues) {
         }
         if (issue.code === "too_big" && issue.origin === "string") message = `Nhập tối đa ${issue.maximum} ký tự.`;
         if (name === "maxBudget") message = quoteBudgetError;
+        if (name === "phone" || name === "recipientPhone") message = recipientPhoneError;
+        if (name === "username") message = "Dùng 3–32 ký tự gồm chữ không dấu, số, dấu chấm, gạch dưới hoặc gạch ngang. Bắt đầu bằng chữ hoặc số.";
+        if (name === "identifier") message = "Nhập email hoặc tên người dùng hợp lệ.";
         fields.set(name, { name, message });
     }
     return [...fields.values()];
@@ -34,6 +37,10 @@ export function errorHandler(error, _request, response, next) {
     }
 
     if (error instanceof ApiError) return response.status(error.status).json({ error: { code: error.code, message: error.message } });
+    if (error.code === "P2002" && Array.isArray(error.meta?.target) && error.meta.target.includes("username")) {
+        const message = "Tên người dùng đã được sử dụng.";
+        return response.status(409).json({ error: { code: "USERNAME_TAKEN", message, fields: [{ name: "username", message }] } });
+    }
     if (error.message === "Quote buyer is unavailable") return response.status(409).json({ error: { code: "BUYER_UNAVAILABLE", message: "Tài khoản người mua không còn hoạt động." } });
     if (error.message === "Artisan is unavailable") return response.status(409).json({ error: { code: "ARTISAN_UNAVAILABLE", message: "Xưởng hiện không đủ điều kiện tham gia giao dịch." } });
     if (error.message === "Assignment has unfinished batches") return response.status(409).json({ error: { code: "BATCHES_INCOMPLETE", message: "Còn lô sản xuất chưa hoàn thành." } });
@@ -44,6 +51,7 @@ export function errorHandler(error, _request, response, next) {
         return response.status(400).json({ error: { code: "INVALID_REQUEST", message, fields: [{ name: "deadline", message }] } });
     }
     if (error.message === "Stale product stock") return response.status(409).json({ error: { code: "STALE_STOCK", message: "Tồn kho đã thay đổi. Hãy tải lại sản phẩm trước khi lưu." } });
+    if (error.message === "Stale product revision") return response.status(409).json({ error: { code: "STALE_PRODUCT", message: "Sản phẩm đã thay đổi. Hãy tải lại trước khi lưu." } });
     if (error.message === "Stock limit exceeded on cancellation") return response.status(409).json({ error: { code: "STOCK_LIMIT_EXCEEDED", message: "Hoàn tồn sẽ vượt giới hạn tồn kho. Hãy kiểm tra lại tồn kho trước khi hủy đơn." } });
     if (error.message === "Invalid payment confirmation") return response.status(409).json({ error: { code: "PAYMENT_CONFIRMATION_REQUIRED", message: "Kiểm tra và xác nhận đã thu tiền trước khi hoàn tất giao hàng COD." } });
     if (error instanceof multer.MulterError) return response.status(error.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({ error: { code: "INVALID_UPLOAD", message: "Tệp tải lên vượt giới hạn hoặc không hợp lệ." } });

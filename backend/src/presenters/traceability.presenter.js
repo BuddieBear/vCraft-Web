@@ -116,6 +116,6 @@ export function renderProductProductionPage(product, reference, batches) {
         <span>${batch.status === "COMPLETED" ? "Đã hoàn thành" : "Đang sản xuất"} · ${date.format(batch.startedAt)}</span></li>`).join("")}</ul>`
         : '<p class="trace-timeline-guide">Xưởng chưa công bố lô sản xuất cho sản phẩm này.</p>'}
     </section>`}
-    ${renderProductionGuide(product, { reference, cover })}`,
+    ${renderProductionGuide(product, { reference, cover, showQr: true })}`,
     });
 }

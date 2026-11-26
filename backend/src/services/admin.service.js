@@ -21,8 +21,8 @@ export async function artisanReviewDetails(id) {
     return workshop;
 }
 
-export async function reviewArtisan(adminId, id, status) {
-    const result = await decideArtisan(adminId, id, status);
+export async function reviewArtisan(adminId, id, decision) {
+    const result = await decideArtisan(adminId, id, decision);
     if (!result.count) {
         throw new ApiError(409, "CONFLICT", "Hồ sơ không tồn tại hoặc đã được xử lý.");
     }

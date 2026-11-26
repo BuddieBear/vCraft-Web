@@ -36,7 +36,7 @@ export async function listOrders(userId, { skip = 0, take = 24 } = {}) {
 }
 
 // The caller authenticates the user; this service verifies ownership and current data again.
-export async function checkout({ userId, recipientName, recipientPhone, shippingAddress, shippingNote, paymentMethod = "COD" }) {
+export async function checkout({ userId, recipientName, recipientPhone, shippingAddress, shippingNote, paymentMethod = "COD", confirmedItems, requireConfirmation = false }) {
     if (typeof userId !== "string" || !userId.trim()) throw new Error("Invalid userId");
     for (const [name, value, max] of [["recipientName", recipientName, 120], ["recipientPhone", recipientPhone, 20], ["shippingAddress", shippingAddress, 2000]]) {
         if (typeof value !== "string" || !value.trim() || value.length > max) throw new Error(`Invalid ${name}`);
@@ -45,11 +45,13 @@ export async function checkout({ userId, recipientName, recipientPhone, shipping
     if (shippingNote != null && (typeof shippingNote !== "string" || shippingNote.length > 2000)) throw new Error("Invalid shippingNote");
     if (!["COD", "BANK_TRANSFER", "VNPAY", "MOMO"].includes(paymentMethod)) throw new Error("Invalid paymentMethod");
     if (paymentMethod !== "COD") throw new ApiError(422, "PAYMENT_METHOD_UNAVAILABLE", "Hiện chỉ hỗ trợ thanh toán khi nhận hàng (COD).");
+    if (requireConfirmation && !confirmedItems) throw new ApiError(409, "CART_CHANGED", "Hãy tải giỏ và xác nhận giá trước khi đặt hàng.");
 
     try {
-        return await checkoutOrder(userId, { recipientName: recipientName.trim(), recipientPhone: recipientPhone.trim(), shippingAddress: shippingAddress.trim(), shippingNote, paymentMethod });
+        return await checkoutOrder(userId, { recipientName: recipientName.trim(), recipientPhone: recipientPhone.trim(), shippingAddress: shippingAddress.trim(), shippingNote, paymentMethod }, confirmedItems);
     } catch (error) {
         if (error.message === "ORDER_TOTAL_TOO_LARGE") throw new ApiError(422, "ORDER_TOTAL_TOO_LARGE", "Tổng đơn hàng vượt giới hạn. Hãy giảm số lượng trong giỏ.");
+        if (error.code === "P2034" || error.message.startsWith("Product is unavailable,")) throw new ApiError(409, "CART_CHANGED", "Giỏ hàng, giá hoặc tồn kho đã đổi. Hãy kiểm tra lại trước khi đặt hàng.");
         throw error;
     }
 }

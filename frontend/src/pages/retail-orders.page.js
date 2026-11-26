@@ -1,14 +1,7 @@
 import { request, signedIn } from "../api/http.js";
 import { formatPrice } from "../components/ui.js";
 import { paymentLabel } from "../data/payment-labels.js";
-
-const orderStates = {
-  PENDING: "Chờ xác nhận",
-  CONFIRMED: "Đã xác nhận",
-  SHIPPING: "Đang giao",
-  DELIVERED: "Đã giao",
-  CANCELLED: "Đã hủy",
-};
+import { retailStatusLabels as orderStates } from "../data/retail-status.js";
 const nextState = { PENDING: "CONFIRMED", CONFIRMED: "SHIPPING", SHIPPING: "DELIVERED" };
 const nextLabel = { CONFIRMED: "Xác nhận đơn", SHIPPING: "Bắt đầu giao", DELIVERED: "Xác nhận đã giao" };
 const pageSize = 12;
@@ -120,7 +113,7 @@ export function mountRetailOrders(section, account) {
     summary.textContent = [orderDate.format(new Date(order.createdAt)), formatPrice(order.totalAmount), paymentLabel(order)].join(" · ");
     card.append(header, summary);
     if (seller) {
-      card.append(renderSellerDetails(order));
+      card.append(renderDetails(order.items, order));
       appendAction(card, order, order);
     } else {
       for (const part of order.fulfillments) {
@@ -130,20 +123,21 @@ export function mountRetailOrders(section, account) {
         heading.textContent = part.artisan.workshopName;
         const summary = document.createElement("p");
         summary.textContent = orderStates[part.status] + " · " + paymentLabel({ ...part, paymentMethod: order.paymentMethod });
-        workshop.append(heading, summary);
+        workshop.append(heading, summary, renderDetails(order.items.filter(item => item.artisanId === part.artisanId)));
         appendAction(workshop, order, part);
         card.append(workshop);
       }
+      card.append(renderDetails([], order));
     }
     return card;
   }
 
-  function renderSellerDetails(order) {
+  function renderDetails(items, order) {
     const details = document.createElement("div");
     details.className = "retail-order-details";
     const lines = document.createElement("ul");
     lines.className = "retail-order-items";
-    for (const item of order.items) {
+    for (const item of items) {
       const row = document.createElement("li");
       const name = document.createElement("strong");
       name.textContent = item.product.name;
@@ -152,6 +146,8 @@ export function mountRetailOrders(section, account) {
       row.append(name, value);
       lines.append(row);
     }
+    if (items.length) details.append(lines);
+    if (!order) return details;
     const shipping = document.createElement("dl");
     for (const [label, value] of [
       ["Người nhận", order.recipientName], ["Điện thoại", order.recipientPhone],
@@ -164,7 +160,7 @@ export function mountRetailOrders(section, account) {
       detail.textContent = value;
       shipping.append(term, detail);
     }
-    details.append(lines, shipping);
+    details.append(shipping);
     return details;
   }
 
@@ -196,10 +192,21 @@ export function mountRetailOrders(section, account) {
     const feedback = document.createElement("p");
     feedback.className = "trade-feedback";
     feedback.setAttribute("role", "status");
-    form.append(button, feedback);
+    form.append(button);
+    if (["PENDING", "CONFIRMED"].includes(part.status) && part.paymentStatus === "UNPAID") {
+      const cancel = document.createElement("button");
+      cancel.type = "submit";
+      cancel.className = "button button-outline";
+      cancel.value = "CANCELLED";
+      cancel.textContent = "Hủy phần hàng của xưởng";
+      form.append(cancel);
+    }
+    form.append(feedback);
     form.addEventListener("submit", async event => {
       event.preventDefault();
       if (saving || loading) return;
+      const statusToSave = event.submitter?.value === "CANCELLED" ? "CANCELLED" : next;
+      if (statusToSave === "CANCELLED" && !window.confirm("Hủy phần hàng này và hoàn số lượng về kho?")) return;
       const profile = account.profile;
       saving = button.disabled = true;
       syncControls();
@@ -209,7 +216,7 @@ export function mountRetailOrders(section, account) {
         await request("/retail/orders/" + encodeURIComponent(order.id) + "/workshops/" + encodeURIComponent(part.artisanId) + "/status", {
           method: "PATCH",
           auth: true,
-          body: { status: next, ...(collect ? { paymentCollected: true } : {}) },
+          body: { status: statusToSave, ...(collect ? { paymentCollected: true } : {}) },
         });
         if (profile === account.profile) {
           feedback.textContent = "Đã cập nhật trạng thái.";

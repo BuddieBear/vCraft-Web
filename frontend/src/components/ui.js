@@ -20,7 +20,7 @@ export function icon(name) {
   return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name]}</svg>`;
 }
 
-const currency = new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" });
+const currency = new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 2 });
 export const saleUnits = { METER: "mét", PIECE: "sản phẩm", SET: "bộ", BOX: "hộp" };
 
 export function formatPrice(price, unit) {

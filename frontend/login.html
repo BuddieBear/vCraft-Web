@@ -17,7 +17,8 @@
       <h1 id="sign-in-title">Đăng nhập</h1>
       <form class="account-form" id="sign-in-form" method="post">
         <label id="name-field" hidden>Họ tên<input name="fullName" autocomplete="name" maxlength="120" disabled></label>
-        <label>Email<input name="email" type="email" autocomplete="email" maxlength="255" required></label>
+        <label><span id="credential-label">Email hoặc tên người dùng</span><input name="identifier" type="text" autocomplete="username" maxlength="255" required></label>
+        <label id="username-field" hidden>Tên người dùng (không bắt buộc)<input name="username" autocomplete="off" autocapitalize="none" minlength="3" maxlength="32" disabled></label>
         <label>Mật khẩu<input name="password" type="password" autocomplete="current-password" maxlength="72" required></label>
         <button class="button button-primary" type="submit">Đăng nhập</button>
       </form>
