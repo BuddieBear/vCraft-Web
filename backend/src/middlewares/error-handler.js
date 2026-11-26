@@ -19,6 +19,9 @@ function validationFields(issues) {
         }
         if (issue.code === "too_big" && issue.origin === "string") message = `Nhập tối đa ${issue.maximum} ký tự.`;
         if (name === "maxBudget") message = quoteBudgetError;
+        if (name === "password" || name === "newPassword") message = "Mật khẩu phải từ 12 đến 72 byte UTF-8.";
+        if (name === "username") message = "Tên đăng nhập gồm 3–50 ký tự không dấu (chữ, số, ., _, -).";
+        if (name === "identifier") message = "Nhập email hoặc tên đăng nhập.";
         fields.set(name, { name, message });
     }
     return [...fields.values()];

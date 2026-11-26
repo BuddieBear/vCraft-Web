@@ -9,7 +9,12 @@ const toggle = document.querySelector(".sign-in-toggle");
 const submit = form.querySelector('button[type="submit"]');
 const nameField = document.querySelector("#name-field");
 const fullName = form.elements.namedItem("fullName");
+const usernameField = document.querySelector("#username-field");
+const usernameInput = form.elements.namedItem("username");
+const identifierLabel = document.querySelector("[data-identifier-label]");
+const identifierInput = form.elements.namedItem("identifier");
 const password = form.elements.namedItem("password");
+const passwordHint = document.querySelector("#password-hint");
 const forgot = document.querySelector(".sign-in-forgot");
 const resetRequest = document.querySelector("#reset-request-form");
 const resetConfirm = document.querySelector("#reset-confirm-form");
@@ -39,7 +44,16 @@ function updateMode() {
   nameField.hidden = !registration;
   fullName.disabled = !registration;
   fullName.required = registration;
+  usernameField.hidden = !registration;
+  usernameInput.disabled = !registration;
+  identifierLabel.textContent = registration ? "Email" : "Email hoặc tên đăng nhập";
+  identifierInput.type = registration ? "email" : "text";
+  identifierInput.autocomplete = registration ? "email" : "username";
+  identifierInput.placeholder = registration ? "ten@example.com" : "Nhập email hoặc username";
   password.autocomplete = registration ? "new-password" : "current-password";
+  if (registration) password.minLength = 12;
+  else password.removeAttribute("minlength");
+  passwordHint.hidden = !registration;
   title.textContent = registration ? "Tạo tài khoản" : "Đăng nhập";
   document.title = title.textContent + " · vCraft";
   submit.textContent = title.textContent;
@@ -62,7 +76,7 @@ forgot.addEventListener("click", () => {
   resetConfirm.hidden = true;
   resetRequest.hidden = false;
   clearFormErrors(resetRequest);
-  resetRequest.elements.namedItem("email").value = form.elements.namedItem("email").value;
+  resetRequest.elements.namedItem("identifier").value = identifierInput.value;
   title.textContent = "Quên mật khẩu";
   document.title = title.textContent + " · vCraft";
   toggle.textContent = "Quay lại đăng nhập";
@@ -70,7 +84,7 @@ forgot.addEventListener("click", () => {
   forgot.textContent = "Quay lại đăng nhập";
   forgot.dataset.mode = "back";
   status.textContent = "";
-  resetRequest.elements.namedItem("email").focus();
+  resetRequest.elements.namedItem("identifier").focus();
 });
 
 function showLogin() {
@@ -90,7 +104,7 @@ function validNewPassword(form, name, value) {
   return false;
 }
 
-function showReset(token) {
+function showReset(token, customMessage) {
   resetToken = token;
   form.hidden = resetRequest.hidden = toggle.hidden = true;
   resetConfirm.hidden = false;
@@ -98,7 +112,7 @@ function showReset(token) {
   forgot.dataset.mode = "back";
   title.textContent = "Đặt lại mật khẩu";
   document.title = title.textContent + " · vCraft";
-  status.textContent = "Nhập mật khẩu mới để hoàn tất.";
+  status.textContent = customMessage || "Nhập mật khẩu mới để hoàn tất.";
   resetConfirm.elements.namedItem("newPassword").focus();
 }
 
@@ -116,13 +130,18 @@ resetRequest.addEventListener("submit", async event => {
   button.disabled = forgot.disabled = true;
   status.textContent = "";
   try {
-    await request("/auth/password/reset/request", {
+    const { data } = await request("/auth/password/reset/request", {
       method: "POST",
-      body: { email: resetRequest.elements.namedItem("email").value },
+      body: { identifier: resetRequest.elements.namedItem("identifier").value.trim() },
     });
-    status.textContent = "Nếu email có tài khoản, hãy kiểm tra hộp thư để nhận liên kết khôi phục.";
+    if (data?.resetToken && /^[A-Za-z0-9_-]{20,200}$/.test(data.resetToken)) {
+      showReset(data.resetToken, "Đã xác nhận tài khoản. Nhập mật khẩu mới (tối thiểu 12 ký tự) để đặt lại.");
+      return;
+    }
+    status.textContent = "Nếu tài khoản tồn tại, hãy kiểm tra hộp thư để nhận liên kết khôi phục.";
   } catch (error) {
-    if (!showFormErrors(resetRequest, error.fields)) status.textContent = error.message;
+    const fields = (error.fields || []).map(f => f.name === "email" ? { ...f, name: "identifier" } : f);
+    if (!showFormErrors(resetRequest, fields)) status.textContent = error.message;
   } finally {
     button.disabled = forgot.disabled = false;
   }
@@ -158,21 +177,31 @@ form.addEventListener("submit", async event => {
   if (submit.disabled) return;
   clearFormErrors(form);
   status.textContent = "";
-  const body = Object.fromEntries(new FormData(form));
-  if (registration && !validNewPassword(form, "password", body.password)) return;
+  const values = Object.fromEntries(new FormData(form));
+  const rawIdentifier = (values.identifier || "").trim();
+  if (registration && !validNewPassword(form, "password", values.password)) return;
   submit.disabled = toggle.disabled = forgot.disabled = true;
   try {
     if (registration) {
-      await request("/auth/register", { method: "POST", body });
-      delete body.fullName;
+      const registerBody = {
+        email: rawIdentifier,
+        fullName: values.fullName,
+        password: values.password,
+        ...(values.username?.trim() ? { username: values.username.trim() } : {}),
+      };
+      await request("/auth/register", { method: "POST", body: registerBody });
       registration = false;
       updateMode();
     }
-    const { data } = await request("/auth/login", { method: "POST", body });
+    const { data } = await request("/auth/login", {
+      method: "POST",
+      body: { identifier: rawIdentifier, password: values.password },
+    });
     setToken(data.accessToken);
     location.assign(returnTo);
   } catch (error) {
-    if (!showFormErrors(form, error.fields)) status.textContent = error.message;
+    const fields = (error.fields || []).map(f => f.name === "email" ? { ...f, name: "identifier" } : f);
+    if (!showFormErrors(form, fields)) status.textContent = error.message;
   } finally {
     submit.disabled = toggle.disabled = forgot.disabled = false;
   }

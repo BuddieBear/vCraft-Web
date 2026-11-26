@@ -17,17 +17,18 @@
       <h1 id="sign-in-title">Đăng nhập</h1>
       <form class="account-form" id="sign-in-form" method="post">
         <label id="name-field" hidden>Họ tên<input name="fullName" autocomplete="name" maxlength="120" disabled></label>
-        <label>Email<input name="email" type="email" autocomplete="email" maxlength="255" required></label>
-        <label>Mật khẩu<input name="password" type="password" autocomplete="current-password" maxlength="72" required></label>
+        <label id="username-field" hidden>Tên đăng nhập (tùy chọn)<input name="username" autocomplete="username" maxlength="50" pattern="[a-zA-Z0-9._\-]{3,50}" placeholder="Ví dụ: minh.nhaxa" disabled></label>
+        <label id="identifier-field"><span data-identifier-label>Email hoặc tên đăng nhập</span><input name="identifier" type="text" autocomplete="username" maxlength="255" placeholder="Nhập email hoặc username" required></label>
+        <label>Mật khẩu<input name="password" type="password" autocomplete="current-password" maxlength="72" required><span class="field-hint" id="password-hint" hidden>Tối thiểu 12 ký tự (tối đa 72 byte UTF-8).</span></label>
         <button class="button button-primary" type="submit">Đăng nhập</button>
       </form>
       <form class="account-form" id="reset-request-form" method="post" hidden>
-        <label>Email tài khoản<input name="email" type="email" autocomplete="email" maxlength="255" required></label>
+        <label>Email hoặc tên đăng nhập<input name="identifier" type="text" autocomplete="username" maxlength="255" placeholder="Nhập email hoặc username tài khoản" required></label>
         <button class="button button-primary" type="submit">Gửi yêu cầu đặt lại</button>
       </form>
       <form class="account-form" id="reset-confirm-form" method="post" hidden>
-        <label>Mật khẩu mới<input name="newPassword" type="password" autocomplete="new-password" maxlength="72" required></label>
-        <label>Nhập lại mật khẩu mới<input name="confirmPassword" type="password" autocomplete="new-password" maxlength="72" required></label>
+        <label>Mật khẩu mới<input name="newPassword" type="password" autocomplete="new-password" minlength="12" maxlength="72" required><span class="field-hint">Tối thiểu 12 ký tự (tối đa 72 byte UTF-8).</span></label>
+        <label>Nhập lại mật khẩu mới<input name="confirmPassword" type="password" autocomplete="new-password" minlength="12" maxlength="72" required></label>
         <button class="button button-primary" type="submit">Đặt lại mật khẩu</button>
       </form>
       <p role="status" aria-live="polite"></p>

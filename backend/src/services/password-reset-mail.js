@@ -3,7 +3,7 @@ import { signInPath } from "../../../frontend/src/site-paths.js";
 
 export function passwordResetDelivery() {
     const { RESEND_API_KEY: key, PASSWORD_RESET_FROM: from, PUBLIC_APP_URL: appUrl, NODE_ENV: environment } = process.env;
-    if (!key && !from && !appUrl && environment === "test") return null;
+    if (!key && !from && !appUrl && environment !== "production") return null;
     let origin;
     try {
         origin = new URL(appUrl);
