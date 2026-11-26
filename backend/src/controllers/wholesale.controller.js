@@ -1,5 +1,5 @@
 import { ApiError } from "../middlewares/api-error.js";
-import { createQuote, updateQuoteWorkshops, sendQuote, requestDispatch, dispatchQuote, submitBid, acceptBids, assignBids, advanceAssignment, findBuyerQuote, findBuyerJournal, getArtisanQuote, listArtisanWork, listQuotesForBuyer, listQuotesForAllocation } from "../services/wholesale.service.js";
+import { createQuote, updateQuoteWorkshops, sendQuote, requestDispatch, dispatchQuote, closeExpiredDispatch, submitBid, acceptBids, assignBids, advanceAssignment, findBuyerQuote, findBuyerJournal, getArtisanQuote, listArtisanWork, listQuotesForBuyer, listQuotesForAllocation } from "../services/wholesale.service.js";
 import { listPage } from "../routes/schemas.js";
 
 export async function buyerQuotes(req, res) {
@@ -45,6 +45,18 @@ export async function dispatch(req, res) {
 
 export async function bid(req, res) {
     res.status(201).json({ data: await submitBid({ ...req.validatedBody, userId: req.user.id, quoteId: req.validatedParams.id }) });
+}
+
+export async function closeDispatch(req, res) {
+    res.json({ data: await closeExpiredDispatch({ userId: req.user.id, quoteId: req.validatedParams.id }) });
+}
+
+export async function editBid(req, res) {
+    res.json({ data: await submitBid({ ...req.validatedBody, userId: req.user.id, quoteId: req.validatedParams.id }, "edit") });
+}
+
+export async function withdrawBid(req, res) {
+    res.json({ data: await submitBid({ ...req.validatedBody, userId: req.user.id, quoteId: req.validatedParams.id }, "withdraw") });
 }
 
 export async function accept(req, res) {

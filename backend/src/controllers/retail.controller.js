@@ -1,6 +1,6 @@
 import { ApiError } from "../middlewares/api-error.js";
 import { setCartItem, listCart, checkout, listOrders, getOrder, listSales, listAdminSales, changeOrderStatus, changeWorkshopOrderStatus } from "../services/retail.service.js";
-import { pageArgs, listPage } from "../routes/schemas.js";
+import { listPage } from "../routes/schemas.js";
 
 export async function adminOrderList(req, res) {
     const query = req.validatedQuery;
@@ -31,11 +31,11 @@ export async function putCartItem(req, res) {
 }
 
 export async function placeOrder(req, res) {
-    res.status(201).json({ data: await checkout({ ...req.validatedBody, userId: req.user.id }) });
+    res.status(201).json({ data: await checkout({ ...req.validatedBody, userId: req.user.id, requireConfirmation: true }) });
 }
 
 export async function orders(req, res) {
-    res.json({ data: await listOrders(req.user.id, pageArgs(req.validatedQuery)) });
+    res.json(await listPage(req.validatedQuery, options => listOrders(req.user.id, options)));
 }
 
 export async function order(req, res) {

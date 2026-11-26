@@ -1,4 +1,5 @@
 import { request } from "../api/http.js";
+import { retailOrderLink, retailOrderLinkId } from "../data/retail-status.js";
 import { biddingPagePath, pageSegment, quotePagePath, quotePageRoot, sitePaths } from "../site-paths.js";
 
 export function mountNotifications(section, account) {
@@ -35,11 +36,12 @@ export function mountNotifications(section, account) {
         const artisan = account.profile?.role === "ARTISAN";
         const canFollow = artisan || account.profile?.role === "BUYER";
         const quoteId = canFollow && typeof item.linkUrl === "string" && pageSegment(item.linkUrl, artisan ? sitePaths.bidding : quotePageRoot);
-        if (quoteId && /^[a-f0-9-]{36}$/i.test(quoteId)) {
+        const retailId = account.profile?.role === "BUYER" && retailOrderLinkId(item.linkUrl);
+        if (retailId || (quoteId && /^[a-f0-9-]{36}$/i.test(quoteId))) {
           const link = document.createElement("a");
           link.className = "text-link notification-link";
-          link.href = artisan ? biddingPagePath(quoteId) : quotePagePath(quoteId);
-          link.textContent = "Xem yêu cầu báo giá";
+          link.href = retailId ? retailOrderLink(retailId) : artisan ? biddingPagePath(quoteId) : quotePagePath(quoteId);
+          link.textContent = retailId ? "Xem đơn hàng" : "Xem yêu cầu báo giá";
           card.append(link);
         }
         if (!item.isRead) {

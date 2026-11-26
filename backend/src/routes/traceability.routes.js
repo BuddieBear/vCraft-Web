@@ -4,11 +4,12 @@ import { validate } from "../middlewares/validate-request.js";
 import { ApiError } from "../middlewares/api-error.js";
 import QRCode from "qrcode";
 import { findBuyerTimelineByBatchCode, listRecentPublicBatches } from "../repositories/traceability.repository.js";
-import { getPublicTimeline, getPublicProductionProduct, getProductBatches, getMyBatches, createBatch, createBatchLog, updateBatchLog, finishBatch } from "../services/traceability.service.js";
+import { getPublicTimeline, getPublicProductionProduct, getProductBatches, getMyBatches, createBatch, createBatchLog, updateBatchLog, finishBatch, cancelBatch } from "../services/traceability.service.js";
 import { batchLandingUrl, productLandingUrl } from "../config/trace-url.js";
 import { authenticate } from "../middlewares/authenticate.js";
 import { authorize } from "../middlewares/authorize.js";
-import { byId, uuid, urls, listPage, pageQuery } from "./schemas.js";
+import { byId, uuid, mediaUrl, listPage, pageQuery } from "./schemas.js";
+import { batchImageParts } from "../../../frontend/src/data/batch-media.js";
 import { timeline } from "../controllers/traceability.controller.js";
 import { defaultStageCodes, maxProductionSteps } from "../../../frontend/src/data/production-steps.js";
 const router = Router();
@@ -38,20 +39,22 @@ router.get("/products/:slug", validate({ params: productParams }), async (req, r
 router.get("/product-guide/reference/:slug/qr", validate({ params: productParams }), productQr(true));
 router.get("/product-guide/:slug/qr", validate({ params: productParams }), productQr(false));
 router.post("/batches", ...own, validate({ body: z.object({ productId: uuid, orderAssignmentId: uuid.nullable().optional(), batchCode: z.string().min(1).max(50).regex(/^[a-zA-Z0-9_-]+$/).refine((value) => value.toLowerCase() !== "mine"), totalQuantity: z.number().int().positive().max(2147483647) }).strict() }), async (req, res) => res.status(201).json({ data: await createBatch(req.user.id, req.validatedBody) }));
+const evidenceUrls = z.array(z.union([mediaUrl, z.string().max(500).refine(url => Boolean(batchImageParts(url)))])).max(20);
 const logContent = z.object({
     stageTitle: z.string().trim().min(1).max(150),
     description: z.string().trim().min(1).max(10000),
     loggedOn: z.iso.date().optional(),
-    evidenceImageUrls: urls,
+    evidenceImageUrls: evidenceUrls,
 }).strict();
 const newLog = logContent.extend({
     stage: z.enum(defaultStageCodes).optional(),
     stepOrder: z.number().int().min(1).max(maxProductionSteps).optional(),
-    evidenceImageUrls: urls.optional(),
+    evidenceImageUrls: evidenceUrls.optional(),
 }).refine(log => log.stepOrder !== undefined || log.stage !== undefined, { path: ["stepOrder"], message: "Chọn công đoạn." });
 router.post("/batches/:id/logs", ...own, validate({ params: byId, body: newLog }), async (req, res) => res.status(201).json({ data: await createBatchLog(req.user.id, req.validatedParams.id, req.validatedBody) }));
 router.put("/batches/:id/logs/:logId", ...own, validate({ params: z.object({ id: uuid, logId: uuid }), body: logContent }), async (req, res) => res.json({ data: await updateBatchLog(req.user.id, req.validatedParams.id, req.validatedParams.logId, req.validatedBody) }));
 router.post("/batches/:id/complete", ...own, validate({ params: byId }), async (req, res) => res.json({ data: await finishBatch(req.user.id, req.validatedParams.id) }));
+router.post("/batches/:id/cancel", ...own, validate({ params: byId }), async (req, res) => res.json({ data: await cancelBatch(req.user.id, req.validatedParams.id) }));
 router.get("/:code/qr", validate({ params: codeParams }), async (req, res) => { if (!await getPublicTimeline(req.validatedParams.code)) throw new ApiError(404, "NOT_FOUND", "Không tìm thấy lô sản phẩm."); res.type("png").send(await QRCode.toBuffer(batchLandingUrl(req.validatedParams.code), { type: "png", width: 320, margin: 2 })); });
 router.get("/by-code/:code", validate({ params: codeParams }), timeline);
 router.get("/:code", validate({ params: codeParams }), timeline);

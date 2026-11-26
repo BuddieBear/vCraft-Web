@@ -174,7 +174,7 @@ enum NotificationType {
 model User {
   id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   email        String    @unique @db.VarChar(255)
-  username     String?   @unique @db.VarChar(50)
+  username     String?   @unique @db.VarChar(32)
   passwordHash String    @map("password_hash") @db.VarChar(255)
   fullName     String    @map("full_name") @db.VarChar(120)
   phone        String?   @db.VarChar(20)
@@ -244,6 +244,9 @@ model ArtisanProfile {
   coverImageUrl      String?                   @map("cover_image_url") @db.VarChar(500)
   galleryImages      String[]                  @default([]) @map("gallery_images")
   verificationStatus ArtisanVerificationStatus @default(PENDING) @map("verification_status")
+  reviewVersion      Int                       @default(0) @map("review_version")
+  pendingIdentity    Json?                     @map("pending_identity")
+  rejectionReason    String?                   @map("rejection_reason") @db.VarChar(2000)
   isSuspended        Boolean                   @default(false) @map("is_suspended")
   verifiedAt         DateTime?                 @map("verified_at") @db.Timestamptz()
   averageRating      Decimal                   @default(5.00) @map("average_rating") @db.Decimal(3, 2)
@@ -310,6 +313,7 @@ model Product {
   pricingMode    PricingMode   @default(FIXED) @map("pricing_mode")
   saleUnit       SaleUnit      @default(PIECE) @map("sale_unit")
   stockQuantity  Int           @default(0) @map("stock_quantity")
+  revision       Int           @default(0)
   mediaUrls      String[]      @default([]) @map("media_urls")
   isUniquePiece  Boolean       @default(false) @map("is_unique_piece")
   isPublished    Boolean       @default(true) @map("is_published")
@@ -321,6 +325,7 @@ model Product {
   artisan          ArtisanProfile    @relation(fields: [artisanId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   category         Category?         @relation(fields: [categoryId], references: [id], onDelete: SetNull, onUpdate: NoAction)
   batches          ProductBatch[]
+  slugAliases      ProductSlugAlias[]
   cartItems        CartItem[]
   retailOrderItems RetailOrderItem[]
   reviews          Review[]
@@ -330,6 +335,15 @@ model Product {
   @@index([name(ops: raw("gin_trgm_ops"))], map: "idx_products_name_search", type: Gin)
   @@index([price], map: "idx_products_price")
   @@map("products")
+}
+
+model ProductSlugAlias {
+  slug      String  @id @db.VarChar(280)
+  productId String  @map("product_id") @db.Uuid
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([productId])
+  @@map("product_slug_aliases")
 }
 
 model ProductBatch {
@@ -371,6 +385,12 @@ model BatchLog {
 
   @@unique([batchId, stepOrder], map: "uq_batch_log_step_order")
   @@map("batch_logs")
+}
+
+model PrivateLegacyImage {
+  filename String @id @db.VarChar(41)
+
+  @@map("private_legacy_images")
 }
 
 model CartItem {
@@ -456,7 +476,7 @@ model QuotationRequest {
   specifications      String        @db.Text
   targetQuantity      Int           @map("target_quantity")
   maxBudget           Decimal?      @map("max_budget") @db.Decimal(14, 2)
-  preferredWeaveType  SilkWeaveType @default(LUA_VAN) @map("preferred_weave_type")
+  preferredWeaveType  SilkWeaveType? @map("preferred_weave_type")
   deadline            DateTime      @db.Date
   attachmentUrls      String[]      @default([]) @map("attachment_urls")
   status              QuoteStatus   @default(DRAFT)
@@ -486,6 +506,7 @@ model Bid {
   note                   String?   @db.Text
   sampleImages           String[]  @default([]) @map("sample_images")
   status                 BidStatus @default(SUBMITTED)
+  revision               Int       @default(0)
   createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt              DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 

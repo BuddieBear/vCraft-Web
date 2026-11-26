@@ -23,6 +23,7 @@ function renderEvidence(target, workshop) {
   const info = document.createElement("dl");
   const { user } = workshop;
   for (const [label, value] of [
+    ["Tên xưởng", workshop.workshopName],
     ["Người phụ trách", user.fullName],
     ["Tên đăng nhập", user.username ? "@" + user.username : "Chưa đặt"],
     ["Email", user.email],
@@ -33,6 +34,12 @@ function renderEvidence(target, workshop) {
     ["Danh xưng", workshop.artisanTitle],
     ["Số năm kinh nghiệm", workshop.experienceYears],
     ["Lịch sử xưởng và tiểu sử", workshop.familyHistory],
+    ...(workshop.pendingIdentity ? [
+      ["Tên đang chờ duyệt", workshop.pendingIdentity.workshopName],
+      ["Địa chỉ đang chờ duyệt", workshop.pendingIdentity.address],
+      ["Tọa độ đang chờ duyệt", workshop.pendingIdentity.latitude + ", " + workshop.pendingIdentity.longitude],
+    ] : []),
+    ...(workshop.rejectionReason ? [["Lý do từ chối gần nhất", workshop.rejectionReason]] : []),
   ]) {
     const term = document.createElement("dt");
     const detail = document.createElement("dd");
@@ -73,7 +80,7 @@ function renderEvidence(target, workshop) {
   target.append(info, heading, gallery.childElementCount ? gallery : missing, certificates, list);
 }
 
-function reviewPanel(item, actions) {
+function reviewPanel(item, decide) {
   const details = document.createElement("details");
   details.className = "admin-review";
   const summary = document.createElement("summary");
@@ -82,10 +89,6 @@ function reviewPanel(item, actions) {
   const status = document.createElement("p");
   status.setAttribute("role", "status");
   details.append(summary, status, result);
-  if (actions) {
-    actions.hidden = true;
-    details.append(actions);
-  }
 
   let loaded = false;
   let loading = false;
@@ -100,9 +103,46 @@ function reviewPanel(item, actions) {
       renderEvidence(result, data);
       loaded = true;
       status.textContent = "";
-      if (actions) {
-        actions.hidden = data.verificationStatus !== "PENDING";
-        if (actions.hidden) status.textContent = "Hồ sơ đã được xử lý. Tải lại danh sách để xem trạng thái mới.";
+      if (decide) {
+        if (!data.user.isActive || (data.verificationStatus !== "PENDING" && !data.pendingIdentity)) {
+          status.textContent = "Hồ sơ không còn chờ duyệt. Tải lại danh sách để xem trạng thái mới.";
+          return;
+        }
+        const form = document.createElement("form");
+        form.className = "account-form";
+        form.innerHTML = `<label>Lý do từ chối<textarea name="reason" required maxlength="2000"></textarea></label>
+          <div class="trade-toolbar">
+            <button class="button button-primary" type="submit" value="APPROVED" formnovalidate>${data.pendingIdentity ? "Duyệt thay đổi" : "Duyệt hồ sơ"}</button>
+            <button class="button button-outline" type="submit" value="REJECTED">Từ chối</button>
+          </div>`;
+        form.addEventListener("submit", async event => {
+          event.preventDefault();
+          const decision = event.submitter?.value ?? "REJECTED";
+          const reason = form.elements.namedItem("reason").value.trim();
+          if (decision === "REJECTED" && !reason) {
+            status.textContent = "Nhập lý do từ chối để xưởng có thể bổ sung hồ sơ.";
+            return;
+          }
+          form.inert = true;
+          try {
+            await decide({ status: decision, expectedVersion: data.reviewVersion, ...(decision === "REJECTED" && { reason }) });
+          } catch (error) {
+            status.textContent = error.message;
+            if (error.status === 409) {
+              form.remove();
+              loaded = false;
+              const reload = document.createElement("button");
+              reload.type = "button";
+              reload.className = "text-button";
+              reload.textContent = "Tải bản hồ sơ mới";
+              reload.addEventListener("click", load);
+              result.append(reload);
+            }
+          } finally {
+            form.inert = false;
+          }
+        });
+        result.append(form);
       }
     } catch (error) {
       status.textContent = error.message;
@@ -131,8 +171,8 @@ export function mountArtisanAdministration(section, account) {
         <form class="account-form">
           <label>Email<input name="email" type="email" required maxlength="255"></label>
           <div class="account-field">
-            <label>Tên đăng nhập (tùy chọn)<input name="username" maxlength="50" pattern="(?=.*[a-zA-Z0-9])[a-zA-Z0-9._\\-]{3,50}" placeholder="Ví dụ: xuong-lua-a" aria-describedby="admin-artisan-username-hint"></label>
-            <span class="field-hint" id="admin-artisan-username-hint">3–50 ký tự không dấu (chữ, số, ., _, -), ít nhất một chữ hoặc số.</span>
+            <label>Tên đăng nhập (tùy chọn)<input name="username" autocapitalize="none" maxlength="32" pattern="[a-zA-Z0-9][a-zA-Z0-9._\\-]{2,31}" placeholder="Ví dụ: xuong-lua-a" aria-describedby="admin-artisan-username-hint"></label>
+            <span class="field-hint" id="admin-artisan-username-hint">3–32 ký tự không dấu (chữ, số, ., _, -), bắt đầu bằng chữ cái hoặc chữ số.</span>
           </div>
           <div class="account-field">
             <label>Mật khẩu ban đầu<input name="password" type="password" autocomplete="new-password" required minlength="12" maxlength="72" aria-describedby="admin-artisan-password-hint"></label>
@@ -152,6 +192,8 @@ export function mountArtisanAdministration(section, account) {
         <label>Trạng thái xưởng
           <select name="workshopStatus">
             <option value="PENDING">Chờ duyệt</option>
+            <option value="IDENTITY_REVIEW">Chờ duyệt thay đổi định danh</option>
+            <option value="REJECTED">Đã từ chối</option>
             <option value="APPROVED">Đang hoạt động</option>
             <option value="SUSPENDED">Đang đình chỉ</option>
           </select>
@@ -198,25 +240,27 @@ export function mountArtisanAdministration(section, account) {
         body.textContent = [item.user.fullName, item.user.username ? "@" + item.user.username : null, item.user.email, item.address].filter(Boolean).join(" · ");
         const actions = document.createElement("div");
         actions.className = "trade-toolbar";
-        const actionOptions = kind === "PENDING"
-          ? [["Duyệt hồ sơ", "/verification", { status: "APPROVED" }, "Đã duyệt hồ sơ."], ["Từ chối", "/verification", { status: "REJECTED" }, "Đã từ chối hồ sơ."]]
-          : kind === "APPROVED"
-            ? [["Đình chỉ xưởng", "/suspension", { isSuspended: true }, "Đã đình chỉ xưởng."]]
-            : [["Mở lại xưởng", "/suspension", { isSuspended: false }, "Đã mở lại xưởng."]];
+        const review = kind === "PENDING" || kind === "IDENTITY_REVIEW";
+        const actionOptions = kind === "APPROVED"
+          ? [["Đình chỉ xưởng", "/suspension", { isSuspended: true }, "Đã đình chỉ xưởng."]]
+          : kind === "SUSPENDED" ? [["Mở lại xưởng", "/suspension", { isSuspended: false }, "Đã mở lại xưởng."]] : [];
         for (const [label, endpoint, body, message] of actionOptions) {
           const button = document.createElement("button");
           button.type = "button";
           button.className = "button button-outline";
           button.textContent = label;
-          button.disabled = kind !== "PENDING" && !item.user.isActive;
+          button.disabled = !item.user.isActive;
           button.addEventListener("click", () => save(actions, async () => {
             await request("/admin/artisans/" + encodeURIComponent(item.id) + endpoint, { method: "PATCH", auth: true, body });
             await load(false, message);
           }));
           actions.append(button);
         }
-        card.append(heading, body, reviewPanel(item, kind === "PENDING" ? actions : null));
-        if (kind !== "PENDING") card.append(actions);
+        card.append(heading, body, reviewPanel(item, review ? async decision => {
+          await request(`/admin/artisans/${encodeURIComponent(item.id)}/verification`, { method: "PATCH", auth: true, body: decision });
+          await load(false, decision.status === "APPROVED" ? "Đã duyệt hồ sơ." : "Đã từ chối hồ sơ.");
+        } : null));
+        if (actionOptions.length) card.append(actions);
         list.append(card);
       }
       status.textContent = message || (list.children.length ? "" : "Chưa có xưởng ở trạng thái này.");

@@ -15,7 +15,8 @@ const categorySlugs = {
 const stageCodes = ["UOM_TO", "MAC_CUI", "DET_LUA", "NHUOM_MAU", "CAN_LANG"];
 const requiredMigrations = [
     "20261108000200_product_pricing_and_sale_units",
-    "20261126000000_user_username",
+    "20261124000000_account_usernames",
+    "20261124120000_resolve_business_findings",
 ];
 const saleUnits = { "mét": "METER", "chiếc": "PIECE", "bộ": "SET", "hộp": "BOX" };
 const workshopEmail = (id) => id + demoWorkshopDomain;

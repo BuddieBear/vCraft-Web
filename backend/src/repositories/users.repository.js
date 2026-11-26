@@ -1,32 +1,48 @@
 import { prisma } from "../database/prisma.js";
-import { lockActiveUserPassword } from "../database/postgresql/row-locks.js";
+import { lockActiveUserPassword, lockWorkshopForUser } from "../database/postgresql/row-locks.js";
 import { createHash } from "node:crypto";
+import { Prisma } from "@prisma/client";
+import { ApiError } from "../middlewares/api-error.js";
 
 export function createBuyer({ email, username = null, fullName, passwordHash }) {
     return prisma.user.create({ data: { email, username, fullName, passwordHash, role: "BUYER" }, select: { id: true, email: true, username: true, fullName: true, role: true } });
 }
 export function createArtisanAccount(userId, account, profile) {
     return prisma.$transaction(async (tx) => {
-        const user = await tx.user.create({ data: { ...account, role: "ARTISAN", artisanProfile: { create: profile } }, select: { id: true, email: true, username: true, fullName: true, role: true, artisanProfile: true } });
+        const user = await tx.user.create({ data: { ...account, username: account.username ?? null, role: "ARTISAN", artisanProfile: { create: profile } }, select: { id: true, email: true, username: true, fullName: true, role: true, artisanProfile: true } });
         await tx.auditLog.create({ data: { userId, action: "ARTISAN_CREATED", targetTable: "users", targetRecordId: user.id } });
         return user;
     });
 }
 export function listAdminArtisans({ skip, take, status }) {
-    const approved = status === "APPROVED" || status === "SUSPENDED";
+    const identity = status === "IDENTITY_REVIEW";
+    const approved = identity || status === "APPROVED" || status === "SUSPENDED";
     return prisma.artisanProfile.findMany({
         where: {
             verificationStatus: approved ? "APPROVED" : status,
-            ...(approved && { isSuspended: status === "SUSPENDED" }),
+            ...(identity ? { pendingIdentity: { not: Prisma.DbNull } } : approved && { isSuspended: status === "SUSPENDED" }),
         },
-        select: { id: true, userId: true, workshopName: true, address: true, createdAt: true, user: { select: { email: true, username: true, fullName: true, isActive: true } } },
+        select: { id: true, userId: true, workshopName: true, address: true, createdAt: true, rejectionReason: true, user: { select: { email: true, username: true, fullName: true, isActive: true } } },
         orderBy: [{ createdAt: "asc" }, { id: "asc" }], skip, take,
     });
 }
-export function decideArtisan(adminId, id, verificationStatus) {
+export function decideArtisan(adminId, id, { status, expectedVersion, reason }) {
     return prisma.$transaction(async (tx) => {
-        const result = await tx.artisanProfile.updateMany({ where: { id, verificationStatus: "PENDING" }, data: { verificationStatus, verifiedAt: verificationStatus === "APPROVED" ? new Date() : null } });
-        if (result.count) await tx.auditLog.create({ data: { userId: adminId, action: `ARTISAN_${verificationStatus}`, targetTable: "artisan_profiles", targetRecordId: id } });
+        const workshop = await tx.artisanProfile.findFirst({ where: { id, user: { isActive: true, role: "ARTISAN" } } });
+        const identity = workshop?.verificationStatus === "APPROVED" && workshop.pendingIdentity;
+        if (!identity && workshop?.verificationStatus !== "PENDING") return { count: 0 };
+        const accepted = status === "APPROVED";
+        const data = {
+            reviewVersion: { increment: 1 }, rejectionReason: accepted ? null : reason,
+            ...(identity ? { pendingIdentity: Prisma.DbNull, ...(accepted && workshop.pendingIdentity) } : { verificationStatus: status }),
+            ...(accepted ? { verifiedAt: new Date() } : identity ? {} : { verifiedAt: null }),
+        };
+        const result = await tx.artisanProfile.updateMany({ where: { id, reviewVersion: expectedVersion, verificationStatus: workshop.verificationStatus, user: { isActive: true, role: "ARTISAN" } }, data });
+        if (!result.count) throw new ApiError(409, "STALE_WORKSHOP_REVIEW", "Hồ sơ vừa thay đổi. Mở lại minh chứng trước khi xét duyệt.");
+        await tx.auditLog.create({ data: {
+            userId: adminId, action: `ARTISAN_${identity ? "IDENTITY_" : ""}${status}`, targetTable: "artisan_profiles", targetRecordId: id,
+            metadata: { expectedVersion, ...(reason && { reason }), ...(identity && { proposedIdentity: workshop.pendingIdentity }) },
+        } });
         return result;
     });
 }
@@ -64,7 +80,14 @@ export function findActiveCredentialsByIdentifier(identifier) {
 const profileFields = { id: true, fullName: true, email: true, username: true, phone: true, avatarUrl: true, role: true, artisanProfile: { select: { isSuspended: true } } };
 const hashToken = (token) => createHash("sha256").update(token).digest("hex");
 export function findUserById(id) { return prisma.user.findUnique({ where: { id, isActive: true }, select: profileFields }); }
-export function updateUserProfile(id, data) { return prisma.user.update({ where: { id, isActive: true }, data, select: profileFields }); }
+export function updateUserProfile(id, data) {
+    return prisma.$transaction(async tx => {
+        const [workshop] = data.fullName !== undefined || data.phone !== undefined ? await lockWorkshopForUser(tx, id) : [];
+        const profile = await tx.user.update({ where: { id, isActive: true }, data, select: profileFields });
+        if (workshop) await tx.artisanProfile.update({ where: { id: workshop.id }, data: { reviewVersion: { increment: 1 } } });
+        return profile;
+    });
+}
 export function findPasswordHashById(id) { return prisma.user.findUnique({ where: { id, isActive: true }, select: { passwordHash: true } }); }
 async function lockActiveUser(tx, id) {
     const [user] = await lockActiveUserPassword(tx, id);

@@ -1,4 +1,4 @@
-import { mediaUrl } from "../api/http.js";
+import { setEvidenceImage } from "../api/http.js";
 import { icon } from "../components/ui.js";
 
 const date = new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium", timeZone: "Asia/Ho_Chi_Minh" });
@@ -56,14 +56,11 @@ function renderStageNote(target, log) {
 
 function stageMedia(log) {
   const media = document.createDocumentFragment();
-  const evidence = log.evidenceImageUrls.map(mediaUrl).filter(Boolean);
-  for (const src of evidence) {
+  for (const path of log.evidenceImageUrls) {
     const image = document.createElement("img");
-    image.src = src;
     image.alt = `Minh chứng công đoạn ${log.stageTitle}`;
-    image.loading = "lazy";
     image.referrerPolicy = "no-referrer";
-    media.append(image);
+    if (setEvidenceImage(image, path)) media.append(image);
   }
   return media;
 }

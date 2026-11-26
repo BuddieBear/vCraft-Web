@@ -59,6 +59,7 @@ export async function mountReferenceShowroom(section, slug) {
         <dt>Địa chỉ tại làng nghề</dt><dd data-address></dd>
         <dt>Giờ làm việc</dt><dd data-hours></dd>
         <dt>Điểm đến</dt><dd data-position></dd>
+        <dt>Nguồn thông tin</dt><dd data-source></dd>
       </dl>
       <div class="trade-toolbar" data-contact></div>
     </article>
@@ -82,6 +83,8 @@ export async function mountReferenceShowroom(section, slug) {
     info.querySelector("[data-position]").textContent = locationInfo.areaPoint
       ? "Ghim khu vực theo hồ sơ công khai. Xác nhận địa điểm cụ thể trước khi đi."
       : Number.isFinite(locationInfo.latitude) ? "Có ghim trên bản đồ làng nghề." : "Chưa có tọa độ công khai.";
+    info.querySelector("[data-source]").textContent = locationInfo.source
+      ? new URL(locationInfo.source).hostname.replace(/^www\./, "") : "Chưa công bố";
     const contact = info.querySelector("[data-contact]");
     for (const [label, href] of [
       ["Xem bản đồ làng nghề", sitePaths.map],

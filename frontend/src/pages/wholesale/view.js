@@ -1,16 +1,19 @@
 import { request } from "../../api/http.js";
 import { formatPrice } from "../../components/ui.js";
+import { vietnamToday } from "../../data/input-values.js";
+import { allocatedPriceCents, decimalFromCents, moneyCents } from "../../data/quote-pricing.js";
 
 export const labels = {
   DRAFT: "Bản nháp riêng", PENDING_DISPATCH: "Chờ Ban quản lý điều phối", SENT_TO_ARTISANS: "Đã gửi", ARTISANS_BIDDING: "Đang nhận báo giá",
   BUYER_ACCEPTED: "Đã chốt báo giá", ASSIGNED: "Đã phân công", IN_PRODUCTION: "Đang sản xuất",
   READY_FOR_DELIVERY: "Sẵn sàng giao", COMPLETED: "Hoàn thành", DELIVERED: "Đã giao", CANCELLED: "Đã hủy",
-  SUBMITTED: "Đã gửi", ACCEPTED: "Đã chọn", REJECTED: "Không được chọn",
+  SUBMITTED: "Đã gửi", ACCEPTED: "Đã chọn", REJECTED: "Không được chọn", WITHDRAWN: "Đã rút",
 };
 const quoteSteps = ["DRAFT", "SENT_TO_ARTISANS", "ARTISANS_BIDDING", "BUYER_ACCEPTED", "IN_PRODUCTION", "DELIVERED"];
 export const hasQuoteJournal = status => quoteSteps.indexOf(status) >= quoteSteps.indexOf("BUYER_ACCEPTED");
 
 export function quoteProgress(status) {
+  if (status === "CANCELLED") return paragraph(labels[status]);
   const current = quoteSteps.indexOf(status === "PENDING_DISPATCH" ? "DRAFT" : status);
   const list = document.createElement("ol");
   list.className = "quote-progress";
@@ -26,6 +29,20 @@ export function quoteProgress(status) {
 }
 
 export const displayDate = new Intl.DateTimeFormat("vi-VN", { timeZone: "UTC", dateStyle: "medium" });
+export const displayLogDate = new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", dateStyle: "medium" });
+export const quoteExpired = quote => quote.deadline.slice(0, 10) < vietnamToday();
+export const quoteLabel = quote => ["DRAFT", "PENDING_DISPATCH", "SENT_TO_ARTISANS", "ARTISANS_BIDDING"].includes(quote.status) && quoteExpired(quote) ? "Đã hết hạn" : labels[quote.status];
+export function allocationPreview(output, quote, bids, allocations) {
+  if (!allocations.length || allocations.some(item => !Number.isInteger(item.quantity) || item.quantity <= 0) || allocations.reduce((sum, item) => sum + item.quantity, 0) !== quote.targetQuantity) {
+    output.textContent = `Chia đủ ${quote.targetQuantity} sản phẩm để xem tổng tiền.`;
+    return;
+  }
+  const prices = allocations.map(item => allocatedPriceCents(bids.find(bid => bid.id === item.bidId).proposedPrice, item.quantity, quote.targetQuantity));
+  const total = prices.reduce((sum, value) => sum + value, 0n);
+  output.textContent = `Tổng tiền phân công · ${formatPrice(decimalFromCents(total))}`;
+  if (prices.includes(0n)) output.textContent += " · Có phần hàng dưới 0,01 ₫.";
+  if (quote.maxBudget != null && total > moneyCents(quote.maxBudget)) output.textContent += " · Vượt ngân sách tối đa.";
+}
 export const get = async (path, signal) => (await request(path, { auth: true, signal })).data;
 export const write = (path, body, method = "POST") => request(path, { method, body, auth: true });
 

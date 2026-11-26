@@ -8,8 +8,7 @@ import { recipientPhoneError, validRecipientPhone } from "../../../frontend/src/
 import { createBuyer, createAuthSession, createPasswordResetToken, consumePasswordResetToken, findActiveCredentialsByIdentifier, findActiveSession, findPasswordHashById, findUserById, findValidPasswordResetToken, revokeAllAuthSessions, revokeAuthSession, updatePasswordAndRevokeSessions, updateUserProfile } from "../repositories/users.repository.js";
 
 const dummyHash = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6Ttx1g0skAUsV/2jU3BZid7jKkDmO";
-const usernamePattern = /^[a-z0-9._-]{3,50}$/;
-const usernameAlnum = /[a-z0-9]/;
+const usernamePattern = /^[a-z0-9][a-z0-9._-]{2,31}$/;
 
 export function validatePassword(password) {
     if (typeof password !== "string" || Buffer.byteLength(password, "utf8") < 12 || Buffer.byteLength(password, "utf8") > 72) throw new ApiError(400, "INVALID_PASSWORD", "Mật khẩu phải từ 12 đến 72 byte UTF-8.");
@@ -20,7 +19,7 @@ export function normalizeUsername(username) {
     if (typeof username !== "string") throw new ApiError(400, "INVALID_USERNAME", "Tên đăng nhập không hợp lệ.");
     const trimmed = username.trim().toLowerCase();
     if (!trimmed) return null;
-    if (!usernamePattern.test(trimmed) || !usernameAlnum.test(trimmed)) throw new ApiError(400, "INVALID_USERNAME", "Tên đăng nhập gồm 3–50 ký tự không dấu (chữ, số, ., _, -) và có ít nhất một chữ cái hoặc chữ số.");
+    if (!usernamePattern.test(trimmed)) throw new ApiError(400, "INVALID_USERNAME", "Tên đăng nhập gồm 3–32 ký tự không dấu (chữ, số, ., _, -), bắt đầu bằng chữ cái hoặc chữ số.");
     return trimmed;
 }
 
@@ -40,10 +39,10 @@ export async function login({ identifier, email, username, password }) {
     if (!lookup) throw new ApiError(400, "INVALID_CREDENTIALS", "Nhập email hoặc tên đăng nhập.");
     const user = await findActiveCredentialsByIdentifier(lookup);
     const valid = await compare(password, user?.passwordHash ?? dummyHash);
-    if (!user || !valid) throw new ApiError(401, "INVALID_CREDENTIALS", "Email/tên đăng nhập hoặc mật khẩu không đúng.");
+    if (!user || !valid) throw new ApiError(401, "INVALID_CREDENTIALS", "Email, tên đăng nhập hoặc mật khẩu không đúng.");
     const issued = issueToken(user);
     const session = await createAuthSession({ userId: user.id, expectedHash: user.passwordHash, jti: issued.jti, expiresAt: new Date(Date.now() + 3600_000) });
-    if (!session) throw new ApiError(401, "INVALID_CREDENTIALS", "Email/tên đăng nhập hoặc mật khẩu không đúng.");
+    if (!session) throw new ApiError(401, "INVALID_CREDENTIALS", "Email, tên đăng nhập hoặc mật khẩu không đúng.");
     const { jti, ...response } = issued;
     return response;
 }

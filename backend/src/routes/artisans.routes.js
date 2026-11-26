@@ -3,7 +3,7 @@ import { z } from "zod";
 import { validate } from "../middlewares/validate-request.js";
 import { ApiError } from "../middlewares/api-error.js";
 import { byId, listPage, pageQuery, urls, mediaUrl } from "./schemas.js";
-import { getArtisan, listArtisans, getMyWorkshop, updateMyWorkshop, createCertificate, removeCertificate } from "../services/artisans.service.js";
+import { getArtisan, listArtisans, getMyWorkshop, updateMyWorkshop, createCertificate, removeCertificate, resubmitMyWorkshop } from "../services/artisans.service.js";
 import { authenticate } from "../middlewares/authenticate.js";
 import { authorize } from "../middlewares/authorize.js";
 import { findReferenceProduct, findReferenceWorkshop, workshopReferences } from "../data/workshop-references.js";
@@ -27,6 +27,7 @@ router.get("/reference/:slug", (req, res) => {
 });
 router.get("/me", ...own, async (req, res) => res.json({ data: await getMyWorkshop(req.user.id) }));
 router.patch("/me", ...own, validate({ body: z.object({ workshopName: z.string().trim().min(1).max(200).optional(), artisanTitle: z.string().max(150).nullable().optional(), familyHistory: z.string().max(20000).nullable().optional(), experienceYears: z.number().int().min(0).max(32767).nullable().optional(), address: z.string().trim().min(1).max(255).optional(), latitude: z.number().min(-90).max(90).optional(), longitude: z.number().min(-180).max(180).optional(), openingHours: z.string().max(100).optional(), isOpenForVisitors: z.boolean().optional(), coverImageUrl: mediaUrl.nullable().optional(), galleryImages: urls.optional() }).strict().refine((v) => Object.keys(v).length > 0) }), async (req, res) => res.json({ data: await updateMyWorkshop(req.user.id, req.validatedBody) }));
+router.post("/me/resubmit", ...own, async (req, res) => res.json({ data: await resubmitMyWorkshop(req.user.id) }));
 router.post("/me/certificates", ...own, validate({ body: z.object({ title: z.string().trim().min(1).max(200), issuingAuthority: z.string().trim().min(1).max(200), issuedYear: z.number().int().min(1800).max(new Date().getFullYear()), certificateImageUrl: mediaUrl }).strict() }), async (req, res) => res.status(201).json({ data: await createCertificate(req.user.id, req.validatedBody) }));
 router.delete("/me/certificates/:id", ...own, validate({ params: byId }), async (req, res) => { await removeCertificate(req.user.id, req.validatedParams.id); res.status(204).end(); });
 const storefront = z.literal("true").optional();

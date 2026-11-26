@@ -31,3 +31,11 @@ export function lockTradingArtisan(tx, userId) {
         FOR SHARE OF a
     `;
 }
+
+export function lockWorkshopForUser(tx, userId) {
+    return tx.$queryRaw`
+        SELECT a.id FROM artisan_profiles a JOIN users u ON u.id = a.user_id
+        WHERE u.id = ${userId}::uuid AND u.is_active AND u.role = 'ARTISAN'
+        FOR UPDATE OF a
+    `;
+}

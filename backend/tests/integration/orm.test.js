@@ -18,6 +18,7 @@ const persistenceTest = fileURLToPath(new URL("./persistence.test.js", import.me
 const commerceTest = fileURLToPath(new URL("./commerce.test.js", import.meta.url));
 const apiTest = fileURLToPath(new URL("./api.test.js", import.meta.url));
 const featureTest = fileURLToPath(new URL("./features.test.js", import.meta.url));
+const authUsernameTest = fileURLToPath(new URL("./auth-username.test.js", import.meta.url));
 
 test("fresh ORM migration, idempotent seed, pricing and rating rollups", { timeout: 120_000 }, async () => {
     const { url, name } = testDatabase();
@@ -116,6 +117,7 @@ test("fresh ORM migration, idempotent seed, pricing and rating rollups", { timeo
         run("--test", commerceTest);
         run("--test", apiTest);
         run("--test", featureTest);
+        run("--test", authUsernameTest);
     } finally {
         await prisma.$disconnect();
     }

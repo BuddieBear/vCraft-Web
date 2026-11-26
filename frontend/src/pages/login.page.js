@@ -152,8 +152,8 @@ export function mountAccount(dialog, trigger) {
             <form class="account-form" data-profile-form>
               <label>Họ tên<input name="fullName" autocomplete="name" maxlength="120" required></label>
               <div class="account-field">
-                <label>Tên đăng nhập<input name="username" autocomplete="username" maxlength="50" pattern="(?=.*[a-zA-Z0-9])[a-zA-Z0-9._\\-]{3,50}" placeholder="Ví dụ: minh.nhaxa" aria-describedby="account-username-hint"></label>
-                <span class="field-hint" id="account-username-hint">3–50 ký tự không dấu (chữ, số, ., _, -), ít nhất một chữ hoặc số.</span>
+                <label>Tên đăng nhập<input name="username" autocomplete="username" autocapitalize="none" maxlength="32" pattern="[a-zA-Z0-9][a-zA-Z0-9._\\-]{2,31}" placeholder="Ví dụ: minh.nhaxa" aria-describedby="account-username-hint"></label>
+                <span class="field-hint" id="account-username-hint">3–32 ký tự không dấu (chữ, số, ., _, -), bắt đầu bằng chữ cái hoặc chữ số.</span>
               </div>
               <label>Số điện thoại<input name="phone" type="tel" autocomplete="tel" maxlength="20" placeholder="Ví dụ: 0912345678"></label>
               <button class="button button-primary" type="submit">Lưu thông tin</button>
@@ -218,8 +218,8 @@ export function mountAccount(dialog, trigger) {
       const phone = values.phone.trim();
       const fieldErrors = [];
       if (!fullName) fieldErrors.push({ name: "fullName", message: "Họ tên không được để trống." });
-      if (username && !/[a-zA-Z0-9]/.test(username)) {
-        fieldErrors.push({ name: "username", message: "Tên đăng nhập phải chứa ít nhất một chữ cái hoặc chữ số." });
+      if (username && !/^[a-zA-Z0-9][a-zA-Z0-9._-]{2,31}$/.test(username)) {
+        fieldErrors.push({ name: "username", message: "Tên đăng nhập gồm 3–32 ký tự không dấu (chữ, số, ., _, -), bắt đầu bằng chữ cái hoặc chữ số." });
       }
       if (phone && !validRecipientPhone(phone)) {
         fieldErrors.push({ name: "phone", message: recipientPhoneError });

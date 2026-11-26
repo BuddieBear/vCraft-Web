@@ -19,9 +19,9 @@ function validationFields(issues) {
         }
         if (issue.code === "too_big" && issue.origin === "string") message = `Nhập tối đa ${issue.maximum} ký tự.`;
         if (name === "maxBudget") message = quoteBudgetError;
-        if (name === "phone") message = recipientPhoneError;
+        if (name === "phone" || name === "recipientPhone") message = recipientPhoneError;
         if ((name === "password" || name === "newPassword") && issue.code === "custom") message = "Mật khẩu phải từ 12 đến 72 byte UTF-8.";
-        if (name === "username" && issue.code !== "too_small" && issue.code !== "too_big") message = "Tên đăng nhập gồm 3–50 ký tự không dấu (chữ, số, ., _, -) và có ít nhất một chữ cái hoặc chữ số.";
+        if (name === "username" && issue.code !== "too_small" && issue.code !== "too_big") message = "Tên đăng nhập gồm 3–32 ký tự không dấu (chữ, số, ., _, -), bắt đầu bằng chữ cái hoặc chữ số.";
         if (name === "identifier" && (issue.code === "too_small" || issue.code === "custom")) message = "Nhập email hoặc tên đăng nhập.";
         fields.set(name, { name, message });
     }
@@ -56,6 +56,7 @@ export function errorHandler(error, _request, response, next) {
         return response.status(400).json({ error: { code: "INVALID_REQUEST", message, fields: [{ name: "deadline", message }] } });
     }
     if (error.message === "Stale product stock") return response.status(409).json({ error: { code: "STALE_STOCK", message: "Tồn kho đã thay đổi. Hãy tải lại sản phẩm trước khi lưu." } });
+    if (error.message === "Stale product revision") return response.status(409).json({ error: { code: "STALE_PRODUCT", message: "Sản phẩm đã thay đổi. Hãy tải lại trước khi lưu." } });
     if (error.message === "Stock limit exceeded on cancellation") return response.status(409).json({ error: { code: "STOCK_LIMIT_EXCEEDED", message: "Hoàn tồn sẽ vượt giới hạn tồn kho. Hãy kiểm tra lại tồn kho trước khi hủy đơn." } });
     if (error.message === "Invalid payment confirmation") return response.status(409).json({ error: { code: "PAYMENT_CONFIRMATION_REQUIRED", message: "Kiểm tra và xác nhận đã thu tiền trước khi hoàn tất giao hàng COD." } });
     if (error instanceof multer.MulterError) return response.status(error.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({ error: { code: "INVALID_UPLOAD", message: "Tệp tải lên vượt giới hạn hoặc không hợp lệ." } });
@@ -70,7 +71,7 @@ export function errorHandler(error, _request, response, next) {
     if (isPersistenceConflict(error)) {
         if (conflictTargetIncludes(error, "username")) {
             const message = "Tên đăng nhập này đã được sử dụng.";
-            return response.status(409).json({ error: { code: "CONFLICT", message, fields: [{ name: "username", message }] } });
+            return response.status(409).json({ error: { code: "USERNAME_TAKEN", message, fields: [{ name: "username", message }] } });
         }
         if (conflictTargetIncludes(error, "email")) {
             const message = "Email này đã được đăng ký.";

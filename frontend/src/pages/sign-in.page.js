@@ -115,8 +115,11 @@ function validNewPassword(form, name, value) {
 
 function showReset(token) {
   resetToken = token;
+  resetConfirm.reset();
+  clearFormErrors(resetConfirm);
   form.hidden = resetRequest.hidden = toggle.hidden = true;
   resetConfirm.hidden = false;
+  forgot.hidden = false;
   forgot.textContent = "Quay lại đăng nhập";
   forgot.dataset.mode = "back";
   title.textContent = "Đặt lại mật khẩu";
@@ -126,10 +129,10 @@ function showReset(token) {
 }
 
 function consumeResetHash() {
-  const resetLink = new URLSearchParams(location.hash.slice(1)).get("reset");
-  if (!resetLink) return;
+  const token = new URLSearchParams(location.hash.slice(1)).get("reset");
+  if (!token) return;
   history.replaceState(null, "", location.pathname + location.search);
-  if (/^[A-Za-z0-9_-]{20,200}$/.test(resetLink)) showReset(resetLink);
+  if (/^[A-Za-z0-9_-]{20,200}$/.test(token)) showReset(token);
 }
 consumeResetHash();
 window.addEventListener("hashchange", consumeResetHash);

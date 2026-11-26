@@ -1,5 +1,5 @@
 export function findDeliveredRetailOrder(tx, orderId, buyerId) {
-    return tx.retailOrder.findFirst({ where: { id: orderId, buyerId, status: "DELIVERED", paymentStatus: "PAID" }, include: { items: { select: { productId: true, artisanId: true } } } });
+    return tx.retailOrder.findFirst({ where: { id: orderId, buyerId, status: "DELIVERED", paymentStatus: "PAID" }, include: { items: { select: { productId: true, artisanId: true } }, fulfillments: { where: { status: "DELIVERED" }, select: { artisanId: true } } } });
 }
 
 export function findDeliveredQuote(tx, quoteId, buyerId) {
@@ -15,7 +15,7 @@ export function createReview(data) {
         let eligible = false;
         if (data.retailOrderId) {
             const order = await findDeliveredRetailOrder(tx, data.retailOrderId, data.userId);
-            eligible = !!order?.items.some((item) => item.artisanId === data.artisanId && (data.targetType === "ARTISAN" || item.productId === data.productId));
+            eligible = !!order?.fulfillments.some(part => part.artisanId === data.artisanId) && order.items.some((item) => item.artisanId === data.artisanId && (data.targetType === "ARTISAN" || item.productId === data.productId));
         } else {
             const quote = await findDeliveredQuote(tx, data.quotationRequestId, data.userId);
             eligible = !!quote?.assignments.some((assignment) => assignment.artisanId === data.artisanId && (data.targetType === "ARTISAN" || assignment.batches.some((batch) => batch.productId === data.productId)));

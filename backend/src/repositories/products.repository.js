@@ -68,9 +68,9 @@ export function listPublicProducts({ skip, take, category, artisanId, q, sort, s
     });
 }
 
-export function findPublicProductBySlug(slug, { storefront = false } = {}) {
-    return prisma.product.findUnique({
-        where: { slug, ...publicProductFilter(storefront) },
+export function findPublicProductBySlug(slug, { storefront = false, historical = false } = {}) {
+    return prisma.product.findFirst({
+        where: { ...publicProductFilter(storefront), ...(historical ? { slugAliases: { some: { slug } } } : { slug }) },
         select: {
             ...summaryFields,
             description: true,
@@ -91,7 +91,7 @@ export function hideProductOwnedByUser(transaction, { productId, userId }) {
             isPublished: true,
             artisan: { userId, user: { isActive: true } },
         },
-        data: { isPublished: false },
+        data: { isPublished: false, revision: { increment: 1 } },
     });
 }
 
@@ -114,14 +114,15 @@ export async function createOwnedProduct(userId, data) {
 export function listOwnedProducts(userId, { skip, take }) {
     return prisma.product.findMany({ where: { artisan: { userId, user: { isActive: true, role: "ARTISAN" } } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip, take });
 }
-export async function replaceOwnedProduct(userId, id, { expectedStockQuantity, ...data }) {
+export async function replaceOwnedProduct(userId, id, { expectedStockQuantity, expectedRevision, ...data }) {
     return prisma.$transaction(async (tx) => {
         const [workshop] = await lockTradingArtisan(tx, userId);
         if (!workshop) return null;
         const own = { id, artisanId: workshop.id };
-        const result = await tx.product.updateMany({ where: { ...own, stockQuantity: expectedStockQuantity }, data });
+        const result = await tx.product.updateMany({ where: { ...own, stockQuantity: expectedStockQuantity, revision: expectedRevision }, data: { ...data, revision: { increment: 1 } } });
         if (result.count) return tx.product.findUnique({ where: { id } });
-        if (await tx.product.findFirst({ where: own, select: { id: true } })) throw new Error("Stale product stock");
+        const current = await tx.product.findFirst({ where: own, select: { stockQuantity: true } });
+        if (current) throw new Error(current.stockQuantity !== expectedStockQuantity ? "Stale product stock" : "Stale product revision");
         return null;
     });
 }

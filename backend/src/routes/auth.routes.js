@@ -8,7 +8,7 @@ import { mediaUrl } from "./schemas.js";
 import { validRecipientPhone } from "../../../frontend/src/data/input-values.js";
 const router = Router();
 const email = z.string().trim().email().max(255);
-const username = z.string().trim().regex(/^[a-zA-Z0-9._-]{3,50}$/).refine((v) => /[a-zA-Z0-9]/.test(v));
+const username = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{2,31}$/);
 const optionalUsername = z.string().trim().pipe(z.union([username, z.literal("")])).nullable().optional();
 const optionalPhone = z.string().trim().max(20).refine((v) => !v || validRecipientPhone(v)).nullable().optional();
 const optionalAvatarUrl = z.string().trim().pipe(z.union([mediaUrl, z.literal("")])).nullable().optional();

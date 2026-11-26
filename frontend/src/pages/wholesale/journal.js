@@ -1,4 +1,5 @@
 import { renderTimeline } from "../traceability.page.js";
+import { formatPrice } from "../../components/ui.js";
 import { card, displayDate, get, labels, paragraph, quoteProgress, workshopName } from "./view.js";
 
 export async function buyerJournalView(root, { expand, quoteId, signal }) {
@@ -14,7 +15,7 @@ export async function buyerJournalView(root, { expand, quoteId, signal }) {
     section.className = "trade-batch";
     const title = document.createElement("h4");
     title.textContent = workshopName(assignment);
-    section.append(title, paragraph(`${labels[assignment.status]} · ${assignment.allocatedQuantity} sản phẩm`));
+    section.append(title, paragraph(`${labels[assignment.status]} · ${assignment.allocatedQuantity} sản phẩm · ${formatPrice(assignment.agreedPrice)}`));
     if (!assignment.batches.length) section.append(paragraph("Xưởng chưa đăng lô sản xuất cho đơn này."));
     for (const [index, batch] of assignment.batches.entries()) {
       expand(section, {

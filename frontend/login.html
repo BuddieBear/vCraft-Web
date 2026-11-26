@@ -18,8 +18,8 @@
       <form class="account-form" id="sign-in-form" method="post">
         <label id="name-field" hidden>Họ tên<input name="fullName" autocomplete="name" maxlength="120" disabled></label>
         <div class="account-field" id="username-field" hidden>
-          <label>Tên đăng nhập (tùy chọn)<input name="username" autocomplete="username" maxlength="50" pattern="(?=.*[a-zA-Z0-9])[a-zA-Z0-9._\-]{3,50}" placeholder="Ví dụ: minh.nhaxa" aria-describedby="register-username-hint" disabled></label>
-          <span class="field-hint" id="register-username-hint">3–50 ký tự không dấu (chữ, số, ., _, -), ít nhất một chữ hoặc số.</span>
+          <label>Tên đăng nhập (tùy chọn)<input name="username" autocomplete="username" autocapitalize="none" maxlength="32" pattern="[a-zA-Z0-9][a-zA-Z0-9._\-]{2,31}" placeholder="Ví dụ: minh.nhaxa" aria-describedby="register-username-hint" disabled></label>
+          <span class="field-hint" id="register-username-hint">3–32 ký tự không dấu (chữ, số, ., _, -), bắt đầu bằng chữ cái hoặc chữ số.</span>
         </div>
         <label id="identifier-field"><span data-identifier-label>Email hoặc tên đăng nhập</span><input name="identifier" type="text" autocomplete="username" maxlength="255" placeholder="Nhập email hoặc username" required></label>
         <div class="account-field">

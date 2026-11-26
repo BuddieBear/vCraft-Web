@@ -3,6 +3,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../database/prisma.js";
 import { lockRetailOrder } from "../database/postgresql/row-locks.js";
 import { tradingWorkshop } from "./artisans.repository.js";
+import { ApiError } from "../middlewares/api-error.js";
+import { retailStatusLabels, retailOrderLink } from "../../../frontend/src/data/retail-status.js";
 
 export function findCheckoutBuyer(tx, userId) {
         return tx.user.findFirst({ where: { id: userId, isActive: true, role: "BUYER" }, select: { id: true } });
@@ -43,11 +45,18 @@ export function setCartItem(userId, productId, quantity) {
     });
 }
 
-export function checkoutOrder(userId, details) {
+export function checkoutOrder(userId, details, confirmedItems) {
     return prisma.$transaction(async (tx) => {
         if (!await findCheckoutBuyer(tx, userId)) throw new Error("Buyer is not active");
         const items = await findCheckoutItems(tx, userId);
         if (!items.length) throw new Error("Cart is empty");
+        if (confirmedItems !== undefined) {
+            const confirmed = new Map(confirmedItems.map(item => [item.productId, item]));
+            if (confirmed.size !== items.length || confirmedItems.length !== items.length || items.some(({ product, quantity }) => {
+                const previous = confirmed.get(product.id);
+                return !previous || previous.quantity !== quantity || !product.price?.equals(previous.unitPrice);
+            })) throw new ApiError(409, "CART_CHANGED", "Giỏ hàng hoặc giá đã đổi. Hãy kiểm tra lại trước khi đặt hàng.");
+        }
         let total = new Prisma.Decimal(0);
         const lines = [];
         for (const item of items) {
@@ -103,7 +112,7 @@ export function listBuyerOrders(userId, { skip = 0, take = 24 } = {}) {
         });
 }
 export function findBuyerOrder(userId, id) {
-        return prisma.retailOrder.findFirst({ where: { id, buyerId: userId, buyer: { isActive: true, role: "BUYER" } }, include: { items: true, fulfillments: fulfillmentWithWorkshop } });
+        return prisma.retailOrder.findFirst({ where: { id, buyerId: userId, buyer: { isActive: true, role: "BUYER" } }, include: { items: { include: lineWithName }, fulfillments: fulfillmentWithWorkshop, reviews: { select: { targetType: true, productId: true, artisanId: true } } } });
 }
 export async function listArtisanOrders(userId, { skip, take, status }) {
     const own = { artisan: assignedArtisan(userId) };
@@ -118,13 +127,32 @@ export async function listArtisanOrders(userId, { skip, take, status }) {
         orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip, take,
     });
     return orders.flatMap(({ fulfillments: [part], ...order }) => part ? [{
-        ...order, ...part, totalAmount: order.items.reduce((total, item) => total.add(item.subtotal), new Prisma.Decimal(0)),
+        ...order, ...part, totalAmount: part.status === "CANCELLED" ? new Prisma.Decimal(0) : order.items.reduce((total, item) => total.add(item.subtotal), new Prisma.Decimal(0)),
     }] : []);
 }
 export function listAdminOrders({ skip, take, status }) {
-        return prisma.retailOrder.findMany({ where: status ? { status } : {}, include: { fulfillments: fulfillmentWithWorkshop }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip, take });
+        return prisma.retailOrder.findMany({ where: status ? { status } : {}, include: { fulfillments: fulfillmentWithWorkshop, items: { include: lineWithName } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip, take });
 }
 const progress = ["PENDING", "CONFIRMED", "SHIPPING", "DELIVERED"];
+const cancellable = part => ["PENDING", "CONFIRMED"].includes(part.status) && part.paymentStatus === "UNPAID";
+
+async function restoreStock(tx, items) {
+    for (const item of items) {
+        const restored = await tx.product.updateMany({
+            where: { id: item.productId, stockQuantity: { lte: 2147483647 - item.quantity } },
+            data: { stockQuantity: { increment: item.quantity } },
+        });
+        if (!restored.count) throw new Error("Stock limit exceeded on cancellation");
+    }
+}
+
+function notifyBuyer(tx, order, status, workshopName) {
+    return tx.notification.create({ data: {
+        userId: order.buyerId, title: "Tiến độ đơn bán lẻ",
+        message: `${order.orderCode}${workshopName ? ` · ${workshopName}` : ""}: ${retailStatusLabels[status]}`,
+        type: "ORDER_STATUS", linkUrl: retailOrderLink(order.id),
+    } });
+}
 
 function nextPayment(order, part, status, paymentCollected) {
     if (progress.indexOf(status) !== progress.indexOf(part.status) + 1 || part.status === "CANCELLED") {
@@ -143,26 +171,29 @@ export function transitionWorkshopOrder(actor, orderId, artisanId, status, payme
         if (actor.role !== "ARTISAN" && actor.role !== "ADMIN") return null;
         const part = await tx.retailFulfillment.findFirst({
             where: { orderId, artisanId, ...(actor.role === "ARTISAN" && { artisan: assignedArtisan(actor.id) }) },
-            include: { order: { include: { fulfillments: true } } },
+            include: { order: { include: { fulfillments: true, items: { orderBy: { productId: "asc" } } } } },
         });
         if (!part) return null;
         const { order } = part;
-        const paymentStatus = nextPayment(order, part, status, paymentCollected);
+        if (status === "CANCELLED") {
+            if (paymentCollected || !cancellable(part)) throw new Error("Invalid order transition");
+            await restoreStock(tx, order.items.filter(item => item.artisanId === artisanId));
+        }
+        const paymentStatus = status === "CANCELLED" ? part.paymentStatus : nextPayment(order, part, status, paymentCollected);
         const updated = await tx.retailFulfillment.update({
             where: { orderId_artisanId: { orderId, artisanId } },
             data: { status, paymentStatus },
             include: { artisan: { select: { workshopName: true } } },
         });
-        const parts = order.fulfillments.map(part => part.artisanId === artisanId ? updated : part);
-        const orderStatus = progress.find(status => parts.some(part => part.status === status));
+        const parts = order.fulfillments.map(part => part.artisanId === artisanId ? updated : part).filter(part => part.status !== "CANCELLED");
+        const activeArtisans = new Set(parts.map(part => part.artisanId));
+        const orderStatus = progress.find(status => parts.some(part => part.status === status)) || "CANCELLED";
         await tx.retailOrder.update({ where: { id: orderId }, data: {
             status: orderStatus,
-            ...(parts.every(part => part.paymentStatus === "PAID") && { paymentStatus: "PAID" }),
+            paymentStatus: parts.length && parts.every(part => part.paymentStatus === "PAID") ? "PAID" : "UNPAID",
+            ...(status === "CANCELLED" && { totalAmount: order.items.reduce((total, item) => activeArtisans.has(item.artisanId) ? total.add(item.subtotal) : total, new Prisma.Decimal(0)) }),
         } });
-        await tx.notification.create({ data: {
-            userId: order.buyerId, title: "Tiến độ đơn bán lẻ",
-            message: `${order.orderCode} · ${updated.artisan.workshopName}: ${status}`, type: "ORDER_STATUS",
-        } });
+        await notifyBuyer(tx, order, status, updated.artisan.workshopName);
         return updated;
     });
 }
@@ -172,7 +203,7 @@ export function transitionOrder(actor, orderId, status, paymentCollected) {
                 await lockRetailOrder(tx, orderId);
                 const order = await tx.retailOrder.findUnique({ where: { id: orderId }, include: {
                     fulfillments: true,
-                    items: { orderBy: { productId: "asc" }, select: { productId: true, quantity: true } },
+                    items: { orderBy: { productId: "asc" }, select: { productId: true, quantity: true, artisanId: true } },
                 } });
                 if (!order) return null;
                 if (actor.role === "BUYER") {
@@ -184,19 +215,15 @@ export function transitionOrder(actor, orderId, status, paymentCollected) {
                 } else if (actor.role !== "ADMIN") return null;
                 let paymentStatus = order.paymentStatus;
                 if (status === "CANCELLED") {
+                        const parts = order.fulfillments.filter(part => part.status !== "CANCELLED");
                         if (paymentCollected) throw new Error("Invalid payment confirmation");
                         if (!["PENDING", "CONFIRMED"].includes(order.status) || order.paymentStatus !== "UNPAID" ||
-                            order.fulfillments.some(part => !["PENDING", "CONFIRMED"].includes(part.status) || part.paymentStatus !== "UNPAID") ||
-                            (actor.role === "BUYER" && order.fulfillments.some(part => part.status !== "PENDING"))) {
+                            parts.some(part => !cancellable(part)) ||
+                            (actor.role === "BUYER" && parts.some(part => part.status !== "PENDING"))) {
                             throw new Error("Invalid order transition");
                         }
-                        for (const item of order.items) {
-                                const restored = await tx.product.updateMany({
-                                        where: { id: item.productId, stockQuantity: { lte: 2147483647 - item.quantity } },
-                                        data: { stockQuantity: { increment: item.quantity } },
-                                });
-                                if (!restored.count) throw new Error("Stock limit exceeded on cancellation");
-                        }
+                        const activeArtisans = new Set(parts.map(part => part.artisanId));
+                        await restoreStock(tx, order.items.filter(item => activeArtisans.has(item.artisanId)));
                 } else {
                         paymentStatus = nextPayment(order, order, status, paymentCollected);
                         if (order.fulfillments.some(part => part.status !== order.status || part.paymentStatus !== order.paymentStatus)) {
@@ -204,8 +231,8 @@ export function transitionOrder(actor, orderId, status, paymentCollected) {
                         }
                 }
                 await tx.retailFulfillment.updateMany({ where: { orderId }, data: { status, paymentStatus } });
-                const updated = await tx.retailOrder.update({ where: { id: orderId }, data: { status, paymentStatus } });
-                await tx.notification.create({ data: { userId: order.buyerId, title: "Trạng thái đơn hàng", message: `${order.orderCode}: ${status}`, type: "ORDER_STATUS" } });
+                const updated = await tx.retailOrder.update({ where: { id: orderId }, data: { status, paymentStatus, ...(status === "CANCELLED" && { totalAmount: new Prisma.Decimal(0) }) } });
+                await notifyBuyer(tx, order, status);
                 return updated;
         });
 }
