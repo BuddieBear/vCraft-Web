@@ -130,14 +130,20 @@ export function mountArtisanAdministration(section, account) {
         <summary>Cấp tài khoản nghệ nhân</summary>
         <form class="account-form">
           <label>Email<input name="email" type="email" required maxlength="255"></label>
-          <label>Tên đăng nhập (tùy chọn)<input name="username" maxlength="50" pattern="[a-zA-Z0-9._\\-]{3,50}" placeholder="Ví dụ: xuong-lua-a"><span class="field-hint">3–50 ký tự không dấu (chữ, số, ., _, -).</span></label>
-          <label>Mật khẩu ban đầu<input name="password" type="password" autocomplete="new-password" required minlength="12" maxlength="72"><span class="field-hint">Tối thiểu 12 ký tự (tối đa 72 byte UTF-8).</span></label>
+          <div class="account-field">
+            <label>Tên đăng nhập (tùy chọn)<input name="username" maxlength="50" pattern="(?=.*[a-zA-Z0-9])[a-zA-Z0-9._\\-]{3,50}" placeholder="Ví dụ: xuong-lua-a" aria-describedby="admin-artisan-username-hint"></label>
+            <span class="field-hint" id="admin-artisan-username-hint">3–50 ký tự không dấu (chữ, số, ., _, -), ít nhất một chữ hoặc số.</span>
+          </div>
+          <div class="account-field">
+            <label>Mật khẩu ban đầu<input name="password" type="password" autocomplete="new-password" required minlength="12" maxlength="72" aria-describedby="admin-artisan-password-hint"></label>
+            <span class="field-hint" id="admin-artisan-password-hint">Tối thiểu 12 ký tự (tối đa 72 byte UTF-8).</span>
+          </div>
           <label>Họ tên<input name="fullName" required maxlength="120"></label>
           <label>Tên xưởng<input name="workshopName" required maxlength="200"></label>
           <label>Địa chỉ<input name="address" required maxlength="255"></label>
           <div class="workshop-coordinates">
-            <label>Vĩ độ<input name="latitude" type="number" step="any" min="-90" max="90" required></label>
-            <label>Kinh độ<input name="longitude" type="number" step="any" min="-180" max="180" required></label>
+            <div class="account-field"><label>Vĩ độ<input name="latitude" type="number" step="any" min="-90" max="90" required></label></div>
+            <div class="account-field"><label>Kinh độ<input name="longitude" type="number" step="any" min="-180" max="180" required></label></div>
           </div>
           <button class="button button-primary" type="submit">Cấp tài khoản</button>
         </form>
@@ -228,11 +234,15 @@ export function mountArtisanAdministration(section, account) {
     }
   }
 
-  async function save(control, work) {
+  async function save(control, work, onError) {
     control.inert = true;
+    let failure;
     try { await work(); }
-    catch (error) { if (account.profile?.role === "ADMIN") status.textContent = error.message; }
+    catch (error) { failure = error; }
     finally { control.inert = false; }
+    if (failure && account.profile?.role === "ADMIN") {
+      if (!onError?.(failure)) status.textContent = failure.message;
+    }
   }
 
   bindFormErrors(form);
@@ -240,6 +250,7 @@ export function mountArtisanAdministration(section, account) {
   form.addEventListener("submit", event => {
     event.preventDefault();
     clearFormErrors(form);
+    status.textContent = "";
     const raw = Object.fromEntries(new FormData(form));
     const body = {
       email: raw.email.trim(),
@@ -252,16 +263,12 @@ export function mountArtisanAdministration(section, account) {
       longitude: Number(raw.longitude),
     };
     save(form, async () => {
-      try {
-        await request("/admin/artisans", { method: "POST", auth: true, body });
-        form.reset();
-        if (issueSection) issueSection.open = false;
-        filter.value = "PENDING";
-        await load(false, "Đã cấp tài khoản. Hồ sơ đang chờ duyệt.");
-      } catch (error) {
-        if (!showFormErrors(form, error.fields)) throw error;
-      }
-    });
+      await request("/admin/artisans", { method: "POST", auth: true, body });
+      form.reset();
+      if (issueSection) issueSection.open = false;
+      filter.value = "PENDING";
+      await load(false, "Đã cấp tài khoản. Hồ sơ đang chờ duyệt.");
+    }, error => showFormErrors(form, error.fields));
   });
   signIn.addEventListener("click", account.open);
   filter.addEventListener("change", () => {

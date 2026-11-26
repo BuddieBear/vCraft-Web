@@ -51,8 +51,13 @@ function updateMode() {
   identifierInput.autocomplete = registration ? "email" : "username";
   identifierInput.placeholder = registration ? "ten@example.com" : "Nhập email hoặc username";
   password.autocomplete = registration ? "new-password" : "current-password";
-  if (registration) password.minLength = 12;
-  else password.removeAttribute("minlength");
+  if (registration) {
+    password.minLength = 12;
+    password.setAttribute("aria-describedby", "password-hint");
+  } else {
+    password.removeAttribute("minlength");
+    password.removeAttribute("aria-describedby");
+  }
   passwordHint.hidden = !registration;
   title.textContent = registration ? "Tạo tài khoản" : "Đăng nhập";
   document.title = title.textContent + " · vCraft";
@@ -63,6 +68,10 @@ function updateMode() {
 toggle.addEventListener("click", () => {
   registration = !registration;
   updateMode();
+  status.textContent = registration
+    ? "Đã chuyển sang tạo tài khoản người mua."
+    : "Đã chuyển sang đăng nhập.";
+  (registration ? fullName : identifierInput).focus();
 });
 
 forgot.addEventListener("click", () => {
@@ -104,7 +113,7 @@ function validNewPassword(form, name, value) {
   return false;
 }
 
-function showReset(token, customMessage) {
+function showReset(token) {
   resetToken = token;
   form.hidden = resetRequest.hidden = toggle.hidden = true;
   resetConfirm.hidden = false;
@@ -112,15 +121,18 @@ function showReset(token, customMessage) {
   forgot.dataset.mode = "back";
   title.textContent = "Đặt lại mật khẩu";
   document.title = title.textContent + " · vCraft";
-  status.textContent = customMessage || "Nhập mật khẩu mới để hoàn tất.";
+  status.textContent = "Nhập mật khẩu mới để hoàn tất.";
   resetConfirm.elements.namedItem("newPassword").focus();
 }
 
-const resetLink = new URLSearchParams(location.hash.slice(1)).get("reset");
-if (resetLink) {
+function consumeResetHash() {
+  const resetLink = new URLSearchParams(location.hash.slice(1)).get("reset");
+  if (!resetLink) return;
   history.replaceState(null, "", location.pathname + location.search);
   if (/^[A-Za-z0-9_-]{20,200}$/.test(resetLink)) showReset(resetLink);
 }
+consumeResetHash();
+window.addEventListener("hashchange", consumeResetHash);
 
 resetRequest.addEventListener("submit", async event => {
   event.preventDefault();
@@ -130,15 +142,11 @@ resetRequest.addEventListener("submit", async event => {
   button.disabled = forgot.disabled = true;
   status.textContent = "";
   try {
-    const { data } = await request("/auth/password/reset/request", {
+    await request("/auth/password/reset/request", {
       method: "POST",
       body: { identifier: resetRequest.elements.namedItem("identifier").value.trim() },
     });
-    if (data?.resetToken && /^[A-Za-z0-9_-]{20,200}$/.test(data.resetToken)) {
-      showReset(data.resetToken, "Đã xác nhận tài khoản. Nhập mật khẩu mới (tối thiểu 12 ký tự) để đặt lại.");
-      return;
-    }
-    status.textContent = "Nếu tài khoản tồn tại, hãy kiểm tra hộp thư để nhận liên kết khôi phục.";
+    status.textContent = "Nếu tài khoản tồn tại, liên kết đặt lại mật khẩu đã được gửi qua email (hoặc ghi trong log máy chủ khi chạy cục bộ).";
   } catch (error) {
     const fields = (error.fields || []).map(f => f.name === "email" ? { ...f, name: "identifier" } : f);
     if (!showFormErrors(resetRequest, fields)) status.textContent = error.message;
@@ -165,6 +173,7 @@ resetConfirm.addEventListener("submit", async event => {
     await request("/auth/password/reset/confirm", { method: "POST", body: { token: resetToken, newPassword } });
     showLogin();
     status.textContent = "Đã đặt lại mật khẩu. Hãy đăng nhập bằng mật khẩu mới.";
+    identifierInput.focus();
   } catch (error) {
     if (!showFormErrors(resetConfirm, error.fields)) status.textContent = error.message;
   } finally {

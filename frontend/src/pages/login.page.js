@@ -2,19 +2,23 @@ import { icon } from "../components/ui.js";
 import { signInPath, sitePaths } from "../site-paths.js";
 import { onSessionChange, request, setToken, signedIn } from "../api/http.js";
 import { bindFormErrors, clearFormErrors, showFormErrors } from "../components/form-errors.js";
+import { recipientPhoneError, validRecipientPhone } from "../data/input-values.js";
 
 const roleLabels = { BUYER: "Khách hàng", ARTISAN: "Nghệ nhân", ADMIN: "Quản trị viên" };
 
 function initials(name) {
   const parts = String(name || "")
+    .normalize("NFC")
     .replace(/\([^)]*\)/g, " ")
     .trim()
     .split(/\s+/)
     .map(part => part.replace(/^[^\p{L}\p{N}]+/u, ""))
     .filter(Boolean);
   if (!parts.length) return "VC";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  if (parts.length === 1) return [...parts[0]].slice(0, 2).join("").toUpperCase();
+  const first = [...parts[0]][0] || "";
+  const last = [...parts[parts.length - 1]][0] || "";
+  return (first + last).toUpperCase();
 }
 
 export function mountAccount(dialog, trigger) {
@@ -101,11 +105,13 @@ export function mountAccount(dialog, trigger) {
     </div>`;
     if (!signedIn()) {
       dialog.innerHTML = `<div class="account-drawer">${header}
-        <div class="account-guest-card">
-          <div class="account-avatar account-avatar-guest" aria-hidden="true">${icon("user")}</div>
-          <h3>Chào mừng đến vCraft</h3>
-          <p>Đăng nhập để đặt mua sản phẩm lụa, gửi yêu cầu đặt sỉ trực tiếp tới xưởng và theo dõi nhật ký sản xuất.</p>
-          <a class="button button-primary account-guest-cta">Đăng nhập / Tạo tài khoản</a>
+        <div class="account-body">
+          <div class="account-guest-card">
+            <div class="account-avatar account-avatar-guest" aria-hidden="true">${icon("user")}</div>
+            <h3>Chào mừng đến vCraft</h3>
+            <p>Đăng nhập để đặt mua sản phẩm lụa, gửi yêu cầu đặt sỉ trực tiếp tới xưởng và theo dõi nhật ký sản xuất.</p>
+            <a class="button button-primary account-guest-cta">Đăng nhập / Tạo tài khoản</a>
+          </div>
         </div>
       </div>`;
       dialog.querySelector("a").href = signInUrl();
@@ -145,7 +151,10 @@ export function mountAccount(dialog, trigger) {
             <summary><span>Chỉnh sửa thông tin cá nhân</span>${icon("plus")}</summary>
             <form class="account-form" data-profile-form>
               <label>Họ tên<input name="fullName" autocomplete="name" maxlength="120" required></label>
-              <label>Tên đăng nhập<input name="username" autocomplete="username" maxlength="50" pattern="[a-zA-Z0-9._\\-]{3,50}" placeholder="Ví dụ: minh.nhaxa"><span class="field-hint">3–50 ký tự không dấu (chữ, số, ., _, -).</span></label>
+              <div class="account-field">
+                <label>Tên đăng nhập<input name="username" autocomplete="username" maxlength="50" pattern="(?=.*[a-zA-Z0-9])[a-zA-Z0-9._\\-]{3,50}" placeholder="Ví dụ: minh.nhaxa" aria-describedby="account-username-hint"></label>
+                <span class="field-hint" id="account-username-hint">3–50 ký tự không dấu (chữ, số, ., _, -), ít nhất một chữ hoặc số.</span>
+              </div>
               <label>Số điện thoại<input name="phone" type="tel" autocomplete="tel" maxlength="20" placeholder="Ví dụ: 0912345678"></label>
               <button class="button button-primary" type="submit">Lưu thông tin</button>
               <p class="trade-feedback" role="status" aria-live="polite"></p>
@@ -156,7 +165,10 @@ export function mountAccount(dialog, trigger) {
             <summary><span>Đổi mật khẩu</span>${icon("plus")}</summary>
             <form class="account-form" data-password-form>
               <label>Mật khẩu hiện tại<input name="currentPassword" type="password" autocomplete="current-password" maxlength="72" required></label>
-              <label>Mật khẩu mới<input name="newPassword" type="password" autocomplete="new-password" minlength="12" maxlength="72" required><span class="field-hint">Tối thiểu 12 ký tự (tối đa 72 byte UTF-8).</span></label>
+              <div class="account-field">
+                <label>Mật khẩu mới<input name="newPassword" type="password" autocomplete="new-password" minlength="12" maxlength="72" aria-describedby="account-password-hint" required></label>
+                <span class="field-hint" id="account-password-hint">Tối thiểu 12 ký tự (tối đa 72 byte UTF-8).</span>
+              </div>
               <label>Nhập lại mật khẩu mới<input name="confirmPassword" type="password" autocomplete="new-password" minlength="12" maxlength="72" required></label>
               <button class="button button-primary" type="submit">Cập nhật mật khẩu</button>
               <p class="trade-feedback" role="status" aria-live="polite"></p>
@@ -202,10 +214,22 @@ export function mountAccount(dialog, trigger) {
       clearFormErrors(profileForm);
       const values = Object.fromEntries(new FormData(profileForm));
       const fullName = values.fullName.trim();
-      if (!fullName) {
-        showFormErrors(profileForm, [{ name: "fullName", message: "Họ tên không được để trống." }]);
+      const username = values.username.trim();
+      const phone = values.phone.trim();
+      const fieldErrors = [];
+      if (!fullName) fieldErrors.push({ name: "fullName", message: "Họ tên không được để trống." });
+      if (username && !/[a-zA-Z0-9]/.test(username)) {
+        fieldErrors.push({ name: "username", message: "Tên đăng nhập phải chứa ít nhất một chữ cái hoặc chữ số." });
+      }
+      if (phone && !validRecipientPhone(phone)) {
+        fieldErrors.push({ name: "phone", message: recipientPhoneError });
+      }
+      if (fieldErrors.length) {
+        feedback.textContent = "";
+        showFormErrors(profileForm, fieldErrors);
         return;
       }
+      const pending = version;
       saveBtn.disabled = true;
       feedback.textContent = "Đang lưu thông tin…";
       try {
@@ -214,16 +238,18 @@ export function mountAccount(dialog, trigger) {
           auth: true,
           body: {
             fullName,
-            username: values.username.trim() || null,
-            phone: values.phone.trim() || null,
+            username: username || null,
+            phone: phone || null,
           },
         });
+        if (pending !== version || !signedIn()) return;
         profile = data;
         delete profileForm.dataset.dirty;
         for (const listener of users) listener(profile);
         syncDialog();
         feedback.textContent = "Đã cập nhật thông tin tài khoản.";
       } catch (error) {
+        if (pending !== version || !signedIn()) return;
         if (!showFormErrors(profileForm, error.fields)) feedback.textContent = error.message;
         else feedback.textContent = "";
       } finally {
