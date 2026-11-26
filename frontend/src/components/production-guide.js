@@ -6,7 +6,7 @@ import { usesDefaultProductionSteps } from "../data/production-steps.js";
 export const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, character =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 
-export function renderProductionGuide(product, { reference = false, cover, heading = "h2", headingId = "production-guide-title", showQr = false } = {}) {
+export function renderProductionGuide(product, { reference = false, cover, heading = "h2", headingId = "production-guide-title", showTraceLink = false, showQr = false } = {}) {
   const configured = !reference && !usesDefaultProductionSteps(product.productionSteps);
   const steps = configured ? [] : productProduction(product, { reference, cover });
   const esc = escapeHtml;
@@ -32,12 +32,12 @@ export function renderProductionGuide(product, { reference = false, cover, headi
             </details></li>`).join("")}
         </ol>
       ` : "<p class='production-note'>Chưa có hướng dẫn riêng cho mẫu sản phẩm này.</p>"}
-      ${showQr && (!reference || steps.length) ? `<div class="production-links">
-          <a class="text-link" href="/trace/product/${esc(segment)}">Mở trang quy trình ${icon("arrow")}</a>
-          <details class="production-qr">
+      ${(showTraceLink || showQr) && (!reference || steps.length) ? `<div class="production-links">
+          ${showTraceLink ? `<a class="text-link" href="/trace/product/${esc(segment)}">Mở trang quy trình ${icon("arrow")}</a>` : ""}
+          ${showQr ? `<details class="production-qr">
             <summary>Mã QR quy trình</summary>
             <img width="160" height="160" loading="lazy" src="/api/traceability/product-guide/${esc(segment)}/qr" alt="Mã QR mở quy trình của ${esc(product.name)}">
-          </details>
+          </details>` : ""}
         </div>` : ""}
     </section>`;
 }
