@@ -119,13 +119,26 @@ export function createQuote(data) {
     return prisma.$transaction(async (tx) => {
         if (!await activeUser(tx, data.userId, "BUYER")) throw new Error("Buyer is not active");
         const selected = data.targetArtisanId ? [data.targetArtisanId] : data.artisanIds;
-        await requireAvailableWorkshops(tx, selected);
-        return tx.quotationRequest.create({ data: {
+        let artisans = [];
+        if (data.submitMode === "SEND") {
+            artisans = await tx.artisanProfile.findMany({ where: { ...(selected.length && { id: { in: selected } }), ...tradingWorkshop }, select: { userId: true } });
+            if (selected.length && artisans.length !== selected.length) throw new Error("Artisan is unavailable");
+            if (!artisans.length) throw new Error("No eligible artisan");
+        } else {
+            await requireAvailableWorkshops(tx, selected);
+        }
+        const status = data.submitMode === "SEND" ? "SENT_TO_ARTISANS" : data.submitMode === "DISPATCH" ? "PENDING_DISPATCH" : "DRAFT";
+        const quote = await tx.quotationRequest.create({ data: {
             buyerId: data.userId, title: data.title, specifications: data.specifications, targetQuantity: data.targetQuantity,
             deadline: data.deadline, targetArtisanId: data.targetArtisanId, maxBudget: data.maxBudget,
-            preferredWeaveType: data.preferredWeaveType, attachmentUrls: data.attachmentUrls,
+            preferredWeaveType: data.preferredWeaveType, attachmentUrls: data.attachmentUrls, status,
             ...(data.artisanIds.length && { recipients: { create: data.artisanIds.map(artisanId => ({ artisanId })) } }),
         } });
+        if (data.submitMode === "SEND" && artisans.length) {
+            const linkUrl = data.linkForQuote ? data.linkForQuote(quote.id) : null;
+            await tx.notification.createMany({ data: artisans.map(({ userId: recipient }) => ({ userId: recipient, title: "Yêu cầu báo giá mới", message: quote.title, type: "QUOTE_REQUEST", linkUrl })) });
+        }
+        return quote;
     });
 }
 

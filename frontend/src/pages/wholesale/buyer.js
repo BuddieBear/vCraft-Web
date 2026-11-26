@@ -1,7 +1,7 @@
 import { formatPrice, saleUnits } from "../../components/ui.js";
 import { getCatalogProduct } from "../../api/catalog.js";
 import { referenceProductPrice } from "../../components/reference-product-card.js";
-import { quoteBudgetError, quoteBudgetMax, validPositiveAmount, vietnamToday } from "../../data/input-values.js";
+import { vietnamToday } from "../../data/input-values.js";
 import { weaveTypes } from "../../data/weave-types.js";
 import { productPagePath, quoteJournalPath, quotePagePath, sitePaths } from "../../site-paths.js";
 import { reviewForm } from "../reviews.page.js";
@@ -43,7 +43,7 @@ function mountWorkshopPicker(form, list, key, selected, onChange) {
   }
   updateSelection();
   list(options, {
-    key, path: "/artisans?storefront=true", auth: false, label: "xưởng nhận yêu cầu",
+    key, path: "/artisans", auth: false, label: "xưởng nhận yêu cầu",
     empty: "Chưa có xưởng nhận yêu cầu đặt sỉ.",
     render(workshops, target) {
       for (const workshop of workshops) {
@@ -115,33 +115,41 @@ export async function buyerView(root, { form, query, list, signal }) {
     <label>Sản phẩm cần đặt<input name="title" required maxlength="255" placeholder="Ví dụ: Khăn lụa in logo"></label>
     <label>Loại lụa<select name="preferredWeaveType"><option value="">Chọn loại lụa</option>${Object.entries(weaveTypes).map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}</select></label>
     <label>Số lượng<input name="targetQuantity" type="number" min="1" max="2147483647" required></label>
-    <label>Ngân sách tối đa (đồng)<input name="maxBudget" type="number" min="0.01" max="${quoteBudgetMax}" step="0.01" inputmode="decimal"></label>
     <label>Ngày cần hàng<input name="deadline" type="date" required></label>
     <label>Ghi chú và quy cách<textarea name="specifications" rows="6" required maxlength="10000" placeholder="Màu, kích thước, yêu cầu cá nhân hóa hoặc thời gian mong muốn"></textarea></label>
-    ${workshopFields}`, "Lưu yêu cầu nháp", async values => {
-    const artisanIds = selectedWorkshopIds(selectedWorkshops);
+    <fieldset class="quote-workshops">
+      <legend>Hình thức gửi yêu cầu</legend>
+      <label class="trade-choice"><input type="radio" name="routing" value="direct" checked> Chọn xưởng nhận trực tiếp</label>
+      <label class="trade-choice"><input type="radio" name="routing" value="dispatch"> Nhờ Ban quản lý điều phối xưởng phù hợp</label>
+    </fieldset>
+    ${workshopFields}`, "Gửi yêu cầu đặt sỉ", async (values, actionMode) => {
+    const routing = values.get("routing") || "direct";
     const notes = values.get("specifications").trim();
     if (!notes) throw new Error("Nhập ghi chú hoặc quy cách của sản phẩm cần đặt.");
+    const isDraft = actionMode === "DRAFT";
+    const submitMode = isDraft ? "DRAFT" : routing === "dispatch" ? "DISPATCH" : "SEND";
+    const artisanIds = routing === "direct" ? selectedWorkshopIds(selectedWorkshops) : undefined;
     const { data } = await write("/wholesale/quotes", {
       title: values.get("title").trim(),
       specifications: priceNote + notes,
       deadline: values.get("deadline"),
       targetQuantity: Number(values.get("targetQuantity")),
-      ...(values.get("maxBudget") !== "" && { maxBudget: values.get("maxBudget") }),
       ...(values.get("preferredWeaveType") && { preferredWeaveType: values.get("preferredWeaveType") }),
-      artisanIds,
+      ...(artisanIds && { artisanIds }),
+      submitMode,
     });
     return quotePagePath(data.id);
-  });
+  }, { primary: true, secondary: { label: "Lưu nháp", mode: "DRAFT" } });
   const deadline = fields.elements.namedItem("deadline");
   deadline.min = vietnamToday();
   deadline.dataset.minMessage = "Chọn ngày cần hàng từ hôm nay trở đi.";
-  const budget = fields.elements.namedItem("maxBudget");
-  budget.dataset.minMessage = "Ngân sách phải lớn hơn 0. Để trống nếu chưa xác định.";
-  budget.addEventListener("input", () => {
-    const value = budget.value;
-    budget.setCustomValidity(value && !validPositiveAmount(value, quoteBudgetMax) ? quoteBudgetError : "");
-  });
+  const workshopSection = fields.querySelectorAll("fieldset.quote-workshops")[1];
+  const syncRouting = () => {
+    const dispatchMode = fields.querySelector('input[name="routing"]:checked')?.value === "dispatch";
+    workshopSection.hidden = dispatchMode;
+  };
+  for (const radio of fields.querySelectorAll('input[name="routing"]')) radio.addEventListener("change", syncRouting);
+  syncRouting();
   mountWorkshopPicker(fields, list, "buyer-workshops", selectedWorkshops);
   if (source?.error) create.append(paragraph("Chưa tải được mẫu lụa. Bạn có thể nhập thông tin để đặt sỉ."));
   const link = document.createElement("a");
@@ -192,6 +200,7 @@ export async function buyerQuoteView(root, { button, form, expand, list, quoteId
     const actions = document.createElement("div");
     actions.className = "trade-toolbar";
     const send = button(workshops.length ? "Gửi xưởng đã chọn" : "Gửi nghệ nhân", () => write(path + "/send"));
+    send.className = "button button-primary";
     const dispatch = !quote.recipients.length && button("Gửi Ban quản lý điều phối", () => write(path + "/request-dispatch"));
     const pendingSelection = paragraph("Lưu danh sách xưởng trước khi gửi.");
     pendingSelection.hidden = true;

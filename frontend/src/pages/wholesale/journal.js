@@ -16,10 +16,11 @@ export async function buyerJournalView(root, { expand, quoteId, signal }) {
     title.textContent = workshopName(assignment);
     section.append(title, paragraph(`${labels[assignment.status]} · ${assignment.allocatedQuantity} sản phẩm`));
     if (!assignment.batches.length) section.append(paragraph("Xưởng chưa đăng lô sản xuất cho đơn này."));
-    for (const batch of assignment.batches) {
+    for (const [index, batch] of assignment.batches.entries()) {
       expand(section, {
         key: "journal-" + batch.id,
         label: `Lô ${batch.batchCode} · ${batch.totalQuantity} sản phẩm`,
+        defaultOpen: index === 0,
         mount: details => loadTimeline(details, batch, signal),
       });
     }

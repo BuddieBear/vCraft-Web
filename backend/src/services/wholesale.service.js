@@ -73,14 +73,16 @@ function validateWorkshops(artisanIds, minimum = 1) {
     artisanIds.forEach(id);
 }
 
-export function createQuote({ userId, title, specifications, targetQuantity, deadline, targetArtisanId = null, artisanIds = [], maxBudget = null, preferredWeaveType = "LUA_VAN", attachmentUrls = [] }) {
+export function createQuote({ userId, title, specifications, targetQuantity, deadline, targetArtisanId = null, artisanIds = [], maxBudget = null, preferredWeaveType = "LUA_VAN", attachmentUrls = [], submitMode = "DRAFT" }) {
     id(userId);
+    if (!["DRAFT", "SEND", "DISPATCH"].includes(submitMode)) throw new Error("Invalid transition");
     const data = { userId, title: text(title, 255), specifications: text(specifications, 10000), targetQuantity: positive(targetQuantity), deadline: deadlineDate(deadline), targetArtisanId, maxBudget: maxBudget === null ? null : money(maxBudget, quoteBudgetMax), preferredWeaveType, attachmentUrls };
     if (targetArtisanId !== null) id(targetArtisanId);
     validateWorkshops(artisanIds, 0);
     if (targetArtisanId && artisanIds.length) throw new Error("Invalid allocations");
+    if (submitMode === "DISPATCH" && artisanIds.length) throw new Error("Invalid allocations");
     if (!Array.isArray(attachmentUrls) || attachmentUrls.some((url) => typeof url !== "string" || url.length > 500)) throw new Error("Invalid attachments");
-    return createQuoteRecord({ ...data, artisanIds });
+    return createQuoteRecord({ ...data, artisanIds, submitMode, linkForQuote: biddingPagePath });
 }
 
 export function updateQuoteWorkshops({ userId, quoteId, artisanIds }) {

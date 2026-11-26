@@ -39,20 +39,31 @@ export function mountWholesale(container, account, { quoteId, query, bidding = f
     return control;
   }
 
-  function form(markup, label, submit) {
+  function form(markup, label, submit, { primary = false, secondary } = {}) {
     const node = document.createElement("form");
     node.className = "account-form";
     node.innerHTML = markup;
     const control = button(label, null, "submit");
+    if (primary) control.className = "button button-primary";
     const feedback = paragraph("");
     feedback.className = "trade-feedback";
     feedback.setAttribute("role", "status");
-    node.append(control, feedback);
+    if (secondary) {
+      const actions = document.createElement("div");
+      actions.className = "trade-toolbar";
+      const alt = button(secondary.label, null, "submit");
+      alt.dataset.submitMode = secondary.mode;
+      actions.append(control, alt);
+      node.append(actions, feedback);
+    } else {
+      node.append(control, feedback);
+    }
     bindFormErrors(node);
     node.addEventListener("submit", event => {
       event.preventDefault();
       clearFormErrors(node);
-      act(control, () => submit(new FormData(node)));
+      const activeControl = event.submitter?.closest("button") || control;
+      act(activeControl, () => submit(new FormData(node), activeControl.dataset.submitMode));
     });
     return node;
   }
@@ -191,7 +202,7 @@ export function mountWholesale(container, account, { quoteId, query, bidding = f
   load();
 }
 
-function expandable(target, { key, label, mount, openSections, signal }) {
+function expandable(target, { key, label, mount, openSections, signal, defaultOpen = false }) {
   const details = document.createElement("details");
   details.className = "trade-batch";
   const summary = document.createElement("summary");
@@ -211,5 +222,5 @@ function expandable(target, { key, label, mount, openSections, signal }) {
       mount(details);
     }
   });
-  details.open = openSections.has(key);
+  details.open = defaultOpen || openSections.has(key);
 }
