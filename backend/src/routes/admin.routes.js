@@ -15,7 +15,7 @@ router.get("/artisans/:id", validate({ params: byId }), async (req, res) => {
     const data = await artisanReviewDetails(req.validatedParams.id);
     res.set("Cache-Control", "private, no-store").json({ data });
 });
-const optionalUsername = z.union([z.string().trim().regex(/^[a-zA-Z0-9._-]{3,50}$/), z.literal("")]).nullable().optional();
+const optionalUsername = z.string().trim().pipe(z.union([z.string().regex(/^[a-zA-Z0-9._-]{3,50}$/).refine((v) => /[a-zA-Z0-9]/.test(v)), z.literal("")])).nullable().optional();
 router.post("/artisans", validate({ body: z.object({ email: z.string().trim().email().max(255), username: optionalUsername, password: z.string().refine((v) => Buffer.byteLength(v, "utf8") >= 12 && Buffer.byteLength(v, "utf8") <= 72), fullName: z.string().trim().min(1).max(120), workshopName: z.string().trim().min(1).max(200), address: z.string().trim().min(1).max(255), latitude: z.number().min(-90).max(90), longitude: z.number().min(-180).max(180) }).strict() }), async (req, res) => res.status(201).json({ data: await issueArtisan(req.user.id, req.validatedBody) }));
 router.patch("/artisans/:id/verification", validate({ params: byId, body: z.object({ status: z.enum(["APPROVED", "REJECTED"]) }).strict() }), async (req, res) => { await reviewArtisan(req.user.id, req.validatedParams.id, req.validatedBody.status); res.status(204).end(); });
 router.patch("/artisans/:id/suspension", validate({ params: byId, body: z.object({ isSuspended: z.boolean() }).strict() }), async (req, res) => {

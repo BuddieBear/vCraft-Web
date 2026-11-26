@@ -13,7 +13,10 @@ const categorySlugs = {
     "Quà tặng": "qua-tang",
 };
 const stageCodes = ["UOM_TO", "MAC_CUI", "DET_LUA", "NHUOM_MAU", "CAN_LANG"];
-const pricingMigration = "20261108000200_product_pricing_and_sale_units";
+const requiredMigrations = [
+    "20261108000200_product_pricing_and_sale_units",
+    "20261126000000_user_username",
+];
 const saleUnits = { "mét": "METER", "chiếc": "PIECE", "bộ": "SET", "hộp": "BOX" };
 const workshopEmail = (id) => id + demoWorkshopDomain;
 const imagePath = (file) => `/public/images/${file}`;
@@ -45,12 +48,12 @@ async function seed() {
     const [{ hasHistory }] = await prisma.$queryRaw`
         SELECT to_regclass('_prisma_migrations') IS NOT NULL AS "hasHistory"
     `;
-    const [pricing] = hasHistory ? await prisma.$queryRaw`
-        SELECT 1 FROM "_prisma_migrations"
-        WHERE migration_name = ${pricingMigration}
+    const appliedMigrations = hasHistory ? await prisma.$queryRaw`
+        SELECT DISTINCT migration_name FROM "_prisma_migrations"
+        WHERE migration_name = ANY(${requiredMigrations}::text[])
             AND finished_at IS NOT NULL AND rolled_back_at IS NULL
     ` : [];
-    if (!pricing) throw new Error("Run npm run db:migrate before seeding.");
+    if (appliedMigrations.length !== requiredMigrations.length) throw new Error("Run npm run db:migrate before seeding.");
 
     const users = [
         { email: "admin@nhaxa.example", username: "admin", fullName: "Quản trị Nha Xá (demo)", role: "ADMIN" },
@@ -72,6 +75,15 @@ async function seed() {
         const productIds = new Map();
 
         for (const account of accounts) {
+            if (account.username) {
+                const owner = await tx.user.findUnique({
+                    where: { username: account.username },
+                    select: { email: true },
+                });
+                if (owner && owner.email !== account.email) {
+                    throw new Error("Conflicting demo username: " + account.username);
+                }
+            }
             const user = await tx.user.upsert({
                 where: { email: account.email }, create: account, update: {},
                 select: { id: true, role: true, username: true },

@@ -4,21 +4,23 @@ import jwt from "jsonwebtoken";
 import { jwtSecret } from "../config/security.js";
 import { ApiError } from "../middlewares/api-error.js";
 import { passwordResetDelivery } from "./password-reset-mail.js";
+import { recipientPhoneError, validRecipientPhone } from "../../../frontend/src/data/input-values.js";
 import { createBuyer, createAuthSession, createPasswordResetToken, consumePasswordResetToken, findActiveCredentialsByIdentifier, findActiveSession, findPasswordHashById, findUserById, findValidPasswordResetToken, revokeAllAuthSessions, revokeAuthSession, updatePasswordAndRevokeSessions, updateUserProfile } from "../repositories/users.repository.js";
 
 const dummyHash = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6Ttx1g0skAUsV/2jU3BZid7jKkDmO";
-const usernamePattern = /^[a-zA-Z0-9._-]{3,50}$/;
+const usernamePattern = /^[a-z0-9._-]{3,50}$/;
+const usernameAlnum = /[a-z0-9]/;
 
-function validatePassword(password) {
+export function validatePassword(password) {
     if (typeof password !== "string" || Buffer.byteLength(password, "utf8") < 12 || Buffer.byteLength(password, "utf8") > 72) throw new ApiError(400, "INVALID_PASSWORD", "Mật khẩu phải từ 12 đến 72 byte UTF-8.");
 }
 
-function normalizeUsername(username) {
+export function normalizeUsername(username) {
     if (username === undefined || username === null || username === "") return null;
     if (typeof username !== "string") throw new ApiError(400, "INVALID_USERNAME", "Tên đăng nhập không hợp lệ.");
     const trimmed = username.trim().toLowerCase();
     if (!trimmed) return null;
-    if (!usernamePattern.test(trimmed)) throw new ApiError(400, "INVALID_USERNAME", "Tên đăng nhập gồm 3–50 ký tự không dấu (chữ, số, ., _, -).");
+    if (!usernamePattern.test(trimmed) || !usernameAlnum.test(trimmed)) throw new ApiError(400, "INVALID_USERNAME", "Tên đăng nhập gồm 3–50 ký tự không dấu (chữ, số, ., _, -) và có ít nhất một chữ cái hoặc chữ số.");
     return trimmed;
 }
 
@@ -78,10 +80,13 @@ export async function requestPasswordReset(identifier) {
         catch (error) { console.error("Password recovery email delivery failed.", { code: error.code }); }
         return { accepted: true };
     }
-    if (process.env.NODE_ENV !== "test") {
-        console.info(`Password reset token generated for ${user.email}: /dang-nhap#reset=${token}`);
+    if (process.env.NODE_ENV === "test") {
+        return { accepted: true, resetToken: token };
     }
-    return { accepted: true, resetToken: token };
+    if (process.env.NODE_ENV === "development") {
+        console.info(`Password reset link for ${user.email}: /dang-nhap#reset=${token}`);
+    }
+    return { accepted: true };
 }
 
 export async function resetPassword(token, newPassword) {
@@ -102,7 +107,12 @@ export async function updateProfile(userId, data) {
     const allowed = {};
     if (data.fullName !== undefined) allowed.fullName = data.fullName.trim();
     if (data.username !== undefined) allowed.username = normalizeUsername(data.username);
-    if (data.phone !== undefined) allowed.phone = data.phone?.trim() || null;
+    if (data.phone !== undefined) {
+        if (data.phone !== null && typeof data.phone !== "string") throw new ApiError(400, "INVALID_PHONE", recipientPhoneError);
+        const phone = data.phone?.trim() || null;
+        if (phone && !validRecipientPhone(phone)) throw new ApiError(400, "INVALID_PHONE", recipientPhoneError);
+        allowed.phone = phone;
+    }
     if (data.avatarUrl !== undefined) allowed.avatarUrl = data.avatarUrl?.trim() || null;
     if (allowed.fullName !== undefined && !allowed.fullName) throw new ApiError(400, "INVALID_PROFILE", "Họ tên không được để trống.");
     if (!Object.keys(allowed).length) throw new ApiError(400, "INVALID_PROFILE", "Không có thông tin hồ sơ để cập nhật.");

@@ -55,8 +55,8 @@ export function findActiveCredentialsByEmail(email) {
 export function findActiveCredentialsByIdentifier(identifier) {
     const normalized = identifier.trim().toLowerCase();
     if (normalized.includes("@")) return findActiveCredentialsByEmail(normalized);
-    return prisma.user.findFirst({
-        where: { username: { equals: normalized, mode: "insensitive" }, isActive: true },
+    return prisma.user.findUnique({
+        where: { username: normalized, isActive: true },
         select: { id: true, email: true, username: true, role: true, passwordHash: true },
     });
 }

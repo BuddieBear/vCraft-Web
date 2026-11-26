@@ -2,10 +2,12 @@ import { hash } from "bcryptjs";
 import { createArtisanAccount, listAdminArtisans, decideArtisan, setArtisanSuspension } from "../repositories/users.repository.js";
 import { ApiError } from "../middlewares/api-error.js";
 import { findArtisanForReview } from "../repositories/artisans.repository.js";
+import { normalizeUsername, validatePassword } from "./auth.service.js";
 
 export async function issueArtisan(adminId, { email, username, password, fullName, ...profile }) {
+    validatePassword(password);
+    const normalizedUsername = normalizeUsername(username);
     const passwordHash = await hash(password, 12);
-    const normalizedUsername = typeof username === "string" && username.trim() ? username.trim().toLowerCase() : null;
     return createArtisanAccount(adminId, { email: email.toLowerCase(), username: normalizedUsername, passwordHash, fullName }, {
         ...profile, isOpenForVisitors: false, openingHours: "",
     });

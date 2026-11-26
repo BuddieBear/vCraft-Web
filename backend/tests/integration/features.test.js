@@ -536,14 +536,33 @@ test("artisan, production, administration, media and retail APIs", async () => {
         const badUsernameReg = await request("/auth/register", { method: "POST", body: { email: "bad-user@example.test", username: "bad user!", fullName: "Bad", password: process.env.SEED_DEMO_PASSWORD } });
         assert.equal(badUsernameReg.status, 400);
         assert.equal(badUsernameReg.json.error.fields[0].name, "username");
+        const punctUsernameReg = await request("/auth/register", { method: "POST", body: { email: "punct-user@example.test", username: "...", fullName: "Punct", password: process.env.SEED_DEMO_PASSWORD } });
+        assert.equal(punctUsernameReg.status, 400);
+        assert.equal(punctUsernameReg.json.error.fields[0].name, "username");
         const dupUsernameReg = await request("/auth/register", { method: "POST", body: { email: "dup-user@example.test", username: "Buyer", fullName: "Dup", password: process.env.SEED_DEMO_PASSWORD } });
         assert.equal(dupUsernameReg.status, 409);
+        assert.equal(dupUsernameReg.json.error.fields[0].name, "username");
+        const invalidLoginFields = await request("/auth/login", { method: "POST", body: { identifier: "a".repeat(256), password: "" } });
+        assert.equal(invalidLoginFields.status, 400);
+        assert.equal(invalidLoginFields.json.error.fields.find((f) => f.name === "identifier")?.message, "Nhập tối đa 255 ký tự.");
+        assert.equal(invalidLoginFields.json.error.fields.find((f) => f.name === "password")?.message, "Vui lòng điền mục này.");
 
         const updatedViewer = await request("/auth/me", { method: "PATCH", token: viewer, body: { fullName: "Updated Viewer", username: "quote_viewer_2", phone: "0912345678" } });
         assert.equal(updatedViewer.status, 200);
         assert.equal(updatedViewer.json.data.username, "quote_viewer_2");
         assert.equal(updatedViewer.json.data.phone, "0912345678");
-        assert.equal((await request("/auth/me", { method: "PATCH", token: viewer, body: { username: "buyer" } })).status, 409);
+        const dupUsernamePatch = await request("/auth/me", { method: "PATCH", token: viewer, body: { username: "buyer" } });
+        assert.equal(dupUsernamePatch.status, 409);
+        assert.equal(dupUsernamePatch.json.error.fields[0].name, "username");
+        const punctUsernamePatch = await request("/auth/me", { method: "PATCH", token: viewer, body: { username: "---" } });
+        assert.equal(punctUsernamePatch.status, 400);
+        assert.equal(punctUsernamePatch.json.error.fields[0].name, "username");
+        const badPhonePatch = await request("/auth/me", { method: "PATCH", token: viewer, body: { phone: "abc" } });
+        assert.equal(badPhonePatch.status, 400);
+        assert.equal(badPhonePatch.json.error.fields[0].name, "phone");
+        const badAvatarPatch = await request("/auth/me", { method: "PATCH", token: viewer, body: { avatarUrl: "javascript:alert(1)" } });
+        assert.equal(badAvatarPatch.status, 400);
+        assert.equal(badAvatarPatch.json.error.fields[0].name, "avatarUrl");
 
         const immediateSend = await request("/wholesale/quotes", {
             method: "POST", token: freshBuyer,
@@ -564,15 +583,46 @@ test("artisan, production, administration, media and retail APIs", async () => {
             body: { title: "Sai chế độ", specifications: "Lụa", targetQuantity: 4, deadline: "2099-01-01", artisanIds: [workshopId], submitMode: "DISPATCH" },
         });
         assert.equal(invalidDispatchCombo.status, 400);
+        const invalidDispatchTarget = await request("/wholesale/quotes", {
+            method: "POST", token: freshBuyer,
+            body: { title: "Sai chế độ đơn xưởng", specifications: "Lụa", targetQuantity: 4, deadline: "2099-01-01", targetArtisanId: workshopId, submitMode: "DISPATCH" },
+        });
+        assert.equal(invalidDispatchTarget.status, 400);
 
-        const prevNodeEnv = process.env.NODE_ENV;
+        const savedEnv = {
+            NODE_ENV: process.env.NODE_ENV,
+            RESEND_API_KEY: process.env.RESEND_API_KEY,
+            PASSWORD_RESET_FROM: process.env.PASSWORD_RESET_FROM,
+            PUBLIC_APP_URL: process.env.PUBLIC_APP_URL,
+        };
         try {
+            delete process.env.RESEND_API_KEY;
+            delete process.env.PASSWORD_RESET_FROM;
+            delete process.env.PUBLIC_APP_URL;
+
             process.env.NODE_ENV = "development";
             assert.equal(passwordResetDelivery(), null);
+            const devReset = await request("/auth/password/reset/request", { method: "POST", body: { identifier: "quote_viewer_2" } });
+            assert.equal(devReset.status, 200);
+            assert.deepEqual(devReset.json.data, { accepted: true });
+            assert.equal(devReset.json.data.resetToken, undefined);
+
+            process.env.NODE_ENV = "test";
+            assert.equal(passwordResetDelivery(), null);
+
             process.env.NODE_ENV = "production";
             assert.throws(() => passwordResetDelivery(), (err) => err.status === 503 && err.code === "RESET_MAIL_UNAVAILABLE");
+
+            delete process.env.NODE_ENV;
+            assert.throws(() => passwordResetDelivery(), (err) => err.status === 503 && err.code === "RESET_MAIL_UNAVAILABLE");
+
+            process.env.NODE_ENV = "";
+            assert.throws(() => passwordResetDelivery(), (err) => err.status === 503 && err.code === "RESET_MAIL_UNAVAILABLE");
         } finally {
-            process.env.NODE_ENV = prevNodeEnv;
+            for (const [key, value] of Object.entries(savedEnv)) {
+                if (value === undefined) delete process.env[key];
+                else process.env[key] = value;
+            }
         }
 
         const resetByUsername = await request("/auth/password/reset/request", { method: "POST", body: { identifier: "quote_viewer_2" } });

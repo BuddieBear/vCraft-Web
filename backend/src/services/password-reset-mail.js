@@ -3,11 +3,11 @@ import { signInPath } from "../../../frontend/src/site-paths.js";
 
 export function passwordResetDelivery() {
     const { RESEND_API_KEY: key, PASSWORD_RESET_FROM: from, PUBLIC_APP_URL: appUrl, NODE_ENV: environment } = process.env;
-    if (!key && !from && !appUrl && environment !== "production") return null;
+    if (!key && !from && !appUrl && (environment === "test" || environment === "development")) return null;
     let origin;
     try {
         origin = new URL(appUrl);
-        if (origin.protocol !== "https:" && !(environment !== "production" && origin.protocol === "http:")) throw new Error();
+        if (origin.protocol !== "https:" && !((environment === "test" || environment === "development") && origin.protocol === "http:")) throw new Error();
         if (origin.username || origin.password || origin.pathname !== "/" || origin.search || origin.hash || !key || !from) throw new Error();
     } catch {
         throw new ApiError(503, "RESET_MAIL_UNAVAILABLE", "Dịch vụ gửi email khôi phục đang tạm thời không khả dụng.");
