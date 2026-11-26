@@ -4,14 +4,13 @@ import { paymentLabel } from "../data/payment-labels.js";
 import { reviewForm } from "./reviews.page.js";
 import { bindFormErrors, clearFormErrors, showFormErrors } from "../components/form-errors.js";
 import { recipientPhoneError, validRecipientPhone } from "../data/input-values.js";
+import { retailStatusLabels as orderStatus } from "../data/retail-status.js";
 
 export function mountCart(dialog, updateBadge, notify, account) {
   let items = [];
   let busy = false;
   let revision = 0;
-  const orderStatus = {
-    PENDING: "Chờ xác nhận", CONFIRMED: "Đã xác nhận", SHIPPING: "Đang giao", DELIVERED: "Đã giao", CANCELLED: "Đã hủy",
-  };
+  let confirmedItems = [];
 
   async function refresh() {
     const version = ++revision;
@@ -31,6 +30,7 @@ export function mountCart(dialog, updateBadge, notify, account) {
   }
 
   function render() {
+    confirmedItems = items.map(({ product, quantity }) => ({ productId: product.id, unitPrice: String(product.price), quantity }));
     dialog.innerHTML = `
       <div class="cart-header"><h2 id="cart-title">Giỏ lụa <small>(${itemCount()})</small></h2>
         <button type="button" class="icon-button" data-action="close" aria-label="Đóng giỏ hàng">${icon("close")}</button>
@@ -42,6 +42,7 @@ export function mountCart(dialog, updateBadge, notify, account) {
         <label>Tên người nhận<input name="recipientName" autocomplete="name" maxlength="120" required></label>
         <label>Số điện thoại<input name="recipientPhone" type="tel" autocomplete="tel" inputmode="tel" maxlength="20" required></label>
         <label>Địa chỉ giao hàng<textarea name="shippingAddress" autocomplete="street-address" maxlength="2000" required></textarea></label>
+        <label>Ghi chú giao hàng<textarea name="shippingNote" maxlength="2000"></textarea></label>
         <button class="button button-primary cart-checkout" type="submit">Đặt hàng · trả khi nhận</button>
       </form>
       <button class="text-button" type="button" data-action="orders">Xem đơn hàng</button>
@@ -92,7 +93,8 @@ export function mountCart(dialog, updateBadge, notify, account) {
     form.hidden = false;
     form.querySelector('[type="submit"]').disabled = !canCheckout;
     form.elements.namedItem("recipientName").value = account.profile?.fullName || "";
-    form.elements.namedItem("recipientPhone").value = account.profile?.phone || "";
+    const phone = account.profile?.phone;
+    form.elements.namedItem("recipientPhone").value = phone && validRecipientPhone(phone) ? phone : "";
   }
 
   async function updateQuantity(id, quantity, product) {
@@ -124,6 +126,73 @@ export function mountCart(dialog, updateBadge, notify, account) {
     return false;
   }
 
+  async function showOrders(page = 1, id) {
+    const target = dialog.querySelector(".cart-orders");
+    const profile = account.profile;
+    const { data, pagination } = await request(id ? `/retail/orders/${encodeURIComponent(id)}` : `/retail/orders?limit=24&page=${page}`, { auth: true });
+    if (!target.isConnected || !dialog.open || account.profile !== profile) return;
+    const rows = id ? [data] : data;
+    const heading = document.createElement("h3");
+    heading.textContent = id ? "Chi tiết đơn hàng" : rows.length ? "Lịch sử đơn hàng" : "Bạn chưa có đơn hàng.";
+    const orders = document.createElement("ul");
+    for (const order of rows) {
+      const item = document.createElement("li");
+      item.textContent = `${order.orderCode} · ${orderStatus[order.status]} · ${formatPrice(order.totalAmount)} · ${paymentLabel(order)}`;
+      if (order.fulfillments.length > 1 || id) {
+        const progress = document.createElement("ul");
+        for (const part of order.fulfillments) {
+          const row = document.createElement("li");
+          row.textContent = `${part.artisan.workshopName} · ${orderStatus[part.status]} · ${paymentLabel({ ...part, paymentMethod: order.paymentMethod })}`;
+          progress.append(row);
+        }
+        item.append(progress);
+      }
+      if (id) {
+        const lines = document.createElement("ul");
+        for (const line of order.items) {
+          const row = document.createElement("li");
+          row.textContent = `${line.quantity} × ${line.product.name} · ${formatPrice(line.subtotal)}`;
+          lines.append(row);
+        }
+        const shipping = document.createElement("p");
+        shipping.textContent = [order.recipientName, order.recipientPhone, order.shippingAddress, order.shippingNote].filter(Boolean).join(" · ");
+        item.append(lines, shipping);
+      }
+      if (order.status === "PENDING" && order.paymentStatus === "UNPAID" && order.fulfillments.every(part => ["PENDING", "CANCELLED"].includes(part.status))) {
+        const cancel = document.createElement("button");
+        cancel.type = "button";
+        cancel.className = "button button-outline";
+        cancel.dataset.action = "cancel-order";
+        cancel.dataset.order = order.id;
+        cancel.dataset.page = page;
+        if (id) cancel.dataset.detail = id;
+        cancel.textContent = "Hủy đơn";
+        item.append(cancel);
+      }
+      if (order.status === "DELIVERED" && order.paymentStatus === "PAID") {
+        const delivered = new Set(order.fulfillments.filter(part => part.status === "DELIVERED").map(part => part.artisanId));
+        const review = reviewForm(order, "retailOrderId", order.items.filter(line => delivered.has(line.artisanId)).map(line => ({
+          productId: line.productId, productName: line.product.name,
+          artisanId: line.artisanId, workshopName: line.artisan.workshopName,
+        })));
+        if (review) item.append(review);
+      }
+      orders.append(item);
+    }
+    target.replaceChildren(heading, orders);
+    if (!pagination) return;
+    for (const [available, next, label] of [[page > 1, page - 1, "Trang trước"], [pagination.hasNext, page + 1, "Trang sau"]]) {
+      if (!available) continue;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "button button-outline";
+      button.dataset.action = "orders";
+      button.dataset.page = next;
+      button.textContent = label;
+      target.append(button);
+    }
+  }
+
   dialog.addEventListener("click", async event => {
     const control = event.target.closest("[data-action]");
     if (!control) return;
@@ -135,34 +204,13 @@ export function mountCart(dialog, updateBadge, notify, account) {
     if (busy) return;
     busy = control.disabled = true;
     try {
-      if (action === "orders") {
-        const { data } = await request("/retail/orders?limit=24", { auth: true });
-        const target = dialog.querySelector(".cart-orders");
-        const heading = document.createElement("h3");
-        heading.textContent = data.length ? "Đơn hàng gần đây" : "Bạn chưa có đơn hàng.";
-        const orders = document.createElement("ul");
-        for (const order of data) {
-          const item = document.createElement("li");
-          item.textContent = `${order.orderCode} · ${orderStatus[order.status]} · ${formatPrice(order.totalAmount)} · ${paymentLabel(order)}`;
-          if (order.fulfillments.length > 1) {
-            const progress = document.createElement("ul");
-            for (const part of order.fulfillments) {
-              const row = document.createElement("li");
-              row.textContent = `${part.artisan.workshopName} · ${orderStatus[part.status]} · ${paymentLabel({ ...part, paymentMethod: order.paymentMethod })}`;
-              progress.append(row);
-            }
-            item.append(progress);
-          }
-          if (order.status === "DELIVERED" && order.paymentStatus === "PAID") {
-            const review = reviewForm(order, "retailOrderId", order.items.map(line => ({
-              productId: line.productId, productName: line.product.name,
-              artisanId: line.artisanId, workshopName: line.artisan.workshopName,
-            })));
-            if (review) item.append(review);
-          }
-          orders.append(item);
+      if (action === "orders" || action === "cancel-order") {
+        if (action === "cancel-order") {
+          if (!window.confirm("Hủy đơn hàng này?")) return;
+          await request(`/retail/orders/${encodeURIComponent(control.dataset.order)}/status`, { method: "PATCH", auth: true, body: { status: "CANCELLED" } });
+          notify("Đã hủy đơn hàng.");
         }
-        target.replaceChildren(heading, orders);
+        await showOrders(Number(control.dataset.page || 1), control.dataset.detail);
         return;
       }
       const id = control.closest("[data-product]").dataset.product;
@@ -194,13 +242,24 @@ export function mountCart(dialog, updateBadge, notify, account) {
     busy = button.disabled = true;
     try {
       const { data } = await request("/retail/checkout", {
-        method: "POST", auth: true, body: { ...values, paymentMethod: "COD" },
+        method: "POST", auth: true, body: { ...values, paymentMethod: "COD", confirmedItems },
       });
       items = [];
       updateBadge(0);
       dialog.close();
       notify("Đã tạo đơn " + data.orderCode + ".");
     } catch (error) {
+      if (error.code === "CART_CHANGED" && dialog.open) {
+        try {
+          await refresh();
+          if (!dialog.open) return;
+          render();
+          for (const [key, value] of Object.entries(values)) dialog.querySelector("form").elements.namedItem(key).value = value;
+        } catch (refreshError) {
+          report(refreshError);
+          return;
+        }
+      }
       if (!showFormErrors(form, error.fields)) report(error);
     } finally { busy = button.disabled = false; }
   });
@@ -224,7 +283,7 @@ export function mountCart(dialog, updateBadge, notify, account) {
         return true;
       } finally { busy = false; }
     },
-    async open() {
+    async open(orderId) {
       if (busy) return;
       busy = true;
       try {
@@ -234,6 +293,7 @@ export function mountCart(dialog, updateBadge, notify, account) {
         if (buyer !== account.profile) return;
         render();
         if (!dialog.open) dialog.showModal();
+        if (typeof orderId === "string") await showOrders(1, orderId);
       } catch (error) { notify(error.message); }
       finally { busy = false; }
     },
