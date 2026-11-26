@@ -5,6 +5,7 @@ import { join } from "node:path";
 import sharp from "sharp";
 import { app } from "../../src/app.js";
 import { prisma } from "../../src/database/prisma.js";
+import { passwordResetDelivery } from "../../src/services/password-reset-mail.js";
 import { quoteBudgetError, vietnamToday } from "../../../frontend/src/data/input-values.js";
 import { biddingPagePath, newsArticlePath, quoteJournalPath, quotePagePath, referenceWorkshopPath, sitePaths } from "../../../frontend/src/site-paths.js";
 import { assertIsolatedTestDatabase } from "../test-env.js";
@@ -109,9 +110,12 @@ test("artisan, production, administration, media and retail APIs", async () => {
         const certificate = await request("/artisans/me/certificates", { method: "POST", token: artisan, body: { title: "Certificate", issuingAuthority: "Test", issuedYear: 2020, certificateImageUrl: uploaded } });
         assert.equal(certificate.status, 201);
         assert.equal((await request(`/artisans/me/certificates/${certificate.json.data.id}`, { method: "DELETE", token: artisan })).status, 204);
-        const newArtisan = await request("/admin/artisans", { method: "POST", token: admin, body: { email: "feature-artisan@example.test", password: "Strong-test-password", fullName: "New Artisan", workshopName: "New Workshop", address: "Test", latitude: 20, longitude: 106 } });
+        const newArtisan = await request("/admin/artisans", { method: "POST", token: admin, body: { email: "feature-artisan@example.test", username: "feature_artisan", password: "Strong-test-password", fullName: "New Artisan", workshopName: "New Workshop", address: "Test", latitude: 20, longitude: 106 } });
         assert.equal(newArtisan.status, 201);
-        const other = await login("feature-artisan@example.test", "Strong-test-password");
+        assert.equal(newArtisan.json.data.username, "feature_artisan");
+        const otherLogin = await request("/auth/login", { method: "POST", body: { identifier: "FEATURE_ARTISAN", password: "Strong-test-password" } });
+        assert.equal(otherLogin.status, 200);
+        const other = otherLogin.json.data.accessToken;
         const workshopId = newArtisan.json.data.artisanProfile.id;
         const proofPath = "/admin/artisans/" + workshopId;
         assert.equal(newArtisan.json.data.artisanProfile.isOpenForVisitors, false);
@@ -131,6 +135,7 @@ test("artisan, production, administration, media and retail APIs", async () => {
         assert.equal(proof.json.data.familyHistory, "Workshop history");
         assert.equal(proof.json.data.galleryImages[0], uploaded);
         assert.equal(proof.json.data.certificates[0].title, "Pending workshop certificate");
+        assert.equal(proof.json.data.user.username, "feature_artisan");
         assert.equal(proof.json.data.user.passwordHash, undefined);
         const suspensionPath = `/admin/artisans/${workshopId}/suspension`;
         const suspension = (isSuspended, token = admin) => request(suspensionPath, { method: "PATCH", token, body: { isSuspended } });
@@ -160,9 +165,11 @@ test("artisan, production, administration, media and retail APIs", async () => {
         assert.equal((await fetch(base + sitePaths.workshop)).status, 200);
         assert.equal((await fetch(base + biddingPagePath(quoteId))).status, 200);
         assert.equal((await fetch(base + biddingPagePath("invalid"))).status, 404);
-        const otherBuyer = { email: "quote-viewer@example.test", fullName: "Other buyer", password: process.env.SEED_DEMO_PASSWORD };
+        const otherBuyer = { email: "quote-viewer@example.test", username: "quote_viewer", fullName: "Other buyer", password: process.env.SEED_DEMO_PASSWORD };
         assert.equal((await request("/auth/register", { method: "POST", body: otherBuyer })).status, 201);
-        const viewer = await login(otherBuyer.email);
+        const viewerLogin = await request("/auth/login", { method: "POST", body: { username: "QUOTE_VIEWER", password: otherBuyer.password } });
+        assert.equal(viewerLogin.status, 200);
+        const viewer = viewerLogin.json.data.accessToken;
         const privateQuote = "/wholesale/quotes/" + quoteId;
         assert.equal((await request(privateQuote)).status, 401);
         assert.equal((await request(privateQuote, { token: other })).status, 403);
@@ -519,6 +526,64 @@ test("artisan, production, administration, media and retail APIs", async () => {
         assert.equal((await request(privateQuote, { token: buyer })).status, 401);
         assert.equal((await request(privateQuote, { token: secondSession })).status, 401);
         assert.equal((await request("/auth/me", { token: viewer })).status, 200);
+
+        // Issue #6, #7, #8, #10 regression coverage: username auth, profile update, forgot-password fallback, atomic wholesale submitMode
+        const buyerByUsername = await request("/auth/login", { method: "POST", body: { identifier: "BUYER", password: process.env.SEED_DEMO_PASSWORD } });
+        assert.equal(buyerByUsername.status, 200);
+        const freshBuyer = buyerByUsername.json.data.accessToken;
+        const buyerProfile = await request("/auth/me", { token: freshBuyer });
+        assert.equal(buyerProfile.json.data.username, "buyer");
+        const badUsernameReg = await request("/auth/register", { method: "POST", body: { email: "bad-user@example.test", username: "bad user!", fullName: "Bad", password: process.env.SEED_DEMO_PASSWORD } });
+        assert.equal(badUsernameReg.status, 400);
+        assert.equal(badUsernameReg.json.error.fields[0].name, "username");
+        const dupUsernameReg = await request("/auth/register", { method: "POST", body: { email: "dup-user@example.test", username: "Buyer", fullName: "Dup", password: process.env.SEED_DEMO_PASSWORD } });
+        assert.equal(dupUsernameReg.status, 409);
+
+        const updatedViewer = await request("/auth/me", { method: "PATCH", token: viewer, body: { fullName: "Updated Viewer", username: "quote_viewer_2", phone: "0912345678" } });
+        assert.equal(updatedViewer.status, 200);
+        assert.equal(updatedViewer.json.data.username, "quote_viewer_2");
+        assert.equal(updatedViewer.json.data.phone, "0912345678");
+        assert.equal((await request("/auth/me", { method: "PATCH", token: viewer, body: { username: "buyer" } })).status, 409);
+
+        const immediateSend = await request("/wholesale/quotes", {
+            method: "POST", token: freshBuyer,
+            body: { title: "Gửi thẳng xưởng", specifications: "Lụa tơ tằm", targetQuantity: 3, deadline: "2099-01-01", artisanIds: [workshopId], submitMode: "SEND" },
+        });
+        assert.equal(immediateSend.status, 201);
+        assert.equal(immediateSend.json.data.status, "SENT_TO_ARTISANS");
+        assert.equal((await request("/wholesale/open-quotes/" + immediateSend.json.data.id, { token: other })).status, 200);
+        const immediateDispatch = await request("/wholesale/quotes", {
+            method: "POST", token: freshBuyer,
+            body: { title: "Nhờ điều phối ngay", specifications: "Lụa trơn", targetQuantity: 4, deadline: "2099-01-01", submitMode: "DISPATCH" },
+        });
+        assert.equal(immediateDispatch.status, 201);
+        assert.equal(immediateDispatch.json.data.status, "PENDING_DISPATCH");
+        assert.ok((await request("/wholesale/admin/quotes?status=PENDING_DISPATCH", { token: admin })).json.data.some(item => item.id === immediateDispatch.json.data.id));
+        const invalidDispatchCombo = await request("/wholesale/quotes", {
+            method: "POST", token: freshBuyer,
+            body: { title: "Sai chế độ", specifications: "Lụa", targetQuantity: 4, deadline: "2099-01-01", artisanIds: [workshopId], submitMode: "DISPATCH" },
+        });
+        assert.equal(invalidDispatchCombo.status, 400);
+
+        const prevNodeEnv = process.env.NODE_ENV;
+        try {
+            process.env.NODE_ENV = "development";
+            assert.equal(passwordResetDelivery(), null);
+            process.env.NODE_ENV = "production";
+            assert.throws(() => passwordResetDelivery(), (err) => err.status === 503 && err.code === "RESET_MAIL_UNAVAILABLE");
+        } finally {
+            process.env.NODE_ENV = prevNodeEnv;
+        }
+
+        const resetByUsername = await request("/auth/password/reset/request", { method: "POST", body: { identifier: "quote_viewer_2" } });
+        assert.equal(resetByUsername.status, 200);
+        assert.ok(resetByUsername.json.data.resetToken);
+        const shortReset = await request("/auth/password/reset/confirm", { method: "POST", body: { token: resetByUsername.json.data.resetToken, newPassword: "short" } });
+        assert.equal(shortReset.status, 400);
+        assert.equal(shortReset.json.error.fields[0].name, "newPassword");
+        const nextPassword = "Reset-Password-Via-Username-123";
+        assert.equal((await request("/auth/password/reset/confirm", { method: "POST", body: { token: resetByUsername.json.data.resetToken, newPassword: nextPassword } })).status, 200);
+        assert.equal((await request("/auth/login", { method: "POST", body: { identifier: "quote_viewer_2", password: nextPassword } })).status, 200);
     } finally {
         if (uploaded) await unlink(join(process.env.UPLOAD_DIR, uploaded.split("/").pop()));
         server.closeAllConnections?.();
