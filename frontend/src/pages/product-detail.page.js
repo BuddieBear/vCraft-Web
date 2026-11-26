@@ -52,7 +52,7 @@ export async function mountProductDetail(section, { slug, reference }, addToCart
     document.title = product.name + " · vCraft";
     price.textContent = reference ? referenceProductPrice(product) : formatPrice(product.price, saleUnits[product.saleUnit]);
     status.textContent = "";
-    grid.insertAdjacentHTML("beforeend", renderProductionGuide(product, { cover: src, reference, showQr: true }));
+    grid.insertAdjacentHTML("beforeend", renderProductionGuide(product, { cover: src, reference, showQr: false }));
     const description = section.querySelector(".product-description");
     const specs = section.querySelector(".detail-specs");
     const actions = section.querySelector(".detail-actions");

@@ -87,17 +87,12 @@ export async function mountReferenceShowroom(section, slug) {
       ["Xem bản đồ làng nghề", sitePaths.map],
       [locationInfo.phone, locationInfo.phone && "tel:" + locationInfo.phone],
       ["Gửi email hỏi lịch", locationInfo.email && "mailto:" + locationInfo.email],
-      ["Nguồn thông tin", locationInfo.source],
     ]) {
       if (!href) continue;
       const link = document.createElement("a");
       link.href = href;
       link.className = "text-link";
       link.textContent = label;
-      if (href === locationInfo.source) {
-        link.target = "_blank";
-        link.rel = "noopener noreferrer";
-      }
       contact.append(link);
     }
     info.hidden = false;
