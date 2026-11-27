@@ -50,11 +50,11 @@ test("checkout, multi-artisan quote and verified review transactions", async () 
         assert.equal((await prisma.product.findUniqueOrThrow({ where: { id: expensive.id } })).stockQuantity, 2);
         assert.equal(await prisma.cartItem.count({ where: { userId: buyer3.id } }), 1);
         assert.equal(await prisma.retailOrder.count({ where: { buyerId: buyer3.id } }), 0);
-        await assert.rejects(createReview({ userId: order.buyerId, targetType: "PRODUCT", productId: product.id, artisanId: w1.id, retailOrderId: order.id, rating: 5, comment: "Good" }));
-        await prisma.retailOrder.update({ where: { id: order.id }, data: { status: "DELIVERED" } });
         const review = { userId: order.buyerId, targetType: "PRODUCT", productId: product.id, artisanId: w1.id, retailOrderId: order.id, rating: 5, comment: "Good" };
         await assert.rejects(createReview(review), /Review target is not in a delivered order/);
-        await prisma.retailOrder.update({ where: { id: order.id }, data: { paymentStatus: "PAID" } });
+        for (const status of ["CONFIRMED", "SHIPPING", "DELIVERED"]) {
+            await changeOrderStatus({ id: a1.id, role: "ARTISAN" }, order.id, status, status === "DELIVERED");
+        }
         await assert.rejects(prisma.review.create({
             data: { buyerId: buyer3.id, productId: product.id, artisanId: w1.id, retailOrderId: order.id, rating: 5, comment: "Wrong order owner", isVerifiedPurchase: true },
         }), { code: "P2003" });

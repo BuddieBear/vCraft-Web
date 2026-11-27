@@ -40,6 +40,7 @@ test("fresh ORM migration, idempotent seed, pricing and rating rollups", { timeo
         SITE_CSP_REPORT_ONLY: "false",
         UPLOAD_DIR: resolve(tmpdir(), `vcraft-upload-test-${randomBytes(8).toString("hex")}`),
     };
+    delete env.NODE_TEST_CONTEXT;
     const run = (...args) => execFileSync(process.execPath, args, {
         cwd: root,
         env,
@@ -47,6 +48,22 @@ test("fresh ORM migration, idempotent seed, pricing and rating rollups", { timeo
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
     });
+    const runTestSuite = (name, file) => {
+        let output;
+        try {
+            output = run("--test-reporter=tap", file);
+        } catch (error) {
+            process.stderr.write(`${name} integration suite failed:\n${error.stdout ?? ""}${error.stderr ?? ""}`);
+            throw error;
+        }
+        const passed = output.match(/^# pass (\d+)\r?$/m);
+        const failed = output.match(/^# fail (\d+)\r?$/m);
+        assert.ok(passed, `${name} emitted no TAP pass summary:\n${output}`);
+        assert.ok(failed, `${name} emitted no TAP failure summary:\n${output}`);
+        assert.ok(Number(passed[1]) > 0, `${name} passed no tests:\n${output}`);
+        assert.equal(Number(failed[1]), 0, `${name} reported failing tests:\n${output}`);
+        process.stdout.write(`${name}: ${passed[1]} tests passed\n`);
+    };
     const seed = () => run(seedFile);
     const productIds = () => prisma.product.findMany({ orderBy: { slug: "asc" }, select: { id: true, slug: true } });
 
@@ -70,7 +87,7 @@ test("fresh ORM migration, idempotent seed, pricing and rating rollups", { timeo
         assert.equal(firstUsers.length, artisans.length + 2);
         assert.equal(await prisma.productBatch.count(), batches.length);
         assert.equal(await prisma.batchLog.count(), batches.length * 5);
-        run("--test", persistenceTest);
+        runTestSuite("persistence", persistenceTest);
 
         const fixed = await prisma.product.findUniqueOrThrow({ where: { slug: "hong-dat" } });
         const contact = await prisma.product.findUniqueOrThrow({ where: { slug: "hop-nang" } });
@@ -115,11 +132,11 @@ test("fresh ORM migration, idempotent seed, pricing and rating rollups", { timeo
         await prisma.product.update({ where: { id: collision.id }, data: { artisanId: collision.artisanId } });
         seed();
         assert.equal(await prisma.product.count(), products.length);
-        run("--test", commerceTest);
-        run("--test", apiTest);
-        run("--test", featureTest);
-        run("--test", authUsernameTest);
-        run("--test", privateTraceabilityTest);
+        runTestSuite("commerce", commerceTest);
+        runTestSuite("api", apiTest);
+        runTestSuite("features", featureTest);
+        runTestSuite("auth-username", authUsernameTest);
+        runTestSuite("private-qr-traceability", privateTraceabilityTest);
     } finally {
         await prisma.$disconnect();
     }

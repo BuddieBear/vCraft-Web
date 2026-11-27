@@ -188,7 +188,7 @@ test("artisan, production, administration, media and retail APIs", async () => {
         const direct = await request("/wholesale/quotes", { method: "POST", token: buyer, body: { title: "Gửi riêng", specifications: "Test", targetQuantity: 1, deadline: "2099-01-01", targetArtisanId: newArtisan.json.data.artisanProfile.id, maxBudget: "2500000.25" } });
         assert.equal(direct.status, 201);
         assert.equal(direct.json.data.maxBudget, "2500000.25");
-        await assert.rejects(prisma.artisanProfile.delete({ where: { id: newArtisan.json.data.artisanProfile.id } }), { code: "P2003" });
+        await assert.rejects(prisma.artisanProfile.delete({ where: { id: newArtisan.json.data.artisanProfile.id } }), /quotation_requests_target_artisan_id_fkey/);
         const routedQuote = await request("/wholesale/quotes", { method: "POST", token: buyer, body: { title: "Gửi nhóm", specifications: "Test", targetQuantity: 5, deadline: "2099-01-01" } });
         assert.equal(routedQuote.status, 201);
         assert.equal(routedQuote.json.data.maxBudget, null);
@@ -601,7 +601,7 @@ test("artisan, production, administration, media and retail APIs", async () => {
         assert.equal(completed.totalAmount, "40");
         assert.ok((await request("/retail/orders?limit=1", { token: buyer })).json.pagination.hasNext);
         assert.ok((await request("/notifications?limit=100", { token: buyer })).json.data.some(item => item.linkUrl === `/?don-hang=${completed.id}` && item.message.includes("Đã hủy")));
-        assert.equal((await request("/reviews", { method: "POST", token: buyer, body: { targetType: "PRODUCT", rating: 5, productId: product.id, artisanId: product.artisanId, retailOrderId: completed.id } })).status, 409);
+        assert.equal((await request("/reviews", { method: "POST", token: buyer, body: { targetType: "PRODUCT", rating: 5, comment: "Cancelled workshop order", productId: product.id, artisanId: product.artisanId, retailOrderId: completed.id } })).status, 409);
 
         for (const [targetType, rating] of [["ARTISAN", 3], ["PRODUCT", 5]]) {
             const review = await request("/reviews", { method: "POST", token: buyer, body: {
