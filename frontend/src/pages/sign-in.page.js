@@ -51,6 +51,7 @@ function updateMode() {
   identifierInput.autocomplete = registration ? "email" : "username";
   identifierInput.placeholder = registration ? "ten@example.com" : "Nhập email hoặc username";
   password.autocomplete = registration ? "new-password" : "current-password";
+  password.value = "";
   if (registration) {
     password.minLength = 12;
     password.setAttribute("aria-describedby", "password-hint");
@@ -68,7 +69,6 @@ function updateMode() {
 toggle.addEventListener("click", () => {
   registration = !registration;
   updateMode();
-  password.value = "";
   status.textContent = registration
     ? "Đã chuyển sang tạo tài khoản người mua."
     : "Đã chuyển sang đăng nhập.";
