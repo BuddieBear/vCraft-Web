@@ -46,6 +46,20 @@ export async function request(path, { method = "GET", body, signal, auth = false
   return result;
 }
 
+export async function requestPng(path, { auth = false } = {}) {
+  const session = auth ? token : null;
+  const headers = { Accept: "image/png" };
+  if (session) headers.Authorization = "Bearer " + session;
+  const response = await fetch("/api" + path, {
+    headers, cache: auth ? "no-store" : "default", redirect: "error",
+  });
+  if (!response.ok || !response.headers.get("Content-Type")?.startsWith("image/png")) {
+    if (response.status === 401 && session && token === session) setToken(null);
+    throw new Error(response.status === 401 ? "Vui lòng đăng nhập lại để tải mã QR." : "Không tải được mã QR.");
+  }
+  return response.blob();
+}
+
 export function mediaUrl(path) {
   if (!path) return null;
   try {

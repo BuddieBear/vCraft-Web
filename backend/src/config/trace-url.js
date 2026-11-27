@@ -14,6 +14,10 @@ export function batchLandingUrl(code) {
     return landingUrl(encodeURIComponent(code));
 }
 
+export function privateBatchLandingUrl(code) {
+    return landingUrl("private/" + encodeURIComponent(code));
+}
+
 export function productLandingUrl(slug, reference) {
     return landingUrl("product/" + productTraceSegment(slug, reference));
 }

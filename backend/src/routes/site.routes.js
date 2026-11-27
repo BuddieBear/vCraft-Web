@@ -41,6 +41,10 @@ router.get([quotePageRoot + "/:id", quoteJournalRoot + "/:id", sitePaths.bidding
 });
 router.get("/trace/product/reference/:slug", productionPage(true));
 router.get("/trace/product/:slug", productionPage(false));
+router.get("/trace/private/:code", (request, response) => {
+    if (!/^[a-zA-Z0-9_-]{1,50}$/.test(request.params.code)) return sendNotFound(response);
+    return response.set("Cache-Control", "private, no-store").sendFile("index.html", { root: frontendDirectory });
+});
 router.get("/trace/:code", batchPage);
 router.get(Object.values(sitePaths), sendIndex);
 

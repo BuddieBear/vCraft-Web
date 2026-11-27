@@ -3,9 +3,9 @@ import { z } from "zod";
 import { validate } from "../middlewares/validate-request.js";
 import { ApiError } from "../middlewares/api-error.js";
 import QRCode from "qrcode";
-import { findBuyerTimelineByBatchCode, listRecentPublicBatches } from "../repositories/traceability.repository.js";
+import { findBuyerTimelineByBatchCode, findPrivateTimelineByBatchCode, listRecentPublicBatches } from "../repositories/traceability.repository.js";
 import { getPublicTimeline, getPublicProductionProduct, getProductBatches, getMyBatches, createBatch, createBatchLog, updateBatchLog, finishBatch, cancelBatch } from "../services/traceability.service.js";
-import { batchLandingUrl, productLandingUrl } from "../config/trace-url.js";
+import { batchLandingUrl, privateBatchLandingUrl, productLandingUrl } from "../config/trace-url.js";
 import { authenticate } from "../middlewares/authenticate.js";
 import { authorize } from "../middlewares/authorize.js";
 import { byId, uuid, mediaUrl, listPage, pageQuery } from "./schemas.js";
@@ -33,6 +33,17 @@ router.get("/public/recent", async (_req, res) => res.json({ data: await listRec
 router.get("/purchased/:code", authenticate, authorize("BUYER"), validate({ params: codeParams }), async (req, res) => {
     const batch = await findBuyerTimelineByBatchCode(req.validatedParams.code, req.user.id);
     if (!batch) throw new ApiError(404, "NOT_FOUND", "Không tìm thấy lô trong đơn của bạn.");
+    res.set("Cache-Control", "private, no-store").json({ data: batch });
+});
+router.get("/private/:code/qr", authenticate, authorize("BUYER", "ARTISAN"), validate({ params: codeParams }), async (req, res) => {
+    if (!await findPrivateTimelineByBatchCode(req.validatedParams.code, req.user)) {
+        throw new ApiError(404, "NOT_FOUND", "Không tìm thấy nhật ký lô được phép xem.");
+    }
+    res.set("Cache-Control", "private, no-store").type("png").send(await QRCode.toBuffer(privateBatchLandingUrl(req.validatedParams.code), { type: "png", width: 320, margin: 2 }));
+});
+router.get("/private/:code/timeline", authenticate, authorize("BUYER", "ARTISAN"), validate({ params: codeParams }), async (req, res) => {
+    const batch = await findPrivateTimelineByBatchCode(req.validatedParams.code, req.user);
+    if (!batch) throw new ApiError(404, "NOT_FOUND", "Không tìm thấy nhật ký lô được phép xem.");
     res.set("Cache-Control", "private, no-store").json({ data: batch });
 });
 router.get("/products/:slug", validate({ params: productParams }), async (req, res) => res.json({ data: await getProductBatches(req.validatedParams.slug) }));

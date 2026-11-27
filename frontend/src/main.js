@@ -2,7 +2,7 @@ import { icon } from "./components/ui.js";
 import { mountCart } from "./pages/cart.page.js";
 import { retailOrderLinkId } from "./data/retail-status.js";
 import { mountAccount } from "./pages/login.page.js";
-import { homeMapId, matchProductPage, pageSegment, quoteJournalRoot, quotePageRoot, referenceWorkshopRoot, sitePaths } from "./site-paths.js";
+import { homeMapId, matchProductPage, pageSegment, privateBatchTraceRoot, quoteJournalRoot, quotePageRoot, referenceWorkshopRoot, sitePaths } from "./site-paths.js";
 
 const pages = new Map([
   [sitePaths.home, { id: "trang-chu", titleId: "hero-title" }],
@@ -22,10 +22,12 @@ const requestedPath = location.pathname.toLowerCase().replace(/\/+$/, "");
 const productPage = matchProductPage(requestedPath);
 const quoteId = pageSegment(requestedPath, quotePageRoot);
 const journalQuoteId = pageSegment(requestedPath, quoteJournalRoot);
+const rawPrivateBatchCode = pageSegment(location.pathname.replace(/\/+$/, ""), privateBatchTraceRoot);
+const privateBatchCode = /^[a-zA-Z0-9_-]{1,50}$/.test(rawPrivateBatchCode || "") ? rawPrivateBatchCode : null;
 const bidQuoteId = pageSegment(requestedPath, sitePaths.bidding);
 const articleSlug = pageSegment(requestedPath, sitePaths.news);
 const referenceWorkshopSlug = pageSegment(requestedPath, referenceWorkshopRoot);
-const path = productPage ? sitePaths.catalog : quoteId ? sitePaths.wholesale : journalQuoteId ? sitePaths.journal : bidQuoteId ? sitePaths.bidding : articleSlug ? sitePaths.news
+const path = productPage ? sitePaths.catalog : quoteId ? sitePaths.wholesale : journalQuoteId || privateBatchCode ? sitePaths.journal : bidQuoteId ? sitePaths.bidding : articleSlug ? sitePaths.news
   : referenceWorkshopSlug ? sitePaths.artisans : pages.has(requestedPath) ? requestedPath : sitePaths.home;
 const legacyPage = path === sitePaths.home
   ? [...pages].find(([, page]) => location.hash === "#" + page.id)
@@ -156,6 +158,9 @@ async function mountContent(section, account, cart) {
     case sitePaths.home:
       return (await import("./pages/home.page.js")).renderHome(section);
     case sitePaths.journal:
+      if (privateBatchCode) {
+        return (await import("./pages/wholesale.page.js")).mountWholesale(section, account, { journal: true, privateBatchCode });
+      }
       if (journalQuoteId) {
         section.className = "section-shell wholesale";
         return (await import("./pages/wholesale.page.js")).mountWholesale(section, account, { quoteId: journalQuoteId, journal: true });

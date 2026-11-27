@@ -1,6 +1,6 @@
-import { apiUrl } from "../api/http.js";
+import { requestPng } from "../api/http.js";
 
-export function batchQr(code, { initiallyOpen = false } = {}) {
+export function batchQr(code, { initiallyOpen = false, private: privateQr = false, label } = {}) {
   const details = document.createElement("details");
   details.className = "batch-qr";
   details.innerHTML = `<summary>Xem mã QR</summary>
@@ -12,13 +12,34 @@ export function batchQr(code, { initiallyOpen = false } = {}) {
   const image = details.querySelector("img");
   const button = details.querySelector("button");
   const status = details.querySelector("[role=status]");
-  const src = apiUrl(`/traceability/${encodeURIComponent(code)}/qr`);
+  details.querySelector("summary").textContent = label || "Xem mã QR";
+  const path = privateQr
+    ? `/traceability/private/${encodeURIComponent(code)}/qr`
+    : `/traceability/${encodeURIComponent(code)}/qr`;
   image.alt = `Mã QR truy xuất lô ${code}`;
+  let previewUrl;
+  let loading = false;
 
   details.addEventListener("toggle", () => {
-    if (!details.open || image.hasAttribute("src")) return;
+    if (!details.open) {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      previewUrl = undefined;
+      image.removeAttribute("src");
+      image.hidden = true;
+      button.disabled = true;
+      return;
+    }
+    if (loading || image.hasAttribute("src")) return;
     status.textContent = "Đang tải mã QR…";
-    image.src = src;
+    loading = true;
+    requestPng(path, { auth: privateQr }).then(blob => {
+      if (details.open) {
+        previewUrl = URL.createObjectURL(blob);
+        image.src = previewUrl;
+      }
+    }).catch(() => {
+      status.textContent = "Chưa tải được mã QR. Đóng rồi mở lại để thử lại.";
+    }).finally(() => { loading = false; });
   });
   image.addEventListener("load", () => {
     image.hidden = false;
@@ -26,6 +47,8 @@ export function batchQr(code, { initiallyOpen = false } = {}) {
     button.disabled = false;
   });
   image.addEventListener("error", () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = undefined;
     image.removeAttribute("src");
     image.hidden = true;
     button.disabled = true;
@@ -35,9 +58,7 @@ export function batchQr(code, { initiallyOpen = false } = {}) {
     button.disabled = true;
     status.textContent = "";
     try {
-      const response = await fetch(src);
-      if (!response.ok || !response.headers.get("Content-Type")?.startsWith("image/png")) throw new Error();
-      const url = URL.createObjectURL(await response.blob());
+      const url = URL.createObjectURL(await requestPng(path, { auth: privateQr }));
       const link = document.createElement("a");
       link.href = url;
       link.download = `vcraft-${code}.png`;
@@ -46,7 +67,7 @@ export function batchQr(code, { initiallyOpen = false } = {}) {
     } catch {
       status.textContent = "Không tải được tệp PNG. Hãy thử lại.";
     } finally {
-      button.disabled = false;
+      button.disabled = !image.hasAttribute("src");
     }
   });
   details.open = initiallyOpen;

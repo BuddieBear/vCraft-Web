@@ -18,6 +18,7 @@ export const homeMapId = "ban-do-lang-nghe";
 export const productPageRoots = Object.freeze({ retail: "/san-pham", reference: "/mau-lua" });
 export const quotePageRoot = sitePaths.wholesale + "/yeu-cau";
 export const quoteJournalRoot = sitePaths.journal + "/don-si";
+export const privateBatchTraceRoot = "/trace/private";
 export const referenceWorkshopRoot = sitePaths.artisans + "/co-so";
 
 export function referenceWorkshopPath(slug) {
@@ -30,6 +31,10 @@ export function quotePagePath(id) {
 
 export function quoteJournalPath(id) {
   return quoteJournalRoot + "/" + encodeURIComponent(id);
+}
+
+export function privateBatchTracePath(code) {
+  return privateBatchTraceRoot + "/" + encodeURIComponent(code);
 }
 
 export function biddingPagePath(id) {
