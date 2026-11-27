@@ -12,6 +12,8 @@ export const recipientPhoneError = "Số điện thoại người nhận phải 
 
 export const slugError = "Chỉ dùng chữ thường không dấu, số và dấu gạch nối (ví dụ: lich-le-hoi-nha-xa).";
 
+export const shippingAddressMin = 8;
+
 export function validRecipientPhone(value) {
   return /^\+?\d{8,15}$/.test(value.trim().replace(/[().\s-]/g, ""));
 }

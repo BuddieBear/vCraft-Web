@@ -3,7 +3,7 @@ import { request, signedIn } from "../api/http.js";
 import { paymentLabel } from "../data/payment-labels.js";
 import { reviewForm } from "./reviews.page.js";
 import { bindFormErrors, clearFormErrors, showFormErrors } from "../components/form-errors.js";
-import { recipientPhoneError, validRecipientPhone } from "../data/input-values.js";
+import { recipientPhoneError, shippingAddressMin, validRecipientPhone } from "../data/input-values.js";
 import { retailStatusLabels as orderStatus } from "../data/retail-status.js";
 
 export function mountCart(dialog, updateBadge, notify, account) {
@@ -41,7 +41,7 @@ export function mountCart(dialog, updateBadge, notify, account) {
       <form class="account-form checkout-form" hidden>
         <label>Tên người nhận<input name="recipientName" autocomplete="name" maxlength="120" required></label>
         <label>Số điện thoại<input name="recipientPhone" type="tel" autocomplete="tel" inputmode="tel" maxlength="20" required></label>
-        <label>Địa chỉ giao hàng<textarea name="shippingAddress" autocomplete="street-address" maxlength="2000" required></textarea></label>
+        <label>Địa chỉ giao hàng<textarea name="shippingAddress" autocomplete="street-address" minlength="${shippingAddressMin}" maxlength="2000" required></textarea></label>
         <label>Ghi chú giao hàng<textarea name="shippingNote" maxlength="2000"></textarea></label>
         <button class="button button-primary cart-checkout" type="submit">Đặt hàng · trả khi nhận</button>
       </form>

@@ -24,7 +24,7 @@ test("checkout, multi-artisan quote and verified review transactions", async () 
         const product = await prisma.product.create({ data: { artisanId: w1.id, name: "test", slug: `commerce-test-${runId}`, price: 20, stockQuantity: 1 } });
         await assert.rejects(prisma.$executeRaw`UPDATE products SET price = 'NaN'::numeric WHERE id = ${product.id}::uuid`);
         for (const u of [buyer, buyer2]) await prisma.cartItem.create({ data: { userId: u.id, productId: product.id, quantity: 1 } });
-        const details = { recipientName: "Test", recipientPhone: "0901234567", shippingAddress: "Test" };
+        const details = { recipientName: "Test", recipientPhone: "0901234567", shippingAddress: "12 Test Street" };
         const results = await Promise.allSettled([checkout({ userId: buyer.id, ...details }), checkout({ userId: buyer2.id, ...details })]);
         assert.equal(results.filter((r) => r.status === "fulfilled").length, 1);
         const order = results.find((r) => r.status === "fulfilled").value;
