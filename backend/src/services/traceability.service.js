@@ -1,11 +1,10 @@
 import { findPublicTimelineByBatchCode, listPublicProductBatches, createOwnedBatch, listOwnedBatches, addOwnedLog, completeOwnedBatch, editOwnedLog, cancelOwnedAssignmentBatch } from "../repositories/traceability.repository.js";
 import { ApiError } from "../middlewares/api-error.js";
-import { batchLandingUrl } from "../config/trace-url.js";
+import { batchLandingUrl, privateBatchLandingUrl } from "../config/trace-url.js";
 import { findPublicProductBySlug } from "../repositories/products.repository.js";
 import { findReferenceProduct } from "../data/workshop-references.js";
 import { productProduction } from "../../../frontend/src/data/product-production.js";
 import { vietnamToday } from "../../../frontend/src/data/input-values.js";
-import { quoteJournalPath } from "../../../frontend/src/site-paths.js";
 
 export async function getPublicProductionProduct(slug, reference) {
     if (!reference) return findPublicProductBySlug(slug, { historical: true });
@@ -15,10 +14,14 @@ export async function getPublicProductionProduct(slug, reference) {
 }
 export function getPublicTimeline(code, options) { return findPublicTimelineByBatchCode(code, options); }
 export function getProductBatches(slug) { return listPublicProductBatches(slug); }
-export function getMyBatches(userId, options) { return listOwnedBatches(userId, options); }
+export async function getMyBatches(userId, options) {
+    return (await listOwnedBatches(userId, options)).map(batch => batch.orderAssignmentId
+        ? { ...batch, qrCodeUrl: privateBatchLandingUrl(batch.batchCode) }
+        : batch);
+}
 export async function createBatch(userId, data) {
     const qrCodeUrl = batchLandingUrl(data.batchCode);
-    const result = await createOwnedBatch(userId, { ...data, qrCodeUrl }, quoteId => new URL(quoteJournalPath(quoteId), qrCodeUrl).href);
+    const result = await createOwnedBatch(userId, { ...data, qrCodeUrl }, privateBatchLandingUrl(data.batchCode));
     if (!result) throw new ApiError(404, "NOT_FOUND", "Không tìm thấy sản phẩm hoặc phân công hợp lệ.");
     return result;
 }

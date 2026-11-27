@@ -2,8 +2,8 @@ import { bindFormErrors, clearFormErrors, showFormErrors } from "../components/f
 import { mountPageList, paragraph } from "./wholesale/view.js";
 import { quotePagePath, sitePaths } from "../site-paths.js";
 
-export function mountWholesale(container, account, { quoteId, query, bidding = false, bidQuoteId, workshop = false, journal = false }) {
-  const title = workshop ? "Xưởng của tôi" : bidQuoteId ? "Chi tiết yêu cầu chào giá"
+export function mountWholesale(container, account, { quoteId, query, bidding = false, bidQuoteId, workshop = false, journal = false, privateBatchCode }) {
+  const title = privateBatchCode ? "Nhật ký lô" : workshop ? "Xưởng của tôi" : bidQuoteId ? "Chi tiết yêu cầu chào giá"
     : bidding ? "Đấu thầu đặt sỉ" : journal ? "Nhật ký đơn đặt sỉ" : quoteId ? "Chi tiết yêu cầu đặt sỉ" : "Đặt hàng sỉ";
   container.innerHTML = `
     ${quoteId ? `<a class="text-link product-back" href="${journal ? quotePagePath(quoteId) : sitePaths.wholesale}">${journal ? "Về chi tiết yêu cầu" : "Tất cả yêu cầu"}</a>` : ""}
@@ -108,17 +108,37 @@ export function mountWholesale(container, account, { quoteId, query, bidding = f
     if (activeLoad !== visibleView?.controller) activeLoad?.abort();
     const controller = activeLoad = new AbortController();
     const { signal } = controller;
-    const profile = account.profile;
     const root = document.createDocumentFragment();
+    loading = true;
+    syncControls();
+    refresh.hidden = true;
+    status.textContent = "Đang xác minh tài khoản…";
+    let profile;
+    try {
+      profile = await account.resolveProfile();
+    } catch (error) {
+      if (signal.aborted) return;
+      discardView();
+      const retry = button("Tải lại hồ sơ");
+      retry.addEventListener("click", () => load());
+      content.replaceChildren(retry);
+      status.textContent = "Chưa tải được hồ sơ tài khoản. " + error.message;
+      loading = false;
+      syncControls();
+      return;
+    }
+    if (signal.aborted) return;
     loading = Boolean(profile);
     syncControls();
     refresh.hidden = !profile;
     if (!profile) {
       discardView();
-      const signIn = button(bidding || workshop ? "Đăng nhập tài khoản nghệ nhân" : quoteId ? "Đăng nhập để xem yêu cầu" : "Đăng nhập để đặt sỉ");
+      const signIn = button(privateBatchCode ? "Đăng nhập để xem nhật ký lô" : bidding || workshop ? "Đăng nhập tài khoản nghệ nhân" : quoteId ? "Đăng nhập để xem yêu cầu" : "Đăng nhập để đặt sỉ");
       signIn.addEventListener("click", account.open);
       content.replaceChildren(signIn);
       status.textContent = "";
+      loading = false;
+      syncControls();
       return;
     }
     status.textContent = workshop ? "Đang tải hồ sơ xưởng…" : "Đang tải yêu cầu…";
@@ -137,12 +157,20 @@ export function mountWholesale(container, account, { quoteId, query, bidding = f
         status.textContent = "Trang này dành cho tài khoản người mua đã tạo yêu cầu.";
         return;
       }
+      if (privateBatchCode && !["BUYER", "ARTISAN"].includes(profile.role)) {
+        discardView();
+        status.textContent = "Không tìm thấy nhật ký lô.";
+        return;
+      }
       if ((bidding || workshop) && profile.role !== "ARTISAN") {
         discardView();
         status.textContent = "Trang này dành cho tài khoản nghệ nhân.";
         return;
       }
-      if (profile.role === "BUYER") {
+      if (privateBatchCode) {
+        const { privateBatchView } = await import("./wholesale/journal.js");
+        if (!signal.aborted) await privateBatchView(root, { batchCode: privateBatchCode, signal });
+      } else if (profile.role === "BUYER") {
         if (journal) {
           const { buyerJournalView } = await import("./wholesale/journal.js");
           if (!signal.aborted) await buyerJournalView(root, tools);

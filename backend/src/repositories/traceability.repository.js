@@ -44,6 +44,10 @@ export function findPublicTimelineByBatchCode(batchCode, { includeCover = false 
 
 const buyerBatchScope = buyerId => ({ quotationRequest: { buyerId, status: { in: ["BUYER_ACCEPTED", "IN_PRODUCTION", "DELIVERED"] } } });
 
+const editableOwner = userId => ({
+    product: { artisan: { userId, verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } } },
+});
+
 function privateLog(batchId, log) {
     return { ...log, evidenceImageUrls: log.evidenceImageUrls.flatMap(url => {
         const filename = publicImageFilename(url);
@@ -52,12 +56,16 @@ function privateLog(batchId, log) {
     }) };
 }
 
-export async function findBuyerTimelineByBatchCode(batchCode, buyerId) {
+export async function findPrivateTimelineByBatchCode(batchCode, actor) {
+    if (!["BUYER", "ARTISAN"].includes(actor.role)) return null;
     const batch = await prisma.productBatch.findUnique({
         where: {
             batchCode,
+            orderAssignmentId: { not: null },
             status: { in: ["IN_PROGRESS", "COMPLETED"] },
-            orderAssignment: buyerBatchScope(buyerId),
+            ...(actor.role === "BUYER"
+                ? { orderAssignment: buyerBatchScope(actor.id) }
+                : editableOwner(actor.id)),
         },
         select: {
             ...timelineFields,
@@ -68,6 +76,10 @@ export async function findBuyerTimelineByBatchCode(batchCode, buyerId) {
     if (!batch) return null;
     const { id, ...timeline } = batch;
     return { ...timeline, logs: timeline.logs.map(log => privateLog(id, log)) };
+}
+
+export function findBuyerTimelineByBatchCode(batchCode, buyerId) {
+    return findPrivateTimelineByBatchCode(batchCode, { id: buyerId, role: "BUYER" });
 }
 
 export function isLegacyPrivateImage(filename) {
@@ -92,7 +104,7 @@ export function findPrivateImageBatch(actor, id, { filename, legacy = false } = 
 export function listPublicProductBatches(slug) {
     return prisma.productBatch.findMany({ where: { ...publicBatch, product: { ...publicBatch.product, slugAliases: { some: { slug } } } }, select: { batchCode: true, status: true, startedAt: true, completedAt: true }, orderBy: [{ startedAt: "desc" }, { batchCode: "asc" }], take: 100 });
 }
-export function createOwnedBatch(userId, data, journalUrl) {
+export function createOwnedBatch(userId, data, privateBatchUrl) {
     return prisma.$transaction(async (tx) => {
         if (!data.orderAssignmentId && !(await lockTradingArtisan(tx, userId)).length) return null;
         const product = await tx.product.findFirst({ where: { id: data.productId, artisan: { userId, verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } } }, select: { artisanId: true, productionSteps: true } });
@@ -102,12 +114,12 @@ export function createOwnedBatch(userId, data, journalUrl) {
             await lockAssignment(tx, data.orderAssignmentId);
             const assignment = await tx.orderAssignment.findFirst({
                 where: { id: data.orderAssignmentId, artisanId: product.artisanId, status: "IN_PRODUCTION" },
-                select: { id: true, allocatedQuantity: true, quotationRequestId: true },
+                select: { id: true, allocatedQuantity: true },
             });
             if (!assignment) return null;
             const existing = await tx.productBatch.aggregate({ where: { orderAssignmentId: assignment.id, status: { not: "CANCELLED" } }, _sum: { totalQuantity: true } });
             if ((existing._sum.totalQuantity ?? 0) + data.totalQuantity > assignment.allocatedQuantity) throw new Error("Batch exceeds allocated quantity");
-            return tx.productBatch.create({ data: { ...batch, qrCodeUrl: journalUrl(assignment.quotationRequestId) } });
+            return tx.productBatch.create({ data: { ...batch, qrCodeUrl: privateBatchUrl } });
         }
         return tx.productBatch.create({ data: batch });
     });
@@ -127,9 +139,6 @@ export async function listOwnedBatches(userId, { skip, take, assignmentId, produ
     });
     return batches.map(batch => batch.orderAssignmentId ? { ...batch, logs: batch.logs.map(log => privateLog(batch.id, log)) } : batch);
 }
-const editableOwner = userId => ({
-    product: { artisan: { userId, verificationStatus: "APPROVED", user: { isActive: true, role: "ARTISAN" } } },
-});
 const editableBatch = userId => ({ ...editableOwner(userId), status: "IN_PROGRESS" });
 
 async function logImages(batch, urls = [], previous = []) {

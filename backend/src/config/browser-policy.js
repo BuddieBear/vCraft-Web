@@ -14,7 +14,7 @@ const policy = [
 ].join("; ");
 
 export function browserDocumentPolicy(request, response, next) {
-    if (!/^\/trace(?:\/|$)/i.test(request.path)) {
+    if (!/^\/trace(?:\/|$)/i.test(request.path) || /^\/trace\/private(?:\/|$)/i.test(request.path)) {
         const name = process.env.SITE_CSP_REPORT_ONLY === "true"
             ? "Content-Security-Policy-Report-Only" : "Content-Security-Policy";
         response.set(name, policy);

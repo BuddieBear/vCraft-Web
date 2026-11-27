@@ -1,4 +1,5 @@
 import { renderTimeline } from "../traceability.page.js";
+import { batchQr } from "../../components/batch-qr.js";
 import { formatPrice } from "../../components/ui.js";
 import { card, displayDate, get, labels, paragraph, quoteProgress, workshopName } from "./view.js";
 
@@ -22,11 +23,27 @@ export async function buyerJournalView(root, { expand, quoteId, signal }) {
         key: "journal-" + batch.id,
         label: `Lô ${batch.batchCode} · ${batch.totalQuantity} sản phẩm`,
         defaultOpen: index === 0,
-        mount: details => loadTimeline(details, batch, signal),
+        mount: details => {
+          details.append(batchQr(batch.batchCode, { private: true, label: `Mã QR lô ${batch.batchCode}` }));
+          loadTimeline(details, batch, signal);
+        },
       });
     }
     panel.append(section);
   }
+}
+
+export async function privateBatchView(root, { batchCode, signal }) {
+  const batch = await get("/traceability/private/" + encodeURIComponent(batchCode) + "/timeline", signal);
+  if (signal.aborted) return;
+  const panel = document.createElement("div");
+  panel.className = "trade-card";
+  const heading = document.createElement("h2");
+  heading.textContent = "Lô " + batch.batchCode;
+  const timeline = document.createElement("div");
+  panel.append(heading, batchQr(batch.batchCode, { private: true, label: `Mã QR lô ${batch.batchCode}` }), timeline);
+  renderTimeline(timeline, batch, "private-" + batch.batchCode);
+  root.append(panel);
 }
 
 function loadTimeline(details, batch, signal) {

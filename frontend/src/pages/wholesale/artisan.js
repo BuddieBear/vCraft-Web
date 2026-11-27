@@ -3,7 +3,7 @@ import { batchQr } from "../../components/batch-qr.js";
 import { mediaUrl, setEvidenceImage } from "../../api/http.js";
 import { weaveTypes } from "../../data/weave-types.js";
 import { vietnamToday } from "../../data/input-values.js";
-import { biddingPagePath, sitePaths } from "../../site-paths.js";
+import { biddingPagePath, privateBatchTracePath, sitePaths } from "../../site-paths.js";
 import { card, displayDate, displayLogDate, get, labels, listSection, paragraph, quoteExpired, quoteLabel, write } from "./view.js";
 import { productionStepTitles } from "../../data/production-steps.js";
 
@@ -185,11 +185,12 @@ export function renderBatch(target, batch, { button, form }, canCancel = false) 
   const stages = productionStepTitles(batch.productionSteps);
   const step = batch.logs.length;
   block.append(paragraph(`Lô ${batch.batchCode} · ${batch.totalQuantity} sản phẩm · ${step}/${stages.length} công đoạn`));
-  if (!batch.orderAssignmentId && batch.product.isPublished && ["IN_PROGRESS", "COMPLETED"].includes(batch.status)) {
-    block.append(batchQr(batch.batchCode));
+  if ((batch.orderAssignmentId || batch.product.isPublished) && ["IN_PROGRESS", "COMPLETED"].includes(batch.status)) {
+    const privateBatch = Boolean(batch.orderAssignmentId);
+    block.append(batchQr(batch.batchCode, { private: privateBatch, label: privateBatch ? `Mã QR lô ${batch.batchCode}` : undefined }));
     const link = document.createElement("a");
     link.className = "text-link";
-    link.href = "/trace/" + encodeURIComponent(batch.batchCode);
+    link.href = privateBatch ? privateBatchTracePath(batch.batchCode) : "/trace/" + encodeURIComponent(batch.batchCode);
     link.textContent = "Xem nhật ký lô";
     block.append(link);
   }
