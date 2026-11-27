@@ -1,5 +1,6 @@
 import { mediaUrl, request, signedIn } from "../api/http.js";
 import { bindFormErrors, clearFormErrors, showFormErrors } from "../components/form-errors.js";
+import { keepFocus } from "../components/ui.js";
 
 function evidencePhoto(value, label, lazy = true) {
   const src = mediaUrl(value);
@@ -80,7 +81,7 @@ function renderEvidence(target, workshop) {
   target.append(info, heading, gallery.childElementCount ? gallery : missing, certificates, list);
 }
 
-function reviewPanel(item, decide) {
+function reviewPanel(item, decide, listStatus) {
   const details = document.createElement("details");
   details.className = "admin-review";
   const summary = document.createElement("summary");
@@ -123,6 +124,7 @@ function reviewPanel(item, decide) {
             status.textContent = "Nhập lý do từ chối để xưởng có thể bổ sung hồ sơ.";
             return;
           }
+          const restoreFocus = keepFocus(status, listStatus);
           form.inert = true;
           try {
             await decide({ status: decision, expectedVersion: data.reviewVersion, ...(decision === "REJECTED" && { reason }) });
@@ -140,6 +142,7 @@ function reviewPanel(item, decide) {
             }
           } finally {
             form.inert = false;
+            restoreFocus();
           }
         });
         result.append(form);
@@ -259,7 +262,7 @@ export function mountArtisanAdministration(section, account) {
         card.append(heading, body, reviewPanel(item, review ? async decision => {
           await request(`/admin/artisans/${encodeURIComponent(item.id)}/verification`, { method: "PATCH", auth: true, body: decision });
           await load(false, decision.status === "APPROVED" ? "Đã duyệt hồ sơ." : "Đã từ chối hồ sơ.");
-        } : null));
+        } : null, status));
         if (actionOptions.length) card.append(actions);
         list.append(card);
       }
@@ -279,11 +282,12 @@ export function mountArtisanAdministration(section, account) {
   }
 
   async function save(control, work, onError) {
+    const restoreFocus = keepFocus(status);
     control.inert = true;
     let failure;
     try { await work(); }
     catch (error) { failure = error; }
-    finally { control.inert = false; }
+    finally { control.inert = false; restoreFocus(); }
     if (failure && account.profile?.role === "ADMIN") {
       if (!onError?.(failure)) status.textContent = failure.message;
     }

@@ -1,5 +1,5 @@
 import { request, signedIn } from "../api/http.js";
-import { formatPrice } from "../components/ui.js";
+import { formatPrice, keepFocus } from "../components/ui.js";
 import { paymentLabel } from "../data/payment-labels.js";
 import { retailStatusLabels as orderStates } from "../data/retail-status.js";
 const nextState = { PENDING: "CONFIRMED", CONFIRMED: "SHIPPING", SHIPPING: "DELIVERED" };
@@ -48,11 +48,18 @@ export function mountRetailOrders(section, account) {
   let saving = false;
   let loading = false;
 
+  let restoreFocus;
+
   function syncControls() {
     const busy = saving || loading;
+    if (busy) restoreFocus ??= keepFocus(status);
     refresh.disabled = filter.disabled = content.inert = busy;
     previous.disabled = busy || page === 1;
     nextPage.disabled = busy || !hasNext;
+    if (!busy) {
+      restoreFocus?.();
+      restoreFocus = undefined;
+    }
   }
 
   async function load(targetPage = page, message = "") {
@@ -208,6 +215,7 @@ export function mountRetailOrders(section, account) {
       const statusToSave = event.submitter?.value === "CANCELLED" ? "CANCELLED" : next;
       if (statusToSave === "CANCELLED" && !window.confirm("Hủy phần hàng này và hoàn số lượng về kho?")) return;
       const profile = account.profile;
+      restoreFocus ??= keepFocus(status);
       saving = button.disabled = true;
       syncControls();
       status.textContent = "";

@@ -1,6 +1,6 @@
 import { request, mediaUrl } from "../api/http.js";
 import { newsArticlePath, sitePaths } from "../site-paths.js";
-import { icon } from "../components/ui.js";
+import { icon, keepFocus } from "../components/ui.js";
 import { bindFormErrors, clearFormErrors, showFormErrors } from "../components/form-errors.js";
 import { slugError } from "../data/input-values.js";
 
@@ -150,13 +150,14 @@ export function mountNews(section, account) {
     remove.textContent = "Xóa bài";
     remove.addEventListener("click", async () => {
       if (!window.confirm("Xóa bài “" + item.title + "”?")) return;
+      const restoreFocus = keepFocus(status);
       actions.inert = true;
       try {
         await request("/news/" + encodeURIComponent(item.id), { method: "DELETE", auth: true });
         if (editing?.id === item.id) form.reset();
         await load(false, "Đã xóa bài.");
       } catch (error) { status.textContent = error.message; }
-      finally { actions.inert = false; }
+      finally { actions.inert = false; restoreFocus(); }
     });
     actions.append(edit, remove);
     card.append(actions);
@@ -207,6 +208,7 @@ export function mountNews(section, account) {
     const { publishedAt, thumbnailUrl, ...values } = Object.fromEntries(new FormData(form));
     const { id } = editing || {};
     const body = { ...values, thumbnailUrl: thumbnailUrl || null, isPinned: form.elements.namedItem("isPinned").checked };
+    const restoreFocus = keepFocus(formStatus);
     form.inert = true;
     try {
       if (publishedAt) body.publishedAt = new Date(publishedAt).toISOString();
@@ -217,7 +219,7 @@ export function mountNews(section, account) {
       // An inert form cannot take focus, so release it before showFormErrors focuses the invalid field.
       form.inert = false;
       if (!showFormErrors(form, error.fields)) formStatus.textContent = error.message;
-    } finally { form.inert = false; }
+    } finally { form.inert = false; restoreFocus(); }
   });
   more.addEventListener("click", () => load(true));
   account.onChange(() => load());

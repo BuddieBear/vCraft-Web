@@ -1,6 +1,7 @@
 import { bindFormErrors, clearFormErrors, showFormErrors } from "../components/form-errors.js";
 import { mountPageList, paragraph } from "./wholesale/view.js";
 import { quotePagePath, sitePaths } from "../site-paths.js";
+import { keepFocus } from "../components/ui.js";
 
 export function mountWholesale(container, account, { quoteId, query, bidding = false, bidQuoteId, workshop = false, journal = false, privateBatchCode }) {
   const title = privateBatchCode ? "Nhật ký lô" : workshop ? "Xưởng của tôi" : bidQuoteId ? "Chi tiết yêu cầu chào giá"
@@ -26,8 +27,15 @@ export function mountWholesale(container, account, { quoteId, query, bidding = f
   const pages = new Map();
   const openSections = new Set();
 
+  let restoreFocus;
+
   function syncControls() {
+    if (busy || loading) restoreFocus ??= keepFocus(status);
     refresh.disabled = content.inert = busy || loading;
+    if (!(busy || loading)) {
+      restoreFocus?.();
+      restoreFocus = undefined;
+    }
   }
 
   function button(label, action, type = "button") {
@@ -74,6 +82,7 @@ export function mountWholesale(container, account, { quoteId, query, bidding = f
     const fields = control.closest("form");
     const feedback = fields?.querySelector(".trade-feedback") || status;
     let failure;
+    restoreFocus ??= keepFocus(status);
     busy = control.disabled = true;
     syncControls();
     status.textContent = "";
