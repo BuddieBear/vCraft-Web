@@ -8,7 +8,8 @@ import routes from "./routes/index.js";
 import { uploadDirectory } from "./services/media.service.js";
 import { isLegacyPrivateImage } from "./repositories/traceability.repository.js";
 import { imageFilename } from "../../frontend/src/data/batch-media.js";
-import siteRoutes, { frontendDirectory, siteNotFound } from "./routes/site.routes.js";
+import siteRoutes, { siteNotFound } from "./routes/site.routes.js";
+import { frontendDirectory } from "./config/site-pages.js";
 import { browserDocumentPolicy } from "./config/browser-policy.js";
 
 export const app = express();
