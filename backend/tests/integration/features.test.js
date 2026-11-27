@@ -116,6 +116,11 @@ test("artisan, production, administration, media and retail APIs", async () => {
         const shortAddress = await request("/retail/checkout", { method: "POST", token: buyer, body: { recipientName: "Test", shippingAddress: "x", recipientPhone: "0901234567" } });
         assert.equal(shortAddress.status, 400);
         assert.equal(shortAddress.json.error.fields[0].name, "shippingAddress");
+        const sevenChars = await request("/retail/checkout", { method: "POST", token: buyer, body: { recipientName: "Test", shippingAddress: " 12 Lê L ", recipientPhone: "0901234567" } });
+        assert.equal(sevenChars.status, 400);
+        assert.equal(sevenChars.json.error.fields[0].name, "shippingAddress");
+        const eightChars = await request("/retail/checkout", { method: "POST", token: buyer, body: { recipientName: "Test", shippingAddress: "12 Lê Lợ", recipientPhone: "0901234567" } });
+        assert.notEqual(eightChars.json.error.fields?.[0]?.name, "shippingAddress");
         const invalidPhone = await request("/retail/checkout", { method: "POST", token: buyer, body: { recipientName: "Test", shippingAddress: "12 Test Street", recipientPhone: "abc" } });
         assert.equal(invalidPhone.status, 400);
         assert.equal(invalidPhone.json.error.fields[0].name, "recipientPhone");

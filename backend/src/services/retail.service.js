@@ -1,6 +1,6 @@
 import { checkoutOrder, findBuyerOrder, listArtisanOrders, listAdminOrders, transitionOrder, transitionWorkshopOrder, listBuyerCart, listBuyerOrders, setCartItem as setCartItemRecord } from "../repositories/retail.repository.js";
 import { ApiError } from "../middlewares/api-error.js";
-import { validRecipientPhone } from "../../../frontend/src/data/input-values.js";
+import { shippingAddressMin, validRecipientPhone } from "../../../frontend/src/data/input-values.js";
 
 export function listSales(userId, options) { return listArtisanOrders(userId, options); }
 export function listAdminSales(options) { return listAdminOrders(options); }
@@ -41,6 +41,7 @@ export async function checkout({ userId, recipientName, recipientPhone, shipping
     for (const [name, value, max] of [["recipientName", recipientName, 120], ["recipientPhone", recipientPhone, 20], ["shippingAddress", shippingAddress, 2000]]) {
         if (typeof value !== "string" || !value.trim() || value.length > max) throw new Error(`Invalid ${name}`);
     }
+    if (shippingAddress.trim().length < shippingAddressMin) throw new Error("Invalid shippingAddress");
     if (!validRecipientPhone(recipientPhone)) throw new Error("Invalid recipientPhone");
     if (shippingNote != null && (typeof shippingNote !== "string" || shippingNote.length > 2000)) throw new Error("Invalid shippingNote");
     if (!["COD", "BANK_TRANSFER", "VNPAY", "MOMO"].includes(paymentMethod)) throw new Error("Invalid paymentMethod");
