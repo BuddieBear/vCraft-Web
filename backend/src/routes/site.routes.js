@@ -1,5 +1,4 @@
 import { Router } from "express";
-import { fileURLToPath } from "node:url";
 import { productPageRoots, productTraceSegment, quoteJournalRoot, quotePageRoot, referenceWorkshopRoot, signInPath, sitePaths } from "../../../frontend/src/site-paths.js";
 import { byId } from "./schemas.js";
 import { getCatalogProduct } from "../services/products.service.js";
@@ -7,11 +6,10 @@ import { findReferenceProduct, findReferenceWorkshop } from "../data/workshop-re
 import { batchPage, productionPage } from "../controllers/traceability.controller.js";
 import { getPublicProductionProduct } from "../services/traceability.service.js";
 import { getNews } from "../services/news.service.js";
+import { frontendDirectory, sendNotFound } from "../config/site-pages.js";
 
-export const frontendDirectory = fileURLToPath(new URL("../../../frontend/", import.meta.url));
 const router = Router();
 const sendIndex = (_request, response) => response.sendFile("index.html", { root: frontendDirectory });
-export const sendNotFound = response => response.status(404).sendFile("404.html", { root: frontendDirectory });
 
 function publicSlugPage(findRecord, { demoRedirect = false } = {}) {
     return async (request, response) => {

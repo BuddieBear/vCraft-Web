@@ -79,6 +79,7 @@ test("artisan, production, administration, media and retail APIs", async () => {
             const missing = await fetch(base + path);
             assert.equal(missing.status, 404, path);
             assert.match(missing.headers.get("content-type"), /^text\/html/, path);
+            assert.match(missing.headers.get("content-security-policy"), /frame-ancestors 'none'/, path);
             assert.match(await missing.text(), /<h1 class="page-title">Không tìm thấy trang<\/h1>/, path);
         }
         const artisan = await login(product.artisan.user.email);
