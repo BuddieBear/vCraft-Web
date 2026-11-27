@@ -151,7 +151,9 @@ test("HTTP authentication, access control, validation and commerce", async () =>
         assert.equal((await setQuantity(3)).status, 200);
         await prisma.product.update({ where: { id: product.id }, data: { stockQuantity: 1 } });
         assert.equal((await setQuantity(2)).status, 200);
-        assert.equal((await setQuantity(3)).status, 409);
+        const overStock = await setQuantity(3);
+        assert.equal(overStock.status, 409);
+        assert.equal(overStock.json.error.code, "INSUFFICIENT_STOCK");
         await prisma.product.update({ where: { id: product.id }, data: { isPublished: false } });
         const staleCart = await request("/retail/cart", { token });
         assert.equal(staleCart.json.data[0].product.isAvailable, false);
