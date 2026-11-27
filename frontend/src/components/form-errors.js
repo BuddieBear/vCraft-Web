@@ -57,6 +57,10 @@ export function clearFormErrors(form) {
   for (const field of form.elements) clearError(field);
 }
 
+export function clearFormFieldError(field) {
+  clearError(field);
+}
+
 export function showFormErrors(form, fields = []) {
   let first;
   for (const { name, message } of fields) {

@@ -268,7 +268,7 @@ test("artisan, production, administration, media and retail APIs", async () => {
         await prisma.quotationRequest.update({ where: { id: lateId }, data: { deadline: new Date("2020-01-01") } });
         assert.equal((await request(latePath + "/dispatch", { method: "POST", token: admin, body: { artisanIds: [workshopId] } })).json.error.code, "QUOTE_EXPIRED");
         assert.equal((await request(latePath + "/close-dispatch", { method: "POST", token: admin })).json.data.status, "CANCELLED");
-        const publicQuote = await request("/wholesale/quotes", { method: "POST", token: buyer, body: { title: "Chào giá mở", specifications: "Lụa satin", preferredWeaveType: "LUA_SATIN", targetQuantity: 10, deadline: "2099-01-01" } });
+        const publicQuote = await request("/wholesale/quotes", { method: "POST", token: buyer, body: { title: "Chào giá mở", specifications: "Lụa satin", targetQuantity: 10, deadline: "2099-01-01" } });
         const publicId = publicQuote.json.data.id;
         const bidPath = `/wholesale/quotes/${publicId}`;
         const detailsPath = `/wholesale/open-quotes/${publicId}`;

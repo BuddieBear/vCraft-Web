@@ -6,6 +6,7 @@ import { allocatedPriceCents, decimalFromCents, moneyCents } from "../../../fron
 
 const biddingStates = ["SENT_TO_ARTISANS", "ARTISANS_BIDDING"];
 const expiredQuote = () => new ApiError(409, "QUOTE_EXPIRED", "Yêu cầu báo giá đã hết hạn.");
+const noMatchingWorkshops = () => new ApiError(409, "NO_MATCHING_WORKSHOPS", "Không tìm thấy xưởng phù hợp có sản phẩm đã công bố cùng loại lụa. Hãy chọn xưởng cụ thể hoặc gửi Ban quản lý điều phối.");
 export function findBuyerQuote(quoteId, buyerId) {
     return prisma.quotationRequest.findFirst({
         where: { id: quoteId, buyerId, buyer: { isActive: true, role: "BUYER" } },
@@ -120,15 +121,36 @@ async function requireAvailableWorkshops(tx, artisanIds) {
     if (artisanIds.length && await tx.artisanProfile.count({ where: { id: { in: artisanIds }, ...tradingWorkshop } }) !== artisanIds.length) throw new Error("Artisan is unavailable");
 }
 
+async function quoteWorkshops(tx, { targetArtisanId, artisanIds, preferredWeaveType }) {
+    const selected = targetArtisanId ? [targetArtisanId] : artisanIds;
+    const automatic = !selected.length && Boolean(preferredWeaveType);
+    const artisans = await tx.artisanProfile.findMany({
+        where: {
+            ...(selected.length && { id: { in: selected } }),
+            ...tradingWorkshop,
+            ...(automatic && { products: { some: { weaveType: preferredWeaveType, isPublished: true } } }),
+        },
+        select: { id: true, userId: true },
+    });
+    if (selected.length && artisans.length !== selected.length) throw new Error("Artisan is unavailable");
+    if (!artisans.length) throw automatic ? noMatchingWorkshops() : new Error("No eligible artisan");
+    return {
+        artisans,
+        automatic,
+        recipientIds: targetArtisanId ? [] : selected.length ? artisanIds : automatic ? artisans.map(({ id }) => id) : [],
+    };
+}
+
 export function createQuote(data) {
     return prisma.$transaction(async (tx) => {
         if (!await activeUser(tx, data.userId, "BUYER")) throw new Error("Buyer is not active");
         const selected = data.targetArtisanId ? [data.targetArtisanId] : data.artisanIds;
         let artisans = [];
+        let recipientIds = data.artisanIds;
         if (data.submitMode === "SEND") {
-            artisans = await tx.artisanProfile.findMany({ where: { ...(selected.length && { id: { in: selected } }), ...tradingWorkshop }, select: { userId: true } });
-            if (selected.length && artisans.length !== selected.length) throw new Error("Artisan is unavailable");
-            if (!artisans.length) throw new Error("No eligible artisan");
+            const routed = await quoteWorkshops(tx, data);
+            artisans = routed.artisans;
+            recipientIds = routed.recipientIds;
         } else {
             await requireAvailableWorkshops(tx, selected);
         }
@@ -137,7 +159,7 @@ export function createQuote(data) {
             buyerId: data.userId, title: data.title, specifications: data.specifications, targetQuantity: data.targetQuantity,
             deadline: data.deadline, targetArtisanId: data.targetArtisanId, maxBudget: data.maxBudget,
             preferredWeaveType: data.preferredWeaveType, attachmentUrls: data.attachmentUrls, status,
-            ...(data.artisanIds.length && { recipients: { create: data.artisanIds.map(artisanId => ({ artisanId })) } }),
+            ...(recipientIds.length && { recipients: { create: recipientIds.map(artisanId => ({ artisanId })) } }),
         } });
         if (data.submitMode === "SEND" && artisans.length) {
             const linkUrl = data.linkForQuote ? data.linkForQuote(quote.id) : null;
@@ -177,10 +199,15 @@ export function sendQuote(userId, quoteId, deadlinePassed, linkUrl) {
         if (!quote || quote.buyerId !== userId || quote.status !== "DRAFT") throw new Error("Quote not found or invalid state");
         if (deadlinePassed(quote.deadline)) throw expiredQuote();
         const recipients = await tx.quoteRecipient.findMany({ where: { quotationRequestId: quoteId }, select: { artisanId: true } });
-        const selected = quote.targetArtisanId ? [quote.targetArtisanId] : recipients.map(({ artisanId }) => artisanId);
-        const artisans = await tx.artisanProfile.findMany({ where: { ...(selected.length && { id: { in: selected } }), ...tradingWorkshop }, select: { userId: true } });
-        if (selected.length && artisans.length !== selected.length) throw new Error("Artisan is unavailable");
-        if (!artisans.length) throw new Error("No eligible artisan");
+        const routed = await quoteWorkshops(tx, {
+            targetArtisanId: quote.targetArtisanId,
+            artisanIds: recipients.map(({ artisanId }) => artisanId),
+            preferredWeaveType: quote.preferredWeaveType,
+        });
+        const { artisans } = routed;
+        if (routed.automatic) await tx.quoteRecipient.createMany({
+            data: routed.recipientIds.map(artisanId => ({ quotationRequestId: quoteId, artisanId })),
+        });
         const result = await tx.quotationRequest.update({ where: { id: quoteId }, data: { status: "SENT_TO_ARTISANS" } });
         await tx.notification.createMany({ data: artisans.map(({ userId: recipient }) => ({ userId: recipient, title: "Yêu cầu báo giá mới", message: quote.title, type: "QUOTE_REQUEST", linkUrl })) });
         return result;
