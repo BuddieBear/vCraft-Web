@@ -179,8 +179,8 @@ async function addBasemap(L, map, feedback) {
 // Leaflet only handles Escape while the map container has focus, not a focused pin or anything in its popup.
 function closePopupOnEscape(map, marker) {
   marker.on("keydown", ({ originalEvent }) => { if (originalEvent.key === "Escape") map.closePopup(); });
-  // The popup element (including its close button) is recreated on each open, so this does not accumulate.
-  marker.on("popupopen", ({ popup }) => popup.getElement().addEventListener("keydown", ({ key }) => {
+  // Leaflet creates the popup element (including its close button) on first open and reuses it, so attach once.
+  marker.once("popupopen", ({ popup }) => popup.getElement().addEventListener("keydown", ({ key }) => {
     if (key !== "Escape") return;
     map.closePopup();
     marker.getElement().focus({ preventScroll: true });
