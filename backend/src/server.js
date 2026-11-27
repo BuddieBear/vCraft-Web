@@ -1,17 +1,15 @@
 import { app } from "./app.js";
 import { prisma } from "./database/prisma.js";
 import { jwtSecret } from "./config/security.js";
+import { parseHost, parsePort } from "./config/network.js";
 
 jwtSecret();
 
-const port = Number(process.env.PORT ?? 5000);
-if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error("PORT must be an integer between 1 and 65535.");
-}
-
-const host = process.env.HOST ?? "127.0.0.1";
+const port = parsePort();
+const host = parseHost();
+const displayHost = host.includes(":") ? `[${host}]` : host;
 const server = app.listen(port, host, () => {
-    console.log(`vCraft API listening on http://${host}:${port}`);
+    console.log(`vCraft API listening on http://${displayHost}:${port}`);
 });
 
 server.once("close", () => {

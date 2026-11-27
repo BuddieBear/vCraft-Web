@@ -1,0 +1,15 @@
+.git
+.github
+node_modules
+**/.env
+**/.env.*
+storage/uploads
+docs
+database/mysql
+backend/tests
+docker-compose.yml
+tmp
+temp
+*.log
+.vscode
+.idea

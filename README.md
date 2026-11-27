@@ -120,7 +120,7 @@ Sau khi cấu hình PostgreSQL và chạy `npm run db:generate`, đặt `JWT_SEC
 npm start
 ```
 
-API mặc định lắng nghe trên `127.0.0.1:5000`. Có thể cấu hình bằng `HOST` và `PORT`.
+API mặc định lắng nghe trên `127.0.0.1:5000`. Có thể cấu hình bằng `HOST`, `PORT` và `TRUST_PROXY`; kiểm tra trạng thái dịch vụ qua `GET /api/health`. Khi triển khai bản chạy thử qua Cloudflare Tunnel hoặc đóng gói bằng [Dockerfile](Dockerfile) cho Docker/PaaS, xem [hướng dẫn triển khai](docs/deploy.md).
 
 Xem [danh sách API và cách xác thực](docs/api.md) cho tài khoản, giỏ hàng, đơn, báo giá, đánh giá và các tài nguyên công khai.
 

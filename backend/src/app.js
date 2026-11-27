@@ -3,6 +3,7 @@ import compression from "compression";
 import cors from "cors";
 import { fileURLToPath } from "node:url";
 import { env } from "./config/env.js";
+import { parseTrustProxy } from "./config/network.js";
 import { errorHandler } from "./middlewares/error-handler.js";
 import routes from "./routes/index.js";
 import { uploadDirectory } from "./services/media.service.js";
@@ -15,6 +16,7 @@ import { browserDocumentPolicy } from "./config/browser-policy.js";
 export const app = express();
 
 app.disable("x-powered-by");
+app.set("trust proxy", parseTrustProxy());
 app.use(compression({
     filter(request, response) {
         const cacheControl = response.getHeader("Cache-Control") || "";

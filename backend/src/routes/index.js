@@ -10,9 +10,11 @@ import news from "./news.routes.js";
 import notifications from "./notifications.routes.js";
 import admin from "./admin.routes.js";
 import media from "./media.routes.js";
+import health from "./health.routes.js";
 import { getCategories } from "../services/products.service.js";
 
 const router = Router();
+router.use("/health", health);
 router.get("/categories", async (_req, res) => res.json({ data: await getCategories() }));
 router.use("/auth", auth);
 router.use("/admin", admin);
