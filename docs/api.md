@@ -49,7 +49,7 @@ Các endpoint riêng yêu cầu `Authorization: Bearer <accessToken>`. Mỗi tok
 | GET | `/notifications` | Đăng nhập; `page`, `limit`. |
 | PATCH | `/notifications/:id/read` | Đăng nhập; trả `updated: false` nếu không tìm thấy hoặc đã đọc. |
 | GET | `/retail/cart` | BUYER; `product.isAvailable` cho biết sản phẩm còn được phép bán. Đối chiếu số lượng với `stockQuantity`. |
-| PUT | `/retail/cart/:id` | BUYER; `quantity` nguyên, 0 xóa mục. Có thể giảm số lượng mục đã lưu khi tồn kho giảm. `id` là mã sản phẩm. |
+| PUT | `/retail/cart/:id` | BUYER; `quantity` nguyên, 0 xóa mục. Có thể giảm số lượng mục đã lưu khi tồn kho giảm. `id` là mã sản phẩm. `409 INSUFFICIENT_STOCK` khi số lượng vượt tồn kho hoặc sản phẩm không còn được bán. |
 | POST | `/retail/checkout` | BUYER; gửi `recipientName`, `recipientPhone`, `shippingAddress`, `confirmedItems: [{ productId, unitPrice, quantity }]` và tùy chọn `shippingNote`, `paymentMethod`. Đơn giá là chuỗi thập phân lấy từ giỏ. `409 CART_CHANGED` yêu cầu tải lại giỏ và xác nhận giá. |
 | GET | `/retail/orders`, `/retail/orders/:id` | BUYER; chỉ đơn của mình, có tiến độ từng xưởng trong `fulfillments`. Danh sách hỗ trợ `page`, `limit`. |
 | GET | `/retail/sales`, `/retail/admin/orders` | Hỗ trợ `page`, `limit`, `status`. ARTISAN nhận mặt hàng và trạng thái của xưởng mình. ADMIN nhận toàn bộ mặt hàng, thông tin giao nhận và trạng thái theo từng xưởng. |
