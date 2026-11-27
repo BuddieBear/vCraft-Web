@@ -134,6 +134,7 @@ function consumeResetHash() {
   if (!token) return;
   history.replaceState(null, "", location.pathname + location.search);
   if (/^[A-Za-z0-9_-]{20,200}$/.test(token)) return showReset(token);
+  showLogin();
   status.textContent = "Liên kết đặt lại mật khẩu không hợp lệ hoặc đã bị cắt. Hãy yêu cầu liên kết mới.";
   forgot.focus();
 }
