@@ -10,6 +10,8 @@ export function vietnamToday(now = new Date()) {
 
 export const recipientPhoneError = "Số điện thoại người nhận phải có từ 8 đến 15 chữ số.";
 
+export const slugError = "Chỉ dùng chữ thường không dấu, số và dấu gạch nối (ví dụ: lich-le-hoi-nha-xa).";
+
 export function validRecipientPhone(value) {
   return /^\+?\d{8,15}$/.test(value.trim().replace(/[().\s-]/g, ""));
 }

@@ -1,6 +1,8 @@
 import { request, mediaUrl } from "../api/http.js";
 import { newsArticlePath, sitePaths } from "../site-paths.js";
 import { icon } from "../components/ui.js";
+import { bindFormErrors, clearFormErrors, showFormErrors } from "../components/form-errors.js";
+import { slugError } from "../data/input-values.js";
 
 const categories = {
   PRICE_ANNOUNCEMENT: "Giá nguyên liệu", POWER_OUTAGE: "Lịch cúp điện",
@@ -75,7 +77,7 @@ export function mountNews(section, account) {
       <summary>Quản lý tin</summary>
       <form class="account-form">
         <label>Tiêu đề<input name="title" maxlength="255" required></label>
-        <label>Đường dẫn bài viết<input name="slug" placeholder="lich-le-hoi-nha-xa" maxlength="280" required></label>
+        <label>Đường dẫn bài viết<input name="slug" placeholder="lich-le-hoi-nha-xa" maxlength="280" pattern="[a-z0-9]+(-[a-z0-9]+)*" title="${slugError}" required></label>
         <label>Danh mục<select name="category">${options}</select></label>
         <label>Nội dung<textarea name="content" maxlength="50000" required></textarea></label>
         <label>URL ảnh bìa<input name="thumbnailUrl" type="url" maxlength="500"></label>
@@ -95,6 +97,7 @@ export function mountNews(section, account) {
   const form = editor.querySelector("form");
   const submit = form.querySelector("[type=submit]");
   const formStatus = form.querySelector("[data-form-status]");
+  bindFormErrors(form);
   const status = section.querySelector("[data-list-status]");
   const list = section.querySelector(".trade-content");
   const more = section.querySelector("[data-more]");
@@ -195,9 +198,12 @@ export function mountNews(section, account) {
     editing = undefined;
     submit.textContent = "Đăng bài";
     formStatus.textContent = "";
+    clearFormErrors(form);
   });
   form.addEventListener("submit", async event => {
     event.preventDefault();
+    clearFormErrors(form);
+    formStatus.textContent = "";
     const { publishedAt, thumbnailUrl, ...values } = Object.fromEntries(new FormData(form));
     const { id } = editing || {};
     const body = { ...values, thumbnailUrl: thumbnailUrl || null, isPinned: form.elements.namedItem("isPinned").checked };
@@ -207,8 +213,10 @@ export function mountNews(section, account) {
       await request(id ? "/news/" + encodeURIComponent(id) : "/news", { method: id ? "PUT" : "POST", auth: true, body });
       form.reset();
       await load(false, "Đã lưu bài viết.");
-    } catch (error) { formStatus.textContent = error.message; }
-    finally { form.inert = false; }
+    } catch (error) {
+      form.inert = false;
+      if (!showFormErrors(form, error.fields)) formStatus.textContent = error.message;
+    } finally { form.inert = false; }
   });
   more.addEventListener("click", () => load(true));
   account.onChange(() => load());

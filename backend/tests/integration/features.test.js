@@ -517,6 +517,12 @@ test("artisan, production, administration, media and retail APIs", async () => {
         assert.equal((await putCart(0)).status, 200);
         const article = await request("/news", { method: "POST", token: admin, body: { title: "Test news", slug: "feature-test-news", category: "POLICY_SUPPORT", content: "Test" } });
         assert.equal(article.status, 201);
+        const duplicateSlug = await request("/news", { method: "POST", token: admin, body: { title: "Again", slug: "feature-test-news", category: "POLICY_SUPPORT", content: "Test" } });
+        assert.equal(duplicateSlug.status, 409);
+        assert.equal(duplicateSlug.json.error.fields[0].name, "slug");
+        const badSlug = await request("/news", { method: "POST", token: admin, body: { title: "Again", slug: "Slug Xấu", category: "POLICY_SUPPORT", content: "Test" } });
+        assert.equal(badSlug.status, 400);
+        assert.equal(badSlug.json.error.fields[0].name, "slug");
         assert.equal((await request("/news/feature-test-news")).status, 200);
         assert.equal((await fetch(base + newsArticlePath("feature-test-news"))).status, 200);
         const scheduled = await request("/news", { method: "POST", token: admin, body: {
