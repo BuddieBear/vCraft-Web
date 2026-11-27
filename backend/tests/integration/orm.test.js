@@ -21,8 +21,9 @@ const featureTest = fileURLToPath(new URL("./features.test.js", import.meta.url)
 const authUsernameTest = fileURLToPath(new URL("./auth-username.test.js", import.meta.url));
 const privateTraceabilityTest = fileURLToPath(new URL("./traceability-private-qr.test.js", import.meta.url));
 const workshopMatchingTest = fileURLToPath(new URL("./workshop-matching.test.js", import.meta.url));
+const deployReadinessTest = fileURLToPath(new URL("./deploy-readiness.test.js", import.meta.url));
 
-test("fresh ORM migration, idempotent seed, pricing and rating rollups", { timeout: 120_000 }, async () => {
+test("fresh ORM migration, idempotent seed, pricing and rating rollups", { timeout: 240_000 }, async () => {
     const { url, name } = testDatabase();
     assertSeparateTestDatabase(name);
 
@@ -39,6 +40,7 @@ test("fresh ORM migration, idempotent seed, pricing and rating rollups", { timeo
         PUBLIC_APP_URL: "",
         CORS_ALLOWED_ORIGINS: "http://127.0.0.1:5189",
         SITE_CSP_REPORT_ONLY: "false",
+        TRUST_PROXY: "false",
         UPLOAD_DIR: resolve(tmpdir(), `vcraft-upload-test-${randomBytes(8).toString("hex")}`),
     };
     delete env.NODE_TEST_CONTEXT;
@@ -139,6 +141,7 @@ test("fresh ORM migration, idempotent seed, pricing and rating rollups", { timeo
         runTestSuite("auth-username", authUsernameTest);
         runTestSuite("private-qr-traceability", privateTraceabilityTest);
         runTestSuite("workshop-matching", workshopMatchingTest);
+        runTestSuite("deploy-readiness", deployReadinessTest);
     } finally {
         await prisma.$disconnect();
     }
