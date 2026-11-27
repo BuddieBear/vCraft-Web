@@ -5,7 +5,7 @@ import { join } from "node:path";
 import sharp from "sharp";
 import { app } from "../../src/app.js";
 import { prisma } from "../../src/database/prisma.js";
-import { quoteBudgetError, vietnamToday } from "../../../frontend/src/data/input-values.js";
+import { quoteBudgetError, slugError, vietnamToday } from "../../../frontend/src/data/input-values.js";
 import { biddingPagePath, newsArticlePath, quoteJournalPath, quotePagePath, referenceWorkshopPath, sitePaths } from "../../../frontend/src/site-paths.js";
 import { assertIsolatedTestDatabase } from "../test-env.js";
 
@@ -517,6 +517,21 @@ test("artisan, production, administration, media and retail APIs", async () => {
         assert.equal((await putCart(0)).status, 200);
         const article = await request("/news", { method: "POST", token: admin, body: { title: "Test news", slug: "feature-test-news", category: "POLICY_SUPPORT", content: "Test" } });
         assert.equal(article.status, 201);
+        const duplicateSlug = await request("/news", { method: "POST", token: admin, body: { title: "Again", slug: "feature-test-news", category: "POLICY_SUPPORT", content: "Test" } });
+        assert.equal(duplicateSlug.status, 409);
+        assert.equal(duplicateSlug.json.error.code, "CONFLICT");
+        assert.equal(duplicateSlug.json.error.fields[0].name, "slug");
+        assert.equal(duplicateSlug.json.error.fields[0].message, "Đường dẫn bài viết này đã được sử dụng.");
+        const second = await request("/news", { method: "POST", token: admin, body: { title: "Second news", slug: "feature-test-news-second", category: "POLICY_SUPPORT", content: "Test" } });
+        assert.equal(second.status, 201);
+        const editConflict = await request(`/news/${second.json.data.id}`, { method: "PUT", token: admin, body: { title: "Second news", slug: "feature-test-news", category: "POLICY_SUPPORT", content: "Test" } });
+        assert.equal(editConflict.status, 409);
+        assert.equal(editConflict.json.error.fields[0].name, "slug");
+        assert.equal((await request(`/news/${second.json.data.id}`, { method: "DELETE", token: admin })).status, 204);
+        const badSlug = await request("/news", { method: "POST", token: admin, body: { title: "Again", slug: "Slug Xấu", category: "POLICY_SUPPORT", content: "Test" } });
+        assert.equal(badSlug.status, 400);
+        assert.equal(badSlug.json.error.fields[0].name, "slug");
+        assert.equal(badSlug.json.error.fields[0].message, slugError);
         assert.equal((await request("/news/feature-test-news")).status, 200);
         assert.equal((await fetch(base + newsArticlePath("feature-test-news"))).status, 200);
         const scheduled = await request("/news", { method: "POST", token: admin, body: {

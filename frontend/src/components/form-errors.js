@@ -30,6 +30,7 @@ function nativeMessage(field) {
   if (field.type === "email" && field.validity.typeMismatch) return "Nhập địa chỉ email hợp lệ.";
   if (field.validity.tooShort) return `Nhập ít nhất ${field.minLength} ký tự.`;
   if (field.validity.patternMismatch && field.name === "username") return "Tên đăng nhập gồm 3–32 ký tự không dấu (chữ, số, ., _, -), bắt đầu bằng chữ cái hoặc chữ số.";
+  if (field.validity.patternMismatch && field.title) return field.title;
   if (field.validity.rangeUnderflow) return field.dataset.minMessage || `Giá trị tối thiểu là ${field.min}.`;
   if (field.validity.rangeOverflow) return `Giá trị tối đa là ${field.max}.`;
   return field.validationMessage;

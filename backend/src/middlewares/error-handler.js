@@ -2,7 +2,7 @@ import { isPersistenceConflict } from "../database/prisma.js";
 import { ZodError } from "zod";
 import { ApiError } from "./api-error.js";
 import multer from "multer";
-import { quoteBudgetError, recipientPhoneError } from "../../../frontend/src/data/input-values.js";
+import { quoteBudgetError, recipientPhoneError, slugError } from "../../../frontend/src/data/input-values.js";
 
 const invalid = new Set(["Invalid identifier", "Invalid text", "Invalid quantity", "Invalid amount", "Invalid deadline", "Invalid attachments", "Invalid images", "Invalid note", "Invalid bids", "Invalid allocations", "Invalid transition", "Invalid userId", "Invalid cart item", "Invalid review target", "Provide one order", "Invalid review", "Invalid media", "Invalid recipientName", "Invalid recipientPhone", "Invalid shippingAddress", "Invalid shippingNote", "Invalid paymentMethod"]);
 const conflict = new Set(["Quote not found or invalid state", "Quote deadline passed", "No eligible artisan", "Artisan cannot bid on quote", "Invalid or unavailable bids", "Too many bids for the requested quantity", "Allocations must cover accepted bids and requested quantity", "Assignment not found", "Assignment not found or invalid state", "Product is unavailable, changed price, or has insufficient stock", "Cart is empty", "Cart changed during checkout", "Artisan is unavailable", "Review target is not in a delivered order", "Invalid production step", "Incomplete production timeline", "Invalid order transition", "Batch exceeds allocated quantity"]);
@@ -19,6 +19,7 @@ function validationFields(issues) {
         }
         if (issue.code === "too_big" && issue.origin === "string") message = `Nhập tối đa ${issue.maximum} ký tự.`;
         if (name === "maxBudget") message = quoteBudgetError;
+        if (name === "slug" && issue.code === "invalid_format") message = slugError;
         if (name === "phone" || name === "recipientPhone") message = recipientPhoneError;
         if ((name === "password" || name === "newPassword") && issue.code === "custom") message = "Mật khẩu phải từ 12 đến 72 byte UTF-8.";
         if (name === "username" && issue.code !== "too_small" && issue.code !== "too_big") message = "Tên đăng nhập gồm 3–32 ký tự không dấu (chữ, số, ., _, -), bắt đầu bằng chữ cái hoặc chữ số.";
@@ -73,6 +74,10 @@ export function errorHandler(error, _request, response, next) {
         if (conflictTargetIncludes(error, "username")) {
             const message = "Tên đăng nhập này đã được sử dụng.";
             return response.status(409).json({ error: { code: "USERNAME_TAKEN", message, fields: [{ name: "username", message }] } });
+        }
+        if (error.meta?.modelName === "CommunityNews" && conflictTargetIncludes(error, "slug")) {
+            const message = "Đường dẫn bài viết này đã được sử dụng.";
+            return response.status(409).json({ error: { code: "CONFLICT", message, fields: [{ name: "slug", message }] } });
         }
         if (conflictTargetIncludes(error, "email")) {
             const message = "Email này đã được đăng ký.";
