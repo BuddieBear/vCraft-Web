@@ -5,7 +5,7 @@ import multer from "multer";
 import { quoteBudgetError, recipientPhoneError } from "../../../frontend/src/data/input-values.js";
 
 const invalid = new Set(["Invalid identifier", "Invalid text", "Invalid quantity", "Invalid amount", "Invalid deadline", "Invalid attachments", "Invalid images", "Invalid note", "Invalid bids", "Invalid allocations", "Invalid transition", "Invalid userId", "Invalid cart item", "Invalid review target", "Provide one order", "Invalid review", "Invalid media", "Invalid recipientName", "Invalid recipientPhone", "Invalid shippingAddress", "Invalid shippingNote", "Invalid paymentMethod"]);
-const conflict = new Set(["Quote not found or invalid state", "Quote deadline passed", "No eligible artisan", "Artisan cannot bid on quote", "Invalid or unavailable bids", "Too many bids for the requested quantity", "Allocations must cover accepted bids and requested quantity", "Assignment not found", "Assignment not found or invalid state", "Product is unavailable or has insufficient stock", "Product is unavailable, changed price, or has insufficient stock", "Cart is empty", "Cart changed during checkout", "Artisan is unavailable", "Review target is not in a delivered order", "Invalid production step", "Incomplete production timeline", "Invalid order transition", "Batch exceeds allocated quantity"]);
+const conflict = new Set(["Quote not found or invalid state", "Quote deadline passed", "No eligible artisan", "Artisan cannot bid on quote", "Invalid or unavailable bids", "Too many bids for the requested quantity", "Allocations must cover accepted bids and requested quantity", "Assignment not found", "Assignment not found or invalid state", "Product is unavailable, changed price, or has insufficient stock", "Cart is empty", "Cart changed during checkout", "Artisan is unavailable", "Review target is not in a delivered order", "Invalid production step", "Incomplete production timeline", "Invalid order transition", "Batch exceeds allocated quantity"]);
 
 function validationFields(issues) {
     const fields = new Map();
@@ -55,6 +55,7 @@ export function errorHandler(error, _request, response, next) {
         const message = "Chọn ngày cần hàng hợp lệ, từ hôm nay trở đi.";
         return response.status(400).json({ error: { code: "INVALID_REQUEST", message, fields: [{ name: "deadline", message }] } });
     }
+    if (error.message === "Product is unavailable or has insufficient stock") return response.status(409).json({ error: { code: "INSUFFICIENT_STOCK", message: "Số lượng vượt quá tồn kho hoặc sản phẩm không còn được bán." } });
     if (error.message === "Stale product stock") return response.status(409).json({ error: { code: "STALE_STOCK", message: "Tồn kho đã thay đổi. Hãy tải lại sản phẩm trước khi lưu." } });
     if (error.message === "Stale product revision") return response.status(409).json({ error: { code: "STALE_PRODUCT", message: "Sản phẩm đã thay đổi. Hãy tải lại trước khi lưu." } });
     if (error.message === "Stock limit exceeded on cancellation") return response.status(409).json({ error: { code: "STOCK_LIMIT_EXCEEDED", message: "Hoàn tồn sẽ vượt giới hạn tồn kho. Hãy kiểm tra lại tồn kho trước khi hủy đơn." } });
