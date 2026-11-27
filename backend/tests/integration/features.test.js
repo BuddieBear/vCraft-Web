@@ -75,6 +75,12 @@ test("artisan, production, administration, media and retail APIs", async () => {
         assert.equal(samplePage.status, 302);
         assert.equal(samplePage.headers.get("location"), "/trace/product/hong-dat");
         assert.equal((await fetch(base + "/trace/product/hong-dat")).status, 200);
+        for (const path of ["/trace/UNKNOWN-1", "/trace/product/khong-co", "/trace/product/reference/khong-co"]) {
+            const missing = await fetch(base + path);
+            assert.equal(missing.status, 404, path);
+            assert.match(missing.headers.get("content-type"), /^text\/html/, path);
+            assert.match(await missing.text(), /<h1 class="page-title">Không tìm thấy trang<\/h1>/, path);
+        }
         const artisan = await login(product.artisan.user.email);
         const buyer = await login("buyer@nhaxa.example");
         const buyerProfile = (await request("/auth/me", { token: buyer })).json.data;

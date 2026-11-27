@@ -11,7 +11,7 @@ import { getNews } from "../services/news.service.js";
 export const frontendDirectory = fileURLToPath(new URL("../../../frontend/", import.meta.url));
 const router = Router();
 const sendIndex = (_request, response) => response.sendFile("index.html", { root: frontendDirectory });
-const sendNotFound = response => response.status(404).sendFile("404.html", { root: frontendDirectory });
+export const sendNotFound = response => response.status(404).sendFile("404.html", { root: frontendDirectory });
 
 function publicSlugPage(findRecord, { demoRedirect = false } = {}) {
     return async (request, response) => {

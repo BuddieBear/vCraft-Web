@@ -1,6 +1,7 @@
 import { getProductBatches, getPublicProductionProduct, getPublicTimeline } from "../services/traceability.service.js";
 import { renderProductProductionPage, renderTraceabilityPage } from "../presenters/traceability.presenter.js";
 import { ApiError } from "../middlewares/api-error.js";
+import { sendNotFound } from "../routes/site.routes.js";
 
 function sendTracePage(response, html) {
     return response.set({
@@ -13,7 +14,7 @@ export function productionPage(reference) {
     return async (request, response) => {
         const { slug } = request.params;
         const product = slug.length <= 280 ? await getPublicProductionProduct(slug, reference) : null;
-        if (!product) return response.status(404).type("text").send("Không tìm thấy hướng dẫn sản xuất.");
+        if (!product) return sendNotFound(response);
         const batches = reference ? [] : await getProductBatches(slug);
         return sendTracePage(response, renderProductProductionPage(product, reference, batches));
     };
@@ -22,7 +23,7 @@ export function productionPage(reference) {
 export async function batchPage(request, response) {
     const { code } = request.params;
     const batch = code.length <= 50 ? await getPublicTimeline(code, { includeCover: true }) : null;
-    if (!batch) return response.status(404).type("text").send("Không tìm thấy lô sản phẩm.");
+    if (!batch) return sendNotFound(response);
     return sendTracePage(response, renderTraceabilityPage(batch));
 }
 
