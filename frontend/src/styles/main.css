@@ -869,3 +869,9 @@ h2 { margin-top: 7px; font-size: clamp(2.1rem, 3.65vw, 3.48rem); line-height: 1.
 @media (max-width: 700px) {
   .trade-content { grid-template-columns: minmax(0, 1fr); }
 }
+/* Mobile tap targets. Placed last so it wins over the base min-height set above (e.g. .retail-toolbar select). */
+@media (max-width: 760px) {
+  .account-form :is(input:not([type="checkbox"], [type="radio"]), select), .retail-toolbar select, [data-workshop-filter] select { min-height: 44px; }
+  .text-link, .text-button { min-height: 44px; }
+  .footer-inner a { min-height: 24px; }
+}
