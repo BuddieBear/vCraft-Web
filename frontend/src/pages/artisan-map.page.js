@@ -176,14 +176,15 @@ async function addBasemap(L, map, feedback) {
   await tryDetailed();
 }
 
-// Leaflet only handles Escape while the map container has focus, not a focused pin or popup link.
-function closePopupOnEscape(map, marker, content) {
+// Leaflet only handles Escape while the map container has focus, not a focused pin or anything in its popup.
+function closePopupOnEscape(map, marker) {
   marker.on("keydown", ({ originalEvent }) => { if (originalEvent.key === "Escape") map.closePopup(); });
-  content.addEventListener("keydown", ({ key }) => {
+  // The popup element (including its close button) is recreated on each open, so this does not accumulate.
+  marker.on("popupopen", ({ popup }) => popup.getElement().addEventListener("keydown", ({ key }) => {
     if (key !== "Escape") return;
     map.closePopup();
     marker.getElement().focus({ preventScroll: true });
-  });
+  }));
 }
 
 function addLandmarks(L, map) {
@@ -206,7 +207,7 @@ function addLandmarks(L, map) {
       .bindTooltip(name, { className: "map-landmark-label", direction: "top", offset: [0, -11], permanent: map.getSize().x >= 650 })
       .bindPopup(popup).addTo(map);
     marker.getElement().setAttribute("aria-label", name);
-    closePopupOnEscape(map, marker, popup);
+    closePopupOnEscape(map, marker);
   }
 }
 
@@ -330,7 +331,7 @@ export function mountArtisanMap(section, { embedded = false } = {}) {
         const marker = L.marker(point, { icon: markerIcon, title: label })
           .bindPopup(popup, { maxHeight: 250 }).addTo(markers);
         marker.getElement().setAttribute("aria-label", label);
-        closePopupOnEscape(map, marker, popup);
+        closePopupOnEscape(map, marker);
         for (const { workshop, card } of entries) {
           popup.append(workshopInfo(workshop, "div"));
           const show = document.createElement("button");
