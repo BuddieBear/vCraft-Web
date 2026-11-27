@@ -214,6 +214,7 @@ export function mountNews(section, account) {
       form.reset();
       await load(false, "Đã lưu bài viết.");
     } catch (error) {
+      // An inert form cannot take focus, so release it before showFormErrors focuses the invalid field.
       form.inert = false;
       if (!showFormErrors(form, error.fields)) formStatus.textContent = error.message;
     } finally { form.inert = false; }
