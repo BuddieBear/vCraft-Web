@@ -15,7 +15,7 @@ test("HTTP authentication, access control, validation and commerce", async () =>
         if (body !== undefined || raw !== undefined) headers["Content-Type"] = "application/json";
         if (token) headers.Authorization = `Bearer ${token}`;
         const response = await fetch(base + path, { method, headers, body: raw ?? (body === undefined ? undefined : JSON.stringify(body)) });
-        return { status: response.status, json: await response.json() };
+        return { status: response.status, json: response.status === 204 ? null : await response.json() };
     }
     try {
         const preflight = await fetch(base + "/retail/cart", { method: "OPTIONS", headers: { Origin: "http://127.0.0.1:5189", "Access-Control-Request-Method": "GET", "Access-Control-Request-Headers": "authorization" } });
