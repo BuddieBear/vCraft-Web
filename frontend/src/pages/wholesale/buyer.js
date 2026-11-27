@@ -1,5 +1,6 @@
 import { formatPrice, saleUnits } from "../../components/ui.js";
 import { getCatalogProduct } from "../../api/catalog.js";
+import { clearFormFieldError } from "../../components/form-errors.js";
 import { referenceProductPrice } from "../../components/reference-product-card.js";
 import { vietnamToday } from "../../data/input-values.js";
 import { weaveTypes } from "../../data/weave-types.js";
@@ -9,7 +10,7 @@ import { allocationPreview, bidText, card, displayDate, get, hasQuoteJournal, la
 
 const workshopFields = `<fieldset class="quote-workshops">
   <legend>Chọn xưởng nhận yêu cầu</legend>
-  <p>Có thể để trống để nhờ Ban quản lý chọn xưởng.</p>
+  <p>Có thể để trống; yêu cầu có loại lụa sẽ khớp danh mục, còn yêu cầu không có loại lụa được gửi rộng.</p>
   <p role="status" data-workshop-selection></p>
   <ul class="quote-selected-workshops"></ul>
   <div data-workshop-options></div>
@@ -120,6 +121,8 @@ export async function buyerView(root, { form, query, list, signal }) {
     <fieldset class="quote-workshops">
       <legend>Hình thức gửi yêu cầu</legend>
       <label class="trade-choice"><input type="radio" name="routing" value="direct" checked> Chọn xưởng nhận trực tiếp</label>
+      <label class="trade-choice"><input type="radio" name="routing" value="matching"> Gửi xưởng có sản phẩm cùng loại lụa</label>
+      <p data-matching-note hidden>Khớp danh mục sản phẩm đã công bố, không xác nhận năng lực sản xuất.</p>
       <label class="trade-choice"><input type="radio" name="routing" value="dispatch"> Nhờ Ban quản lý điều phối xưởng phù hợp</label>
     </fieldset>
     ${workshopFields}`, "Gửi yêu cầu đặt sỉ", async (values, actionMode) => {
@@ -146,9 +149,15 @@ export async function buyerView(root, { form, query, list, signal }) {
   deadline.min = vietnamToday();
   deadline.dataset.minMessage = "Chọn ngày cần hàng từ hôm nay trở đi.";
   const workshopSection = fields.querySelectorAll("fieldset.quote-workshops")[1];
+  const weaveType = fields.elements.namedItem("preferredWeaveType");
+  const matchingNote = fields.querySelector("[data-matching-note]");
   const syncRouting = () => {
-    const dispatchMode = fields.querySelector('input[name="routing"]:checked')?.value === "dispatch";
-    workshopSection.hidden = dispatchMode;
+    const routing = fields.querySelector('input[name="routing"]:checked')?.value;
+    const matching = routing === "matching";
+    if (!matching && weaveType.required) clearFormFieldError(weaveType);
+    workshopSection.hidden = matching || routing === "dispatch";
+    weaveType.required = matching;
+    matchingNote.hidden = !matching;
   };
   for (const radio of fields.querySelectorAll('input[name="routing"]')) radio.addEventListener("change", syncRouting);
   syncRouting();
@@ -201,7 +210,9 @@ export async function buyerQuoteView(root, { button, form, expand, list, quoteId
   if (quote.status === "DRAFT" && !quoteExpired(quote)) {
     const actions = document.createElement("div");
     actions.className = "trade-toolbar";
-    const send = button(workshops.length ? "Gửi xưởng đã chọn" : "Gửi rộng tới các xưởng", () => write(path + "/send"));
+    const sendLabel = workshops.length ? "Gửi xưởng đã chọn"
+      : quote.preferredWeaveType ? "Gửi xưởng có sản phẩm cùng loại lụa" : "Gửi rộng tới các xưởng";
+    const send = button(sendLabel, () => write(path + "/send"));
     const dispatch = !workshops.length && button("Gửi Ban quản lý điều phối", () => write(path + "/request-dispatch"));
     const pendingSelection = paragraph("Lưu danh sách xưởng trước khi gửi.");
     pendingSelection.hidden = true;
