@@ -792,6 +792,7 @@ h2 { margin-top: 7px; font-size: clamp(2.1rem, 3.65vw, 3.48rem); line-height: 1.
 [data-workshop-filter] select { min-height: 40px; padding: 6px 10px; font: inherit; color: var(--ink); background: var(--white); border: 1px solid var(--line); border-radius: 2px; }
 .sign-in-page { width: min(100% - 40px, 480px); margin: 48px auto; }
 .sign-in-card { margin-top: 28px; padding: clamp(24px, 6vw, 40px); background: var(--white); border: 1px solid var(--line); }
+.sign-in-card[id] { scroll-margin-top: 0; } /* no sticky header here, so skip the offset section[id] adds */
 .sign-in-card h1 { margin-top: 14px; font-size: clamp(2rem, 6vw, 2.8rem); }
 .sign-in-card .account-form { margin-block: 24px; }
 .sign-in-card .account-form .button { justify-self: stretch; }
