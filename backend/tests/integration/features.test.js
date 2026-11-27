@@ -113,7 +113,10 @@ test("artisan, production, administration, media and retail APIs", async () => {
         assert.equal(badProfilePhone.json.error.fields[0].name, "phone");
         const validProfilePhone = await request("/auth/me", { method: "PATCH", token: buyer, body: { phone: "0901234567" } });
         assert.equal(validProfilePhone.json.data.phone, "0901234567");
-        const invalidPhone = await request("/retail/checkout", { method: "POST", token: buyer, body: { recipientName: "Test", shippingAddress: "Test", recipientPhone: "abc" } });
+        const shortAddress = await request("/retail/checkout", { method: "POST", token: buyer, body: { recipientName: "Test", shippingAddress: "x", recipientPhone: "0901234567" } });
+        assert.equal(shortAddress.status, 400);
+        assert.equal(shortAddress.json.error.fields[0].name, "shippingAddress");
+        const invalidPhone = await request("/retail/checkout", { method: "POST", token: buyer, body: { recipientName: "Test", shippingAddress: "12 Test Street", recipientPhone: "abc" } });
         assert.equal(invalidPhone.status, 400);
         assert.equal(invalidPhone.json.error.fields[0].name, "recipientPhone");
         const me = await request("/artisans/me", { token: artisan });
@@ -509,7 +512,7 @@ test("artisan, production, administration, media and retail APIs", async () => {
         assert.equal((await fetch(base + "/trace/FEATURE-001")).status, 200);
         assert.equal((await request("/retail/cart", { token: buyer })).json.data[0].product.isAvailable, false);
         assert.equal((await putCart(2)).status, 409);
-        assert.equal((await request("/retail/checkout", { method: "POST", token: buyer, body: { recipientName: "Buyer", recipientPhone: "0901234567", shippingAddress: "Test" } })).status, 409);
+        assert.equal((await request("/retail/checkout", { method: "POST", token: buyer, body: { recipientName: "Buyer", recipientPhone: "0901234567", shippingAddress: "12 Test Street" } })).status, 409);
         assert.equal((await suspension(false)).status, 204);
         assert.equal((await request("/products/by-slug/feature-test-silk?storefront=true")).status, 200);
         assert.equal((await request(extraPath + "/bids", { ...offer, token: other })).status, 201);
@@ -544,13 +547,13 @@ test("artisan, production, administration, media and retail APIs", async () => {
         assert.equal((await request(`/news/${article.json.data.id}`, { method: "DELETE", token: admin })).status, 204);
         assert.equal((await fetch(base + newsArticlePath("feature-test-news"))).status, 404);
         assert.equal((await request(`/retail/cart/${product.id}`, { method: "PUT", token: buyer, body: { quantity: 1 } })).status, 200);
-        const online = await request("/retail/checkout", { method: "POST", token: buyer, body: { recipientName: "Buyer", recipientPhone: "0901234567", shippingAddress: "Test", paymentMethod: "VNPAY" } });
+        const online = await request("/retail/checkout", { method: "POST", token: buyer, body: { recipientName: "Buyer", recipientPhone: "0901234567", shippingAddress: "12 Test Street", paymentMethod: "VNPAY" } });
         assert.equal(online.status, 422);
         assert.equal(online.json.error.code, "PAYMENT_METHOD_UNAVAILABLE");
         const checkoutCart = async (details = {}) => {
             const { data } = (await request("/retail/cart", { token: buyer })).json;
             return request("/retail/checkout", { method: "POST", token: buyer, body: {
-                recipientName: "Buyer", recipientPhone: "0901234567", shippingAddress: "Test", ...details,
+                recipientName: "Buyer", recipientPhone: "0901234567", shippingAddress: "12 Test Street", ...details,
                 confirmedItems: data.map(({ product, quantity }) => ({ productId: product.id, unitPrice: product.price, quantity })),
             } });
         };
@@ -583,7 +586,7 @@ test("artisan, production, administration, media and retail APIs", async () => {
         assert.equal(split.status, 201);
         const splitPath = "/retail/orders/" + split.json.data.id;
         const managedOrder = (await request("/retail/admin/orders?status=PENDING", { token: admin })).json.data.find(row => row.id === split.json.data.id);
-        assert.equal(managedOrder.shippingAddress, "Test");
+        assert.equal(managedOrder.shippingAddress, "12 Test Street");
         assert.equal(managedOrder.items.length, 2);
         const sales = await request("/retail/sales?status=PENDING&limit=1", { token: other });
         assert.equal(sales.status, 200);

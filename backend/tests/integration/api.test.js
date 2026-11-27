@@ -161,7 +161,7 @@ test("HTTP authentication, access control, validation and commerce", async () =>
         assert.equal((await setQuantity(1)).status, 200);
         await prisma.product.update({ where: { id: product.id }, data: { isPublished: true, stockQuantity: product.stockQuantity } });
         assert.equal((await request("/retail/cart", { token })).json.data[0].product.isAvailable, true);
-        const checkoutBody = { recipientName: "Buyer", recipientPhone: "0901234567", shippingAddress: "Address", confirmedItems: [{ productId: product.id, quantity: 1, unitPrice: product.price.toString() }] };
+        const checkoutBody = { recipientName: "Buyer", recipientPhone: "0901234567", shippingAddress: "12 Test Street", confirmedItems: [{ productId: product.id, quantity: 1, unitPrice: product.price.toString() }] };
         const invalidPhone = await request("/retail/checkout", { method: "POST", token, body: { ...checkoutBody, recipientPhone: "abc" } });
         assert.equal(invalidPhone.status, 400);
         assert.equal(invalidPhone.json.error.code, "INVALID_PHONE");
