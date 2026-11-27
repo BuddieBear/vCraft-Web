@@ -28,6 +28,21 @@ export function formatPrice(price, unit) {
   return unit === "mét" ? `${currency.format(price)} / mét` : currency.format(price);
 }
 
+// Making the focused control (or its container) inert/disabled drops focus to <body>. Call this before going busy and
+// the returned function once idle: it refocuses that control, or else the first fallback (e.g. the status line) that takes focus.
+export function keepFocus(...fallbacks) {
+  const before = document.activeElement;
+  return () => {
+    if (document.activeElement !== document.body || before === document.body) return;
+    for (const target of [before, ...fallbacks]) {
+      if (!target?.isConnected) continue;
+      if (target !== before) target.tabIndex = -1;
+      target.focus(target === before ? undefined : { preventScroll: true });
+      if (document.activeElement !== document.body) return;
+    }
+  };
+}
+
 export function asset(file) {
   return `/public/images/${file}`;
 }

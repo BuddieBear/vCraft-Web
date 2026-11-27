@@ -1,5 +1,5 @@
 import { request } from "../../api/http.js";
-import { formatPrice } from "../../components/ui.js";
+import { formatPrice, keepFocus } from "../../components/ui.js";
 import { vietnamToday } from "../../data/input-values.js";
 import { allocatedPriceCents, decimalFromCents, moneyCents } from "../../data/quote-pricing.js";
 
@@ -73,15 +73,21 @@ export function mountPageList(target, { key, path, label, empty, render, state, 
   let page = state.get(key) || 1;
   let requestedPage = page;
   let visiblePage;
+  let restoreFocus;
   function sync() {
     items.inert = pending;
     items.setAttribute("aria-busy", String(pending));
     previous.disabled = pending || page === 1;
     next.disabled = pending || !hasNext;
+    if (!pending) {
+      restoreFocus?.();
+      restoreFocus = undefined;
+    }
   }
 
   async function load(destination) {
     if (pending || signal.aborted) return;
+    restoreFocus ??= keepFocus(status);
     pending = true;
     requestedPage = destination;
     retry.hidden = true;
