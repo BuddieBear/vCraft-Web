@@ -37,7 +37,7 @@ export function keepFocus(...fallbacks) {
     for (const target of [before, ...fallbacks]) {
       if (!target?.isConnected) continue;
       if (target !== before) target.tabIndex = -1;
-      target.focus();
+      target.focus(target === before ? undefined : { preventScroll: true });
       if (document.activeElement !== document.body) return;
     }
   };

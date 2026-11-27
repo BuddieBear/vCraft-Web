@@ -165,6 +165,7 @@ export function mountNews(section, account) {
   }
 
   async function load(append = false, message = "") {
+    const restoreFocus = keepFocus(status);
     const current = ++version;
     const admin = account.profile?.role === "ADMIN";
     editor.hidden = !admin;
@@ -192,6 +193,7 @@ export function mountNews(section, account) {
       }
     } finally {
       if (current === version) more.disabled = false;
+      restoreFocus();
     }
   }
 

@@ -216,6 +216,7 @@ export function mountArtisanAdministration(section, account) {
   let version = 0;
 
   async function load(append = false, message = "") {
+    const restoreFocus = keepFocus(status);
     const current = ++version;
     const allowed = account.profile?.role === "ADMIN";
     content.hidden = !allowed;
@@ -278,6 +279,7 @@ export function mountArtisanAdministration(section, account) {
       }
     } finally {
       if (current === version) more.disabled = false;
+      restoreFocus();
     }
   }
 

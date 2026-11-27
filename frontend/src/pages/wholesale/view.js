@@ -75,7 +75,6 @@ export function mountPageList(target, { key, path, label, empty, render, state, 
   let visiblePage;
   let restoreFocus;
   function sync() {
-    if (pending) restoreFocus ??= keepFocus(status);
     items.inert = pending;
     items.setAttribute("aria-busy", String(pending));
     previous.disabled = pending || page === 1;
@@ -88,6 +87,7 @@ export function mountPageList(target, { key, path, label, empty, render, state, 
 
   async function load(destination) {
     if (pending || signal.aborted) return;
+    restoreFocus ??= keepFocus(status);
     pending = true;
     requestedPage = destination;
     retry.hidden = true;
