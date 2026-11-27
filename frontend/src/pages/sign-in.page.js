@@ -51,6 +51,7 @@ function updateMode() {
   identifierInput.autocomplete = registration ? "email" : "username";
   identifierInput.placeholder = registration ? "ten@example.com" : "Nhập email hoặc username";
   password.autocomplete = registration ? "new-password" : "current-password";
+  password.value = "";
   if (registration) {
     password.minLength = 12;
     password.setAttribute("aria-describedby", "password-hint");
