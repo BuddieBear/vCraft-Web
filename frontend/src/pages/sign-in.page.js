@@ -68,6 +68,7 @@ function updateMode() {
 toggle.addEventListener("click", () => {
   registration = !registration;
   updateMode();
+  password.value = "";
   status.textContent = registration
     ? "Đã chuyển sang tạo tài khoản người mua."
     : "Đã chuyển sang đăng nhập.";
