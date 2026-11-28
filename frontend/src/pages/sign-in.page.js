@@ -1,5 +1,5 @@
 import { request, setToken } from "../api/http.js";
-import { signInPath } from "../site-paths.js";
+import { pageSegment, quotePageRoot, signInPath, sitePaths } from "../site-paths.js";
 import { bindFormErrors, clearFormErrors, showFormErrors } from "../components/form-errors.js";
 
 const form = document.querySelector("#sign-in-form");
@@ -19,18 +19,22 @@ const forgot = document.querySelector(".sign-in-forgot");
 const resetRequest = document.querySelector("#reset-request-form");
 const resetConfirm = document.querySelector("#reset-confirm-form");
 for (const fields of [form, resetRequest, resetConfirm]) bindFormErrors(fields);
-const requestedReturn = new URLSearchParams(location.search).get("returnTo");
+const params = new URLSearchParams(location.search);
+const requestedReturn = params.get("returnTo");
 let returnTo = "/";
+let quoteSignIn = false;
 if (requestedReturn?.startsWith("/") && !requestedReturn.startsWith("//")) {
   try {
     const url = new URL(requestedReturn, location.origin);
     const path = url.pathname.toLowerCase().replace(/\/+$/, "");
     if (url.origin === location.origin && ![signInPath, "/login.html"].includes(path)) {
       returnTo = url.href;
+      quoteSignIn = params.get("reason") === "quote" && Boolean(pageSegment(path, quotePageRoot));
     }
   } catch { /* Use the home page for an invalid destination. */ }
 }
-document.querySelector(".sign-in-back").href = returnTo;
+document.querySelector(".sign-in-back").href = quoteSignIn ? sitePaths.wholesale : returnTo;
+if (quoteSignIn) status.textContent = "Vui lòng đăng nhập để xem yêu cầu báo giá.";
 
 let registration = false;
 let resetToken;
@@ -214,7 +218,8 @@ form.addEventListener("submit", async event => {
       body: { identifier: rawIdentifier, password: values.password },
     });
     setToken(data.accessToken);
-    location.assign(returnTo);
+    if (quoteSignIn) location.replace(returnTo);
+    else location.assign(returnTo);
   } catch (error) {
     const fields = (error.fields || []).map(f => f.name === "email" ? { ...f, name: "identifier" } : f);
     if (!showFormErrors(form, fields)) status.textContent = error.message;

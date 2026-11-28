@@ -329,9 +329,11 @@ export function mountAccount(dialog, trigger) {
   trigger.addEventListener("click", openProfile);
   loadProfile();
 
-  function signInUrl() {
+  function signInUrl(reason) {
     const destination = location.pathname + location.search + location.hash;
-    return signInPath + "?" + new URLSearchParams({ returnTo: destination });
+    const params = new URLSearchParams({ returnTo: destination });
+    if (reason) params.set("reason", reason);
+    return signInPath + "?" + params;
   }
 
   function open() {
@@ -347,6 +349,7 @@ export function mountAccount(dialog, trigger) {
 
   return {
     open,
+    requireSignIn(reason) { location.replace(signInUrl(reason)); },
     get profile() { return profile; },
     async resolveProfile() {
       if (!profile && signedIn()) await (loading || loadProfile());

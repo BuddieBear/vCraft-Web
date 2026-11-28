@@ -142,6 +142,10 @@ export function mountWholesale(container, account, { quoteId, query, bidding = f
     refresh.hidden = !profile;
     if (!profile) {
       discardView();
+      if (quoteId && !journal) {
+        account.requireSignIn("quote");
+        return;
+      }
       const signIn = button(privateBatchCode ? "Đăng nhập để xem nhật ký lô" : bidding || workshop ? "Đăng nhập tài khoản nghệ nhân" : quoteId ? "Đăng nhập để xem yêu cầu" : "Đăng nhập để đặt sỉ");
       signIn.addEventListener("click", account.open);
       content.replaceChildren(signIn);
